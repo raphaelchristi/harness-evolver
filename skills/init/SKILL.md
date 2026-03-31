@@ -80,11 +80,21 @@ Agent(
     - /home/rp/Desktop/test-crewai/README.md
     </files_to_read>
 
+    <production_traces>
+    {IF .harness-evolver/production_seed.md EXISTS, paste its full contents here.
+     This file contains real production inputs, traffic distribution, error patterns,
+     and user feedback from LangSmith. Use it to generate REALISTIC test cases that
+     match actual usage patterns instead of synthetic ones.
+
+     If the file does not exist, omit this entire block.}
+    </production_traces>
+
     <output>
     Create directory tasks/ (at project root) with 30 files: task_001.json through task_030.json.
     Format: {"id": "task_001", "input": "...", "metadata": {"difficulty": "easy|medium|hard", "type": "standard|edge|cross_domain|adversarial"}}
     No "expected" field needed — the judge subagent will score outputs.
     Distribution: 40% standard, 20% edge, 20% cross-domain, 20% adversarial.
+    If production traces are available, match the real traffic distribution instead of uniform.
     </output>
 )
 ```
@@ -93,12 +103,37 @@ Wait for `## TESTGEN COMPLETE`. If the subagent fails or returns with no tasks, 
 
 Print: "Generated {N} test cases from code analysis."
 
+If `.harness-evolver/production_seed.md` exists, also print:
+"Tasks enriched with production trace data from LangSmith."
+
 ## Phase 3: Run Init
+
+First, check if the project has a LangSmith production project configured:
+
+```bash
+# Auto-detect from env vars or .env
+PROD_PROJECT=$(python3 -c "
+import os
+for v in ('LANGCHAIN_PROJECT', 'LANGSMITH_PROJECT'):
+    p = os.environ.get(v, '')
+    if p: print(p); exit()
+for f in ('.env', '.env.local'):
+    if os.path.exists(f):
+        for line in open(f):
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                k, _, val = line.partition('=')
+                if k.strip() in ('LANGCHAIN_PROJECT', 'LANGSMITH_PROJECT'):
+                    print(val.strip().strip('\"').strip(\"'\"))
+                    exit()
+" 2>/dev/null)
+```
 
 ```bash
 python3 $TOOLS/init.py [directory] \
     --harness harness.py --eval eval.py --tasks tasks/ \
-    --tools-dir $TOOLS
+    --tools-dir $TOOLS \
+    ${PROD_PROJECT:+--langsmith-project "$PROD_PROJECT"}
 ```
 
 Add `--harness-config config.json` if a config exists.

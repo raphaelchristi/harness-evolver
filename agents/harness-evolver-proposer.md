@@ -40,6 +40,24 @@ These insights are generated from LangSmith traces cross-referenced with per-tas
 
 If trace insights are not available, proceed with manual trace analysis as described in Phase 2.
 
+## Production Insights
+
+If `.harness-evolver/production_seed.json` exists in your `<files_to_read>`, it contains **real production data** from the app's LangSmith project:
+
+- `categories` — real traffic distribution (which domains/routes get the most queries)
+- `error_patterns` — actual production errors and their frequency
+- `negative_feedback_inputs` — queries where users gave thumbs-down
+- `slow_queries` — high-latency queries that may indicate bottlenecks
+- `sample_inputs` — real user inputs grouped by category
+
+Use this data to:
+1. **Prioritize changes that fix real production failures** over synthetic test failures
+2. **Match the real traffic distribution** — if 60% of production queries are domain A, optimize for domain A
+3. **Focus on negative feedback patterns** — these are confirmed bad user experiences
+4. **Address latency outliers** — slow queries may need different routing, caching, or model selection
+
+Production data complements trace_insights.json. Trace insights show what happened in *harness evaluation runs*. Production insights show what happens in *real-world usage*.
+
 ## Context7 — Enrich Your Knowledge
 
 You have access to Context7 MCP tools (`resolve-library-id` and `get-library-docs`) for looking up **current, version-specific documentation** of any library.
