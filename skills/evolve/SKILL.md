@@ -34,6 +34,27 @@ For each iteration:
 python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); print(f'v{s[\"iterations\"]+1:03d}')"
 ```
 
+### 1.4. Gather Production Insights (first iteration only)
+
+On the **first iteration**, if the project has a production LangSmith project configured but no production seed yet, fetch it:
+
+```bash
+PROD_PROJECT=$(python3 -c "
+import json, os
+c = json.load(open('.harness-evolver/config.json'))
+print(c.get('eval', {}).get('production_project', ''))
+" 2>/dev/null)
+if [ -n "$PROD_PROJECT" ] && [ ! -f ".harness-evolver/production_seed.json" ] && [ -n "$LANGSMITH_API_KEY" ]; then
+    python3 $TOOLS/seed_from_traces.py \
+        --project "$PROD_PROJECT" \
+        --output-md .harness-evolver/production_seed.md \
+        --output-json .harness-evolver/production_seed.json \
+        --limit 100 2>/dev/null
+fi
+```
+
+The `production_seed.json` is included in all proposers' `<files_to_read>` so they have real-world context about how the agent is actually used in production.
+
 ### 1.5. Gather LangSmith Traces (MANDATORY after every evaluation)
 
 **Run these commands unconditionally after EVERY evaluation** (including baseline). Do NOT guess project names — discover them.
@@ -255,6 +276,7 @@ Agent(
     - .harness-evolver/langsmith_stats.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/trace_insights.json (if exists)
+    - .harness-evolver/production_seed.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -295,6 +317,7 @@ Agent(
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/trace_insights.json (if exists)
+    - .harness-evolver/production_seed.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -334,6 +357,7 @@ Agent(
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/trace_insights.json (if exists)
+    - .harness-evolver/production_seed.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -377,6 +401,7 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/scores.json
     - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/trace_insights.json (if exists)
+    - .harness-evolver/production_seed.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -438,6 +463,7 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/scores.json
     - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/trace_insights.json (if exists)
+    - .harness-evolver/production_seed.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 

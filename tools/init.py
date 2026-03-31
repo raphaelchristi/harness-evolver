@@ -124,6 +124,40 @@ def _detect_langsmith():
     return {"enabled": False}
 
 
+def _detect_langsmith_project(search_dir="."):
+    """Auto-detect the app's existing LangSmith project name.
+
+    Checks (in order):
+    1. LANGCHAIN_PROJECT env var (standard LangChain convention)
+    2. LANGSMITH_PROJECT env var (alternative)
+    3. .env file in the project directory
+    """
+    for var in ("LANGCHAIN_PROJECT", "LANGSMITH_PROJECT"):
+        project = os.environ.get(var)
+        if project:
+            return project
+
+    # Parse .env file
+    for env_name in (".env", ".env.local"):
+        env_path = os.path.join(search_dir, env_name)
+        if os.path.exists(env_path):
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("#") or "=" not in line:
+                            continue
+                        key, _, val = line.partition("=")
+                        key = key.strip()
+                        val = val.strip().strip("'\"")
+                        if key in ("LANGCHAIN_PROJECT", "LANGSMITH_PROJECT") and val:
+                            return val
+            except OSError:
+                pass
+
+    return None
+
+
 def _check_langsmith_cli():
     """Check if langsmith-cli is installed."""
     try:
@@ -202,6 +236,9 @@ def main():
     parser.add_argument("--skip-validation", action="store_true",
                         help="Skip harness validation step. Use when you know the harness "
                              "works but validation times out (e.g. real LLM agent calls).")
+    parser.add_argument("--langsmith-project", default=None,
+                        help="Existing LangSmith project name with production traces. "
+                             "Auto-detected from LANGCHAIN_PROJECT / LANGSMITH_PROJECT env vars or .env file.")
     args = parser.parse_args()
 
     # Auto-detect missing args
@@ -280,6 +317,7 @@ def main():
             "args": ["--results-dir", "{results_dir}", "--tasks-dir", "{tasks_dir}",
                      "--scores", "{scores}"],
             "langsmith": _detect_langsmith(),
+            "production_project": args.langsmith_project or _detect_langsmith_project(search_dir),
         },
         "evolution": {
             "max_iterations": 10,
@@ -374,6 +412,31 @@ def main():
                     print(f"Architecture: {topo}")
         except Exception:
             pass
+
+    # 4.5 Fetch production traces seed (if LangSmith production project detected)
+    prod_project = config["eval"].get("production_project")
+    if prod_project and os.environ.get("LANGSMITH_API_KEY"):
+        seed_py = os.path.join(tools, "seed_from_traces.py")
+        if os.path.exists(seed_py):
+            print(f"Fetching production traces from LangSmith project '{prod_project}'...")
+            try:
+                r = subprocess.run(
+                    [_resolve_python(), seed_py,
+                     "--project", prod_project,
+                     "--output-md", os.path.join(base, "production_seed.md"),
+                     "--output-json", os.path.join(base, "production_seed.json"),
+                     "--limit", "100"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    print(r.stdout.strip())
+                else:
+                    print(f"  Could not fetch production traces: {r.stderr.strip()[:200]}")
+            except Exception as e:
+                print(f"  Production trace fetch failed: {e}")
+    elif prod_project:
+        print(f"Production LangSmith project detected: {prod_project}")
+        print("  Set LANGSMITH_API_KEY to auto-fetch production traces during init.")
 
     # 5. Validate baseline harness
     config_path = os.path.join(base, "baseline", "config.json")

@@ -36,6 +36,19 @@ Read the harness source code to understand:
 - What are its likely failure modes?
 - Are there any data files (knowledge bases, docs, etc.) that define the domain?
 
+### Phase 1.5: Use Production Traces (if available)
+
+If your prompt contains a `<production_traces>` block, this is **real data from production LangSmith traces**. This is the most valuable signal you have — real user inputs beat synthetic ones.
+
+When production traces are available:
+1. Read the traffic distribution — generate tasks proportional to real usage (if 60% of queries are domain A, 60% of tasks should cover domain A)
+2. Use actual user phrasing as inspiration — real inputs show abbreviations, typos, informal language
+3. Base edge cases on real error patterns — the errors listed are genuine failures, not imagined scenarios
+4. Prioritize negative feedback traces — these are confirmed bad experiences that MUST be covered
+5. Include slow queries as edge cases — high-latency traces may reveal timeout or complexity issues
+
+**Do NOT just copy production inputs verbatim.** Use them as inspiration to generate VARIATIONS that test the same capabilities.
+
 ### Phase 2: Design Test Distribution
 
 Plan 30 test cases with this distribution:
@@ -43,6 +56,8 @@ Plan 30 test cases with this distribution:
 - **20% Edge Cases** (6 tasks): boundary conditions, minimal inputs, unusual but valid
 - **20% Cross-Domain** (6 tasks): inputs spanning multiple categories or requiring nuanced judgment
 - **20% Adversarial** (6 tasks): misleading, ambiguous, or designed to expose weaknesses
+
+If production traces are available, adjust the distribution to match real traffic patterns instead of uniform.
 
 Ensure all categories/topics from the harness are covered.
 
