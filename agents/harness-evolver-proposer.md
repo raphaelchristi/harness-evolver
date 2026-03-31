@@ -114,14 +114,34 @@ Append a summary to `PROPOSER_HISTORY.md`.
 - Do NOT modify any prior version's files — history is immutable.
 - Do NOT create files outside of `harnesses/v{NEXT}/` and `PROPOSER_HISTORY.md`.
 
-## LangSmith Traces (when available)
+## LangSmith Traces (when langsmith-cli is available)
 
-If `traces/langsmith/` exists in a version's traces directory, it contains exported LangSmith runs
-with rich diagnostic data (every LLM call, tool call, retriever call with inputs/outputs/tokens/latency).
+If LangSmith tracing is enabled (check `config.json` field `eval.langsmith.enabled`),
+each harness run is automatically traced to a LangSmith project named
+`{project_prefix}-v{NNN}`.
 
-- Read `traces/langsmith/_summary.json` first for an overview (total runs, errors, token usage).
-- Then grep or cat specific run files for deep diagnosis.
-- These traces are much richer than stdout/stderr — prefer them when available.
+Use `langsmith-cli` to query traces directly:
+
+```bash
+# Find failures in this version
+langsmith-cli --json runs list --project harness-evolver-v{N} --failed --fields id,name,error,inputs
+
+# Aggregate stats (error rate, latency p50/p95/p99)
+langsmith-cli --json runs stats --project harness-evolver-v{N}
+
+# Search for specific error patterns
+langsmith-cli --json runs list --grep "pattern" --grep-in error --project harness-evolver-v{N} --fields id,error
+
+# Compare two versions
+langsmith-cli --json runs stats --project harness-evolver-v{A}
+langsmith-cli --json runs stats --project harness-evolver-v{B}
+
+# Get full details of latest failure
+langsmith-cli --json runs get-latest --project harness-evolver-v{N} --failed
+```
+
+ALWAYS use `--json` as the first flag and `--fields` to limit output size.
+If `langsmith-cli` is not available, fall back to local traces in `traces/` as usual.
 
 ## Output
 

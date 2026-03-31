@@ -19,6 +19,27 @@ import sys
 import tempfile
 
 
+def _detect_langsmith():
+    """Auto-detect LangSmith API key and return config section."""
+    if os.environ.get("LANGSMITH_API_KEY"):
+        return {
+            "enabled": True,
+            "api_key_env": "LANGSMITH_API_KEY",
+            "project_prefix": "harness-evolver",
+        }
+    return {"enabled": False}
+
+
+def _check_langsmith_cli():
+    """Check if langsmith-cli is installed."""
+    try:
+        r = subprocess.run(["langsmith-cli", "self", "detect"],
+                          capture_output=True, text=True, timeout=5)
+        return r.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Initialize Harness Evolver project")
     parser.add_argument("--harness", required=True, help="Path to harness script")
@@ -66,6 +87,7 @@ def main():
             "command": f"python3 {eval_name}",
             "args": ["--results-dir", "{results_dir}", "--tasks-dir", "{tasks_dir}",
                      "--scores", "{scores}"],
+            "langsmith": _detect_langsmith(),
         },
         "evolution": {
             "max_iterations": 10,
@@ -83,6 +105,15 @@ def main():
     }
     with open(os.path.join(base, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
+
+    ls_config = config["eval"].get("langsmith", {})
+    if ls_config.get("enabled"):
+        print("  LangSmith tracing enabled (LANGSMITH_API_KEY detected)")
+        if _check_langsmith_cli():
+            print("  langsmith-cli detected — proposer will use it for trace analysis")
+        else:
+            print("  Recommendation: install langsmith-cli for rich trace analysis:")
+            print("    uv tool install langsmith-cli && langsmith-cli auth login")
 
     # 5. Validate baseline harness
     print("Validating baseline harness...")

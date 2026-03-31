@@ -107,28 +107,23 @@ def cmd_run(args):
     timing = {"per_task": {}}
     results_dir = tempfile.mkdtemp()
 
-    # LangSmith: setup tracing (optional)
+    # LangSmith: setup auto-tracing env vars if configured
     langsmith_env = None
-    project_config = {}
-    try:
-        sys.path.insert(0, os.path.dirname(__file__))
-        from langsmith_adapter import is_enabled, setup_tracing, export_traces, run_evaluators as ls_run_evaluators
-        # Try to find project config
-        base_dir = os.path.dirname(traces_dir)
-        while base_dir and base_dir != os.path.dirname(base_dir):
-            cfg_path = os.path.join(base_dir, "config.json")
-            if os.path.exists(cfg_path):
-                with open(cfg_path) as f:
-                    project_config = json.load(f)
-                break
-            base_dir = os.path.dirname(base_dir)
-        if is_enabled(project_config):
-            version = os.path.basename(os.path.dirname(traces_dir))
-            tracing_env = setup_tracing(project_config, version)
-            if tracing_env:
-                langsmith_env = {**os.environ, **tracing_env}
-    except ImportError:
-        pass
+    project_config_path = os.path.join(os.path.dirname(os.path.dirname(traces_dir)), "config.json")
+    if os.path.exists(project_config_path):
+        with open(project_config_path) as f:
+            project_config = json.load(f)
+        ls = project_config.get("eval", {}).get("langsmith", {})
+        if ls.get("enabled"):
+            api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
+            if api_key:
+                version = os.path.basename(os.path.dirname(traces_dir))
+                langsmith_env = {
+                    **os.environ,
+                    "LANGCHAIN_TRACING_V2": "true",
+                    "LANGCHAIN_API_KEY": api_key,
+                    "LANGCHAIN_PROJECT": f"{ls.get('project_prefix', 'harness-evolver')}-{version}",
+                }
 
     for task_file in task_files:
         task_path = os.path.join(tasks_dir, task_file)
@@ -186,22 +181,6 @@ def cmd_run(args):
         print(f"Evaluation complete. combined_score: {scores.get('combined_score', 'N/A')}")
     else:
         print("WARNING: eval script did not produce scores file.", file=sys.stderr)
-
-    # LangSmith: export traces and run evaluators (optional)
-    try:
-        from langsmith_adapter import is_enabled, export_traces, run_evaluators as ls_run_evaluators
-        if is_enabled(project_config):
-            version = os.path.basename(os.path.dirname(traces_dir))
-            export_traces(project_config, version, traces_dir)
-            ls_scores = ls_run_evaluators(project_config, version)
-            if ls_scores and os.path.exists(scores_path):
-                with open(scores_path) as f:
-                    scores_data = json.load(f)
-                scores_data["langsmith"] = ls_scores
-                with open(scores_path, "w") as f:
-                    json.dump(scores_data, f, indent=2)
-    except ImportError:
-        pass
 
 
 def main():
