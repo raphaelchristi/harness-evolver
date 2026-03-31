@@ -14,8 +14,8 @@
 
 **Phases:**
 - **Phase 1 (Tasks 1-11):** MVP — core loop with local traces and user-written eval
-- **Phase 2 (Tasks 12-14):** LangSmith integration — auto-tracing, LLM-as-Judge evaluators, dataset sync
-- **Phase 3 (Tasks 15-16):** Context7 integration — stack detection, documentation-aware proposer
+- **Phase 2 (Task 12):** LangSmith integration — env var tracing + langsmith-cli for proposer diagnosis
+- **Phase 3 (Tasks 13-14):** Context7 integration — stack detection, documentation-aware proposer
 
 **LangSmith Hook Points (implemented in Phase 2, designed for in Phase 1):**
 The MVP code has clean phase boundaries where LangSmith plugs in:
@@ -2419,476 +2419,20 @@ git commit -m "chore: all tests passing, MVP implementation complete"
 
 ---
 
-# Phase 2: LangSmith Integration
+# Phase 2: LangSmith Integration (v2 — langsmith-cli approach)
 
-> **Spec:** `docs/specs/2026-03-31-langsmith-integration.md`
-> **Prerequisite:** Phase 1 (Tasks 1-11) complete and validated
-> **Principle:** LangSmith is optional. The MVP loop continues working without it. This phase adds richness, not dependencies.
+> **Spec:** `docs/specs/2026-03-31-langsmith-integration.md` (v2)
+> **Prerequisite:** Phase 1 (Tasks 1-11) complete
+> **Principle:** No custom API client. The proposer uses `langsmith-cli` directly (like grep/cat/diff). evaluate.py only sets env vars for auto-tracing.
+> **Eliminated:** `langsmith_api.py`, `langsmith_adapter.py`, filesystem export, score merging
 
-### Task 12: LangSmith API Client
-
-**Files:**
-- Create: `tools/langsmith_api.py`
-- Create: `tests/test_langsmith_api.py`
-
-- [ ] **Step 1: Write the failing test**
-
-Create `tests/test_langsmith_api.py`:
-
-```python
-"""Tests for langsmith_api.py — REST API client (stdlib urllib)."""
-
-import json
-import os
-import sys
-import unittest
-from unittest.mock import patch, MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
-from langsmith_api import get_runs, get_dataset_examples, create_project, get_feedback
-
-
-class TestLangSmithAPI(unittest.TestCase):
-    @patch("langsmith_api.urlopen")
-    def test_get_runs_sends_correct_request(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({"runs": []}).encode()
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_resp
-
-        result = get_runs("fake-key", "my-project")
-        self.assertEqual(result, {"runs": []})
-
-        # Verify the request was sent correctly
-        call_args = mock_urlopen.call_args[0][0]
-        self.assertIn("runs/query", call_args.full_url)
-        self.assertEqual(call_args.get_header("X-api-key"), "fake-key")
-
-    @patch("langsmith_api.urlopen")
-    def test_get_dataset_examples(self, mock_urlopen):
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps([{"id": "ex1"}]).encode()
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        mock_urlopen.return_value = mock_resp
-
-        result = get_dataset_examples("fake-key", "ds-123")
-        self.assertEqual(result, [{"id": "ex1"}])
-
-
-if __name__ == "__main__":
-    unittest.main()
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-```bash
-cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest tests.test_langsmith_api -v
-```
-
-Expected: `ModuleNotFoundError: No module named 'langsmith_api'`
-
-- [ ] **Step 3: Write implementation**
-
-Create `tools/langsmith_api.py`:
-
-```python
-#!/usr/bin/env python3
-"""LangSmith REST API client. Stdlib-only (urllib + json).
-
-Provides low-level API calls to LangSmith for trace export, dataset access,
-and evaluator execution. Used by langsmith_adapter.py.
-"""
-
-import json
-import os
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
-
-LANGSMITH_BASE_URL = os.environ.get(
-    "LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"
-)
-
-
-def _request(method, path, api_key, data=None):
-    url = f"{LANGSMITH_BASE_URL}{path}"
-    headers = {
-        "x-api-key": api_key,
-        "Content-Type": "application/json",
-    }
-    body = json.dumps(data).encode() if data else None
-    req = Request(url, data=body, headers=headers, method=method)
-    try:
-        with urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode())
-    except HTTPError as e:
-        error_body = e.read().decode() if e.fp else ""
-        raise RuntimeError(f"LangSmith API error {e.code}: {error_body}")
-
-
-def get_runs(api_key, project_name, run_type=None, limit=100):
-    params = {"project_name": project_name, "limit": limit}
-    if run_type:
-        params["run_type"] = run_type
-    return _request("POST", "/api/v1/runs/query", api_key, params)
-
-
-def get_dataset_examples(api_key, dataset_id, limit=1000):
-    return _request(
-        "GET", f"/api/v1/datasets/{dataset_id}/examples?limit={limit}", api_key
-    )
-
-
-def create_project(api_key, project_name):
-    return _request("POST", "/api/v1/projects", api_key, {"name": project_name})
-
-
-def get_feedback(api_key, project_name):
-    runs = get_runs(api_key, project_name)
-    run_ids = [r["id"] for r in runs.get("runs", [])]
-    if not run_ids:
-        return []
-    return _request("POST", "/api/v1/feedback/query", api_key, {"run_ids": run_ids})
-
-
-def run_evaluator(api_key, project_name, evaluator_name):
-    return _request(
-        "POST",
-        "/api/v1/evaluators/run",
-        api_key,
-        {"project_name": project_name, "evaluator": evaluator_name},
-    )
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-```bash
-cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest tests.test_langsmith_api -v
-```
-
-Expected: All tests PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tools/langsmith_api.py tests/test_langsmith_api.py
-git commit -m "feat: add LangSmith REST API client (stdlib urllib)"
-```
-
----
-
-### Task 13: LangSmith Adapter (evaluate.py integration)
+### Task 12: LangSmith tracing + init detection + proposer instructions
 
 **Files:**
-- Create: `tools/langsmith_adapter.py`
-- Modify: `tools/evaluate.py`
-- Create: `tests/test_langsmith_adapter.py`
-
-- [ ] **Step 1: Write the adapter failing test**
-
-Create `tests/test_langsmith_adapter.py`:
-
-```python
-"""Tests for langsmith_adapter.py — bridges evaluate.py with LangSmith."""
-
-import json
-import os
-import sys
-import tempfile
-import unittest
-from unittest.mock import patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
-from langsmith_adapter import (
-    setup_tracing,
-    export_traces,
-    run_evaluators,
-    is_enabled,
-)
-
-
-class TestIsEnabled(unittest.TestCase):
-    def test_disabled_when_no_config(self):
-        self.assertFalse(is_enabled({}))
-
-    def test_disabled_when_explicitly_false(self):
-        config = {"eval": {"langsmith": {"enabled": False}}}
-        self.assertFalse(is_enabled(config))
-
-    def test_enabled_when_true(self):
-        config = {"eval": {"langsmith": {"enabled": True}}}
-        self.assertTrue(is_enabled(config))
-
-
-class TestSetupTracing(unittest.TestCase):
-    def test_sets_env_vars(self):
-        config = {
-            "eval": {
-                "langsmith": {
-                    "enabled": True,
-                    "api_key_env": "TEST_LS_KEY",
-                    "project_prefix": "test-evolver",
-                }
-            }
-        }
-        with patch.dict(os.environ, {"TEST_LS_KEY": "fake-key"}):
-            env = setup_tracing(config, "v003")
-            self.assertEqual(env["LANGCHAIN_TRACING_V2"], "true")
-            self.assertEqual(env["LANGCHAIN_API_KEY"], "fake-key")
-            self.assertEqual(env["LANGCHAIN_PROJECT"], "test-evolver-v003")
-
-    def test_returns_empty_when_no_api_key(self):
-        config = {
-            "eval": {
-                "langsmith": {
-                    "enabled": True,
-                    "api_key_env": "NONEXISTENT_KEY",
-                    "project_prefix": "test",
-                }
-            }
-        }
-        env = setup_tracing(config, "v001")
-        self.assertEqual(env, {})
-
-
-class TestExportTraces(unittest.TestCase):
-    @patch("langsmith_adapter.langsmith_api")
-    def test_export_creates_langsmith_dir(self, mock_api):
-        mock_api.get_runs.return_value = {"runs": [
-            {
-                "id": "run1", "run_type": "llm", "name": "chat",
-                "inputs": {"prompt": "hi"}, "outputs": {"text": "hello"},
-                "error": None, "latency_ms": 500,
-                "prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30,
-                "child_run_ids": [], "extra": {}, "feedback_stats": None,
-            }
-        ]}
-        tmpdir = tempfile.mkdtemp()
-        config = {
-            "eval": {
-                "langsmith": {
-                    "enabled": True,
-                    "api_key_env": "TEST_KEY",
-                    "project_prefix": "test",
-                    "export_traces": True,
-                }
-            }
-        }
-        with patch.dict(os.environ, {"TEST_KEY": "fake"}):
-            export_traces(config, "v001", tmpdir)
-        ls_dir = os.path.join(tmpdir, "langsmith")
-        self.assertTrue(os.path.isdir(ls_dir))
-        self.assertTrue(os.path.exists(os.path.join(ls_dir, "_summary.json")))
-        self.assertTrue(os.path.exists(os.path.join(ls_dir, "run1.json")))
-
-
-if __name__ == "__main__":
-    unittest.main()
-```
-
-- [ ] **Step 2: Write the adapter implementation**
-
-Create `tools/langsmith_adapter.py`:
-
-```python
-#!/usr/bin/env python3
-"""LangSmith adapter for Harness Evolver.
-
-Bridges evaluate.py with LangSmith for:
-1. Auto-tracing setup (env vars for LangChain)
-2. Trace export to filesystem (for proposer)
-3. LLM-as-Judge evaluators
-
-Stdlib-only. Uses langsmith_api.py for REST calls.
-"""
-
-import json
-import os
-import sys
-
-# Import sibling module
-sys.path.insert(0, os.path.dirname(__file__))
-import langsmith_api
-
-
-def is_enabled(config):
-    return config.get("eval", {}).get("langsmith", {}).get("enabled", False)
-
-
-def setup_tracing(config, version):
-    """Return env vars dict to set before running harness. Empty dict if unavailable."""
-    ls = config["eval"]["langsmith"]
-    api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
-    if not api_key:
-        return {}
-    return {
-        "LANGCHAIN_TRACING_V2": "true",
-        "LANGCHAIN_API_KEY": api_key,
-        "LANGCHAIN_PROJECT": f"{ls['project_prefix']}-{version}",
-    }
-
-
-def export_traces(config, version, traces_dir):
-    """Export LangSmith runs to traces/langsmith/ for the proposer to read."""
-    ls = config["eval"]["langsmith"]
-    if not ls.get("export_traces", True):
-        return
-
-    api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
-    if not api_key:
-        return
-
-    project_name = f"{ls['project_prefix']}-{version}"
-    try:
-        response = langsmith_api.get_runs(api_key, project_name)
-    except Exception as e:
-        print(f"WARNING: Failed to export LangSmith traces: {e}", file=sys.stderr)
-        return
-
-    runs = response.get("runs", [])
-    ls_dir = os.path.join(traces_dir, "langsmith")
-    os.makedirs(ls_dir, exist_ok=True)
-
-    for run in runs:
-        run_file = os.path.join(ls_dir, f"{run['id']}.json")
-        with open(run_file, "w") as f:
-            json.dump(
-                {
-                    "run_id": run["id"],
-                    "run_type": run.get("run_type"),
-                    "name": run.get("name"),
-                    "inputs": run.get("inputs"),
-                    "outputs": run.get("outputs"),
-                    "error": run.get("error"),
-                    "latency_ms": run.get("latency_ms"),
-                    "tokens": {
-                        "prompt": run.get("prompt_tokens", 0),
-                        "completion": run.get("completion_tokens", 0),
-                        "total": run.get("total_tokens", 0),
-                    },
-                    "child_runs": len(run.get("child_run_ids", [])),
-                    "feedback": run.get("feedback_stats"),
-                },
-                f,
-                indent=2,
-            )
-
-    summary = {
-        "total_runs": len(runs),
-        "run_types": {},
-        "errors": [],
-        "total_tokens": 0,
-        "avg_latency_ms": 0,
-    }
-    for r in runs:
-        rt = r.get("run_type", "unknown")
-        summary["run_types"][rt] = summary["run_types"].get(rt, 0) + 1
-        summary["total_tokens"] += r.get("total_tokens", 0)
-        if r.get("error"):
-            summary["errors"].append({"run_id": r["id"], "error": r["error"]})
-    if runs:
-        summary["avg_latency_ms"] = round(
-            sum(r.get("latency_ms", 0) for r in runs) / len(runs), 1
-        )
-    with open(os.path.join(ls_dir, "_summary.json"), "w") as f:
-        json.dump(summary, f, indent=2)
-
-
-def run_evaluators(config, version):
-    """Run LangSmith built-in evaluators, return scores dict."""
-    ls = config["eval"]["langsmith"]
-    evaluators = ls.get("evaluators", {})
-    builtin = evaluators.get("builtin", [])
-    if not builtin:
-        return {}
-
-    api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
-    if not api_key:
-        return {}
-
-    project_name = f"{ls['project_prefix']}-{version}"
-    scores = {}
-    for name in builtin:
-        try:
-            result = langsmith_api.run_evaluator(api_key, project_name, name)
-            scores[name] = result.get("aggregate_score", 0.0)
-        except Exception as e:
-            print(f"WARNING: LangSmith evaluator '{name}' failed: {e}", file=sys.stderr)
-    return scores
-```
-
-- [ ] **Step 3: Modify evaluate.py to use the adapter**
-
-Add these changes to `tools/evaluate.py`:
-
-In `cmd_run`, after building the harness subprocess environment and before the task loop:
-
-```python
-# At the top of cmd_run, after parsing args:
-    langsmith_env = {}
-    project_config_path = os.path.join(os.path.dirname(traces_dir), "..", "config.json")
-    project_config = {}
-    if os.path.exists(project_config_path):
-        project_config = json.load(open(project_config_path))
-
-    try:
-        from langsmith_adapter import is_enabled, setup_tracing, export_traces, run_evaluators
-        if is_enabled(project_config):
-            version = os.path.basename(os.path.dirname(traces_dir))
-            langsmith_env = setup_tracing(project_config, version)
-    except ImportError:
-        pass
-```
-
-When calling `subprocess.run` for each task, merge `langsmith_env` into the environment:
-
-```python
-    env = {**os.environ, **langsmith_env} if langsmith_env else None
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
-```
-
-After running the user's eval script, add LangSmith evaluators and export:
-
-```python
-    # After user eval completes successfully:
-    try:
-        from langsmith_adapter import is_enabled, export_traces, run_evaluators
-        if is_enabled(project_config):
-            version = os.path.basename(os.path.dirname(traces_dir))
-            export_traces(project_config, version, traces_dir)
-            ls_scores = run_evaluators(project_config, version)
-            if ls_scores and os.path.exists(scores_path):
-                scores = json.load(open(scores_path))
-                scores["langsmith"] = ls_scores
-                json.dump(scores, open(scores_path, "w"), indent=2)
-    except ImportError:
-        pass
-```
-
-- [ ] **Step 4: Run all tests (Phase 1 + Phase 2)**
-
-```bash
-cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest discover -s tests -v
-```
-
-Expected: All tests pass. Phase 1 tests unaffected (LangSmith code paths are guarded by try/except ImportError and is_enabled checks).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tools/langsmith_adapter.py tools/evaluate.py tests/test_langsmith_adapter.py
-git commit -m "feat: add LangSmith integration (auto-tracing, trace export, LLM-as-Judge)"
-```
-
----
-
-### Task 14: LangSmith Dataset Support + Init Detection
-
-**Files:**
-- Modify: `tools/init.py`
-- Modify: `skills/harness-evolve-init/SKILL.md`
-- Create: `tests/test_langsmith_init.py`
+- Modify: `tools/evaluate.py` (~10 lines: env var setup before harness subprocess)
+- Modify: `tools/init.py` (~25 lines: detect LANGSMITH_API_KEY + langsmith-cli, add config section)
+- Modify: `agents/harness-evolver-proposer.md` (~20 lines: langsmith-cli diagnosis instructions)
+- Create: `tests/test_langsmith_init.py` (2 tests: detect key present/absent)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2900,10 +2444,8 @@ Create `tests/test_langsmith_init.py`:
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 TOOLS_DIR = os.path.join(REPO_ROOT, "tools")
@@ -2915,42 +2457,33 @@ class TestLangSmithDetection(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.base_dir = os.path.join(self.tmpdir, ".harness-evolver")
 
-    def test_init_detects_langsmith_api_key(self):
-        """When LANGSMITH_API_KEY is set, config.json should have langsmith.enabled=true."""
-        env = {**os.environ, "LANGSMITH_API_KEY": "lsv2_fake_key_for_test"}
-        r = subprocess.run(
-            [
-                "python3", os.path.join(TOOLS_DIR, "init.py"),
-                "--harness", os.path.join(EXAMPLE_DIR, "harness.py"),
-                "--eval", os.path.join(EXAMPLE_DIR, "eval.py"),
-                "--tasks", os.path.join(EXAMPLE_DIR, "tasks"),
-                "--base-dir", self.base_dir,
-                "--harness-config", os.path.join(EXAMPLE_DIR, "config.json"),
-                "--tools-dir", TOOLS_DIR,
-            ],
+    def _run_init(self, env):
+        return subprocess.run(
+            ["python3", os.path.join(TOOLS_DIR, "init.py"),
+             "--harness", os.path.join(EXAMPLE_DIR, "harness.py"),
+             "--eval", os.path.join(EXAMPLE_DIR, "eval.py"),
+             "--tasks", os.path.join(EXAMPLE_DIR, "tasks"),
+             "--base-dir", self.base_dir,
+             "--harness-config", os.path.join(EXAMPLE_DIR, "config.json"),
+             "--tools-dir", TOOLS_DIR],
             capture_output=True, text=True, timeout=120, env=env,
         )
+
+    def test_init_detects_langsmith_api_key(self):
+        env = {**os.environ, "LANGSMITH_API_KEY": "lsv2_fake_key"}
+        r = self._run_init(env)
         self.assertEqual(r.returncode, 0, r.stderr)
-        config = json.load(open(os.path.join(self.base_dir, "config.json")))
+        with open(os.path.join(self.base_dir, "config.json")) as f:
+            config = json.load(f)
         self.assertTrue(config["eval"]["langsmith"]["enabled"])
+        self.assertEqual(config["eval"]["langsmith"]["project_prefix"], "harness-evolver")
 
     def test_init_no_langsmith_without_key(self):
-        """When LANGSMITH_API_KEY is not set, langsmith.enabled should be false."""
         env = {k: v for k, v in os.environ.items() if k != "LANGSMITH_API_KEY"}
-        r = subprocess.run(
-            [
-                "python3", os.path.join(TOOLS_DIR, "init.py"),
-                "--harness", os.path.join(EXAMPLE_DIR, "harness.py"),
-                "--eval", os.path.join(EXAMPLE_DIR, "eval.py"),
-                "--tasks", os.path.join(EXAMPLE_DIR, "tasks"),
-                "--base-dir", self.base_dir,
-                "--harness-config", os.path.join(EXAMPLE_DIR, "config.json"),
-                "--tools-dir", TOOLS_DIR,
-            ],
-            capture_output=True, text=True, timeout=120, env=env,
-        )
+        r = self._run_init(env)
         self.assertEqual(r.returncode, 0, r.stderr)
-        config = json.load(open(os.path.join(self.base_dir, "config.json")))
+        with open(os.path.join(self.base_dir, "config.json")) as f:
+            config = json.load(f)
         self.assertFalse(config["eval"]["langsmith"]["enabled"])
 
 
@@ -2958,9 +2491,9 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Modify init.py to detect LangSmith**
+- [ ] **Step 2: Modify init.py — add LangSmith detection**
 
-Add this function to `tools/init.py`:
+Add these functions before `main()` in `tools/init.py`:
 
 ```python
 def _detect_langsmith():
@@ -2970,79 +2503,111 @@ def _detect_langsmith():
             "enabled": True,
             "api_key_env": "LANGSMITH_API_KEY",
             "project_prefix": "harness-evolver",
-            "evaluators": {"builtin": ["correctness"], "custom": []},
-            "export_traces": True,
-            "trace_format": "jsonl",
         }
     return {"enabled": False}
+
+
+def _check_langsmith_cli():
+    """Check if langsmith-cli is installed."""
+    try:
+        r = subprocess.run(["langsmith-cli", "self", "detect"],
+                          capture_output=True, text=True, timeout=5)
+        return r.returncode == 0
+    except FileNotFoundError:
+        return False
 ```
 
-In the config generation section of `main()`, add the langsmith section:
+In `main()`, add `"langsmith": _detect_langsmith()` inside the `"eval"` section of the config dict.
+
+After writing config.json, if langsmith is enabled, print:
+```python
+    ls_config = config["eval"].get("langsmith", {})
+    if ls_config.get("enabled"):
+        print("  LangSmith tracing enabled (LANGSMITH_API_KEY detected)")
+        if _check_langsmith_cli():
+            print("  langsmith-cli detected — proposer will use it for trace analysis")
+        else:
+            print("  Recommendation: install langsmith-cli for rich trace analysis:")
+            print("    uv tool install langsmith-cli && langsmith-cli auth login")
+```
+
+- [ ] **Step 3: Modify evaluate.py — add env var setup**
+
+In `_run_harness_on_task`, add `env=None` parameter and pass it to `subprocess.run`.
+
+In `cmd_run`, before the task loop, add:
 
 ```python
-    config = {
-        ...
-        "eval": {
-            ...
-            "langsmith": _detect_langsmith(),
-        },
-        ...
-    }
+    # LangSmith: setup auto-tracing env vars if configured
+    langsmith_env = None
+    project_config_path = os.path.join(os.path.dirname(os.path.dirname(traces_dir)), "config.json")
+    if os.path.exists(project_config_path):
+        with open(project_config_path) as f:
+            project_config = json.load(f)
+        ls = project_config.get("eval", {}).get("langsmith", {})
+        if ls.get("enabled"):
+            api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
+            if api_key:
+                version = os.path.basename(os.path.dirname(traces_dir))
+                langsmith_env = {
+                    **os.environ,
+                    "LANGCHAIN_TRACING_V2": "true",
+                    "LANGCHAIN_API_KEY": api_key,
+                    "LANGCHAIN_PROJECT": f"{ls.get('project_prefix', 'harness-evolver')}-{version}",
+                }
 ```
 
-- [ ] **Step 3: Update init skill for --langsmith-dataset flag**
+Then pass `env=langsmith_env` to `_run_harness_on_task` calls.
 
-Add to `skills/harness-evolve-init/SKILL.md`:
+- [ ] **Step 4: Update proposer.md — add langsmith-cli instructions**
+
+Replace the existing "LangSmith Traces" section in `agents/harness-evolver-proposer.md` with:
 
 ```markdown
-## LangSmith Dataset (optional)
+## LangSmith Traces (when langsmith-cli is available)
 
-If the user provides `--langsmith-dataset <dataset_id>`:
+If LangSmith tracing is enabled (check `config.json` field `eval.langsmith.enabled`),
+each harness run is automatically traced to a LangSmith project named
+`{project_prefix}-v{NNN}`.
+
+Use `langsmith-cli` to query traces directly — do NOT export to filesystem:
 
 ```bash
-python3 ~/.harness-evolver/tools/init.py \
-    --harness {harness} \
-    --eval {eval} \
-    --tasks {tasks} \
-    --base-dir .harness-evolver \
-    --langsmith-dataset {dataset_id}
+# Find failures in this version
+langsmith-cli --json runs list --project harness-evolver-v{N} --failed --fields id,name,error,inputs
+
+# Aggregate stats (error rate, latency p50/p95/p99)
+langsmith-cli --json runs stats --project harness-evolver-v{N}
+
+# Search for specific error patterns
+langsmith-cli --json runs list --grep "pattern" --grep-in error --project harness-evolver-v{N} --fields id,error
+
+# Compare two versions
+langsmith-cli --json runs stats --project harness-evolver-v{A}
+langsmith-cli --json runs stats --project harness-evolver-v{B}
+
+# Get full details of latest failure
+langsmith-cli --json runs get-latest --project harness-evolver-v{N} --failed
 ```
 
-This pulls examples from a LangSmith dataset to use as tasks.
-Requires `LANGSMITH_API_KEY` in the environment.
+ALWAYS use `--json` as the first flag and `--fields` to limit output size.
+If `langsmith-cli` is not available, fall back to local traces in `traces/` as usual.
 ```
 
-- [ ] **Step 4: Run all tests**
+- [ ] **Step 5: Run all tests**
 
 ```bash
 cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest discover -s tests -v
 ```
 
-Expected: All tests pass including new LangSmith tests.
-
-- [ ] **Step 5: Update proposer agent with LangSmith hint**
-
-Append to the Phase 2 section in `agents/harness-evolver-proposer.md`:
-
-```markdown
-## LangSmith Traces (when available)
-
-If `traces/langsmith/` exists in a version's traces directory, it contains exported LangSmith runs
-with rich diagnostic data (every LLM call, tool call, retriever call with inputs/outputs/tokens/latency).
-
-- Read `traces/langsmith/_summary.json` first for an overview (total runs, errors, token usage).
-- Then grep or cat specific run files for deep diagnosis.
-- These traces are much richer than stdout/stderr — prefer them when available.
-```
+Expected: All 30 tests pass (28 Phase 1 + 2 new LangSmith).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tools/init.py skills/ agents/ tests/test_langsmith_init.py
-git commit -m "feat: add LangSmith auto-detection in init + dataset support"
+git add tools/evaluate.py tools/init.py agents/harness-evolver-proposer.md tests/test_langsmith_init.py
+git commit -m "feat: add LangSmith integration (env var tracing + langsmith-cli for proposer)"
 ```
-
----
 
 ---
 
@@ -3060,7 +2625,7 @@ LangSmith = OBSERVABILITY (what happened? how to score?)  → enriches traces + 
 Context7  = KNOWLEDGE (how to solve correctly?)            → enriches proposals
 ```
 
-### Task 15: detect_stack.py
+### Task 13: detect_stack.py
 
 **Files:**
 - Create: `tools/detect_stack.py`
@@ -3360,7 +2925,7 @@ git commit -m "feat: add stack detection via AST for Context7 integration"
 
 ---
 
-### Task 16: Context7-aware init.py + proposer.md
+### Task 14: Context7-aware init.py + proposer.md
 
 **Files:**
 - Modify: `tools/init.py`
@@ -3602,16 +3167,15 @@ git commit -m "feat: add Context7 integration (stack detection, documentation-aw
 | `tests/test_integration.py` | Integration test | ~80 |
 | **Phase 1 Total** | | **~1500 lines** |
 
-### Phase 2: LangSmith Integration
+### Phase 2: LangSmith Integration (v2 — langsmith-cli)
 
 | File | Purpose | Lines (est.) |
 |------|---------|--------------|
-| `tools/langsmith_api.py` | REST API client (stdlib urllib) | ~70 |
-| `tools/langsmith_adapter.py` | Bridges evaluate.py ↔ LangSmith | ~120 |
-| `tests/test_langsmith_api.py` | Unit tests (mocked API) | ~50 |
-| `tests/test_langsmith_adapter.py` | Unit tests (mocked API) | ~80 |
-| `tests/test_langsmith_init.py` | Init detection tests | ~50 |
-| **Phase 2 Total** | | **~370 lines** |
+| `tools/evaluate.py` (modified) | Add env var setup for LANGCHAIN_TRACING_V2 | ~15 added |
+| `tools/init.py` (modified) | Detect LANGSMITH_API_KEY + langsmith-cli | ~25 added |
+| `agents/harness-evolver-proposer.md` (modified) | langsmith-cli diagnosis instructions | ~20 added |
+| `tests/test_langsmith_init.py` | Init detection tests (2 tests) | ~50 |
+| **Phase 2 Total** | | **~110 lines** |
 
 ### Phase 3: Context7 Integration
 
@@ -3622,4 +3186,4 @@ git commit -m "feat: add Context7 integration (stack detection, documentation-aw
 | `tests/test_context7_init.py` | Init stack detection tests (2 tests) | ~70 |
 | **Phase 3 Total** | | **~270 lines** |
 | | | |
-| **Grand Total** | | **~2140 lines** |
+| **Grand Total** | | **~1880 lines** |
