@@ -1,6 +1,6 @@
 {
   "name": "harness-evolver",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Meta-Harness-style autonomous harness optimization for Claude Code",
   "author": "Raphael Valdetaro",
   "license": "MIT",
