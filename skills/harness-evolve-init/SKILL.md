@@ -1,7 +1,7 @@
 ---
 name: harness-evolve-init
-description: "Initialize harness evolution in the current project. Sets up .harness-evolver/ with baseline harness, eval script, and tasks."
-argument-hint: "--harness <path> --eval <path> --tasks <path>"
+description: "Initialize harness evolution in the current project. Auto-detects harness.py, eval.py, and tasks/ in the working directory."
+argument-hint: "[directory] [--harness <path>] [--eval <path>] [--tasks <path>]"
 allowed-tools: [Read, Write, Bash, Glob]
 ---
 
@@ -9,45 +9,42 @@ allowed-tools: [Read, Write, Bash, Glob]
 
 Initialize the Harness Evolver for this project.
 
-## Arguments
+## Usage
 
-- `--harness <path>` — path to the harness script (any executable, typically Python)
-- `--eval <path>` — path to the evaluation script
-- `--tasks <path>` — path to the tasks directory (JSON files with id, input, expected)
+```
+/harness-evolve-init                    # auto-detect everything in CWD
+/harness-evolve-init ./my-project       # auto-detect in a specific directory
+/harness-evolve-init --harness run.py   # override one path, auto-detect the rest
+```
+
+## How Auto-Detection Works
+
+The tool scans the directory for:
+1. **Exact names:** `harness.py`, `eval.py`, `tasks/`, `config.json`
+2. **Fuzzy fallback:** `*harness*`, `*agent*`, `*run*` for harness; `*eval*`, `*score*` for eval; any dir with JSON files containing `id`/`input` fields for tasks
+
+If all 3 are found, init proceeds immediately. If something is missing, it reports what's needed.
 
 ## What To Do
 
 Run the init tool:
 
 ```bash
-python3 ~/.harness-evolver/tools/init.py \
-    --harness {harness} \
-    --eval {eval} \
-    --tasks {tasks} \
-    --base-dir .harness-evolver \
-    --harness-config {config if provided, else omit} \
+python3 ~/.harness-evolver/tools/init.py {directory if provided} \
     --tools-dir ~/.harness-evolver/tools
 ```
+
+Add explicit flags only if the user provided them:
+- `--harness PATH` — override harness auto-detection
+- `--eval PATH` — override eval auto-detection
+- `--tasks PATH` — override tasks auto-detection
+- `--harness-config PATH` — optional config for the harness
 
 If `~/.harness-evolver/tools/init.py` does not exist, check `.harness-evolver/tools/init.py` (local override).
 
 After init completes, report:
+- What was detected (harness, eval, tasks)
 - Baseline score
 - Number of tasks
+- Integrations detected (LangSmith, Context7, stack)
 - Next step: run `/harness-evolve` to start the optimization loop
-
-## LangSmith Dataset (optional)
-
-If the user provides `--langsmith-dataset <dataset_id>`:
-
-```bash
-python3 ~/.harness-evolver/tools/init.py \
-    --harness {harness} \
-    --eval {eval} \
-    --tasks {tasks} \
-    --base-dir .harness-evolver \
-    --langsmith-dataset {dataset_id}
-```
-
-This pulls examples from a LangSmith dataset to use as tasks.
-Requires `LANGSMITH_API_KEY` in the environment.

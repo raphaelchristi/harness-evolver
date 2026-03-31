@@ -2,21 +2,91 @@
 """Project initializer for Harness Evolver.
 
 Usage:
-    init.py --harness PATH --eval PATH --tasks PATH --base-dir PATH
-            [--harness-config PATH] [--tools-dir PATH]
+    init.py [DIR]                                          # auto-detect in DIR (or CWD)
+    init.py --harness PATH --eval PATH --tasks PATH        # explicit paths
+    init.py --base-dir PATH [--harness-config PATH]        # advanced options
 
-Creates the .harness-evolver/ directory structure, copies baseline files,
-runs validation, evaluates the baseline, and initializes state.
+Auto-detects harness.py, eval.py, tasks/ and config.json in the working directory.
+Falls back to fuzzy matching (*harness*, *eval*, *score*, dirs with .json files).
 Stdlib-only. No external dependencies.
 """
 
 import argparse
+import glob
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+
+
+def _auto_detect(search_dir):
+    """Auto-detect harness, eval, and tasks in a directory.
+
+    Returns (harness_path, eval_path, tasks_path, config_path) or raises SystemExit.
+    """
+    search_dir = os.path.abspath(search_dir)
+
+    # Exact convention names first
+    harness = None
+    eval_script = None
+    tasks = None
+    config = None
+
+    # 1. Exact matches
+    for name in ["harness.py"]:
+        p = os.path.join(search_dir, name)
+        if os.path.isfile(p):
+            harness = p
+    for name in ["eval.py"]:
+        p = os.path.join(search_dir, name)
+        if os.path.isfile(p):
+            eval_script = p
+    for name in ["tasks", "tasks/"]:
+        p = os.path.join(search_dir, name.rstrip("/"))
+        if os.path.isdir(p):
+            tasks = p
+    for name in ["config.json"]:
+        p = os.path.join(search_dir, name)
+        if os.path.isfile(p):
+            config = p
+
+    # 2. Fuzzy fallback for harness
+    if not harness:
+        candidates = [f for f in glob.glob(os.path.join(search_dir, "*.py"))
+                      if any(k in os.path.basename(f).lower() for k in ["harness", "agent", "run"])]
+        if len(candidates) == 1:
+            harness = candidates[0]
+
+    # 3. Fuzzy fallback for eval
+    if not eval_script:
+        candidates = [f for f in glob.glob(os.path.join(search_dir, "*.py"))
+                      if any(k in os.path.basename(f).lower() for k in ["eval", "score", "judge"])
+                      and f != harness]
+        if len(candidates) == 1:
+            eval_script = candidates[0]
+
+    # 4. Fuzzy fallback for tasks
+    if not tasks:
+        for d in os.listdir(search_dir):
+            dp = os.path.join(search_dir, d)
+            if os.path.isdir(dp) and any(f.endswith(".json") for f in os.listdir(dp)):
+                # Check if at least one JSON has "id" and "input" keys
+                for f in os.listdir(dp):
+                    if f.endswith(".json"):
+                        try:
+                            with open(os.path.join(dp, f)) as fh:
+                                data = json.load(fh)
+                            if "id" in data and "input" in data:
+                                tasks = dp
+                                break
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                if tasks:
+                    break
+
+    return harness, eval_script, tasks, config
 
 
 def _detect_langsmith():
@@ -77,16 +147,59 @@ def _check_context7_available():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Initialize Harness Evolver project")
-    parser.add_argument("--harness", required=True, help="Path to harness script")
-    parser.add_argument("--eval", required=True, help="Path to eval script")
-    parser.add_argument("--tasks", required=True, help="Path to tasks directory")
-    parser.add_argument("--base-dir", required=True, help="Path for .harness-evolver/")
+    parser = argparse.ArgumentParser(
+        description="Initialize Harness Evolver project",
+        usage="init.py [DIR] [--harness PATH] [--eval PATH] [--tasks PATH]",
+    )
+    parser.add_argument("dir", nargs="?", default=".",
+                        help="Directory to scan (default: current directory)")
+    parser.add_argument("--harness", default=None, help="Path to harness script")
+    parser.add_argument("--eval", default=None, help="Path to eval script")
+    parser.add_argument("--tasks", default=None, help="Path to tasks directory")
+    parser.add_argument("--base-dir", default=None, help="Path for .harness-evolver/")
     parser.add_argument("--harness-config", default=None, help="Path to harness config.json")
     parser.add_argument("--tools-dir", default=None, help="Path to tools directory")
     args = parser.parse_args()
 
-    base = args.base_dir
+    # Auto-detect missing args
+    search_dir = os.path.abspath(args.dir)
+    if not args.harness or not args.eval or not args.tasks:
+        detected_harness, detected_eval, detected_tasks, detected_config = _auto_detect(search_dir)
+        if not args.harness:
+            args.harness = detected_harness
+        if not args.eval:
+            args.eval = detected_eval
+        if not args.tasks:
+            args.tasks = detected_tasks
+        if not args.harness_config and detected_config:
+            args.harness_config = detected_config
+
+    # Validate we have everything
+    missing = []
+    if not args.harness:
+        missing.append("harness (no harness.py or *harness*.py found)")
+    if not args.eval:
+        missing.append("eval (no eval.py or *eval*.py found)")
+    if not args.tasks:
+        missing.append("tasks (no tasks/ directory with JSON files found)")
+    if missing:
+        print("Could not auto-detect:", file=sys.stderr)
+        for m in missing:
+            print(f"  - {m}", file=sys.stderr)
+        print(f"\nSearched in: {search_dir}", file=sys.stderr)
+        print("\nProvide explicitly:", file=sys.stderr)
+        print("  /harness-evolve-init --harness PATH --eval PATH --tasks PATH", file=sys.stderr)
+        sys.exit(1)
+
+    # Print what was detected
+    print(f"Harness: {os.path.relpath(args.harness, search_dir)}")
+    print(f"Eval:    {os.path.relpath(args.eval, search_dir)}")
+    print(f"Tasks:   {os.path.relpath(args.tasks, search_dir)}/")
+    if args.harness_config:
+        print(f"Config:  {os.path.relpath(args.harness_config, search_dir)}")
+    print()
+
+    base = args.base_dir or os.path.join(search_dir, ".harness-evolver")
     tools = args.tools_dir or os.path.dirname(__file__)
 
     evaluate_py = os.path.join(tools, "evaluate.py")
