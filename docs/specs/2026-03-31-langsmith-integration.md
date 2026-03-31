@@ -1,6 +1,6 @@
 # Harness Evolver × LangSmith — Guia de Integração (v2)
 
-> **Autor**: Raphael Valdetaro Christi Cordeiro
+> **Autor**: Raphael Valdetaro
 > **Data**: 2026-03-31
 > **Status**: Roadmap (v0.3+)
 > **Revisão**: v2 — reescrito para usar langsmith-cli em vez de REST API client custom

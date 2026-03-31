@@ -2217,7 +2217,7 @@ Create `package.json`:
   "name": "harness-evolver",
   "version": "0.1.0",
   "description": "Meta-Harness-style autonomous harness optimization for Claude Code",
-  "author": "Raphael Valdetaro Christi Cordeiro",
+  "author": "Raphael Valdetaro",
   "license": "MIT",
   "repository": {
     "type": "git",

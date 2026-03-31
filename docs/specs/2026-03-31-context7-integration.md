@@ -1,6 +1,6 @@
 # Harness Evolver × Context7 — Guia de Integração
 
-> **Autor**: Raphael Valdetaro Christi Cordeiro  
+> **Autor**: Raphael Valdetaro  
 > **Data**: 2026-03-31  
 > **Status**: Roadmap (v0.4+)  
 > **Pré-requisito**: MVP (Tasks 1-11) implementado  

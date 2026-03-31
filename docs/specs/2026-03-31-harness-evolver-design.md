@@ -1,6 +1,6 @@
 # Harness Evolver — Design Spec v0.1
 
-> **Autor**: Raphael Valdetaro Christi Cordeiro
+> **Autor**: Raphael Valdetaro
 > **Data**: 2026-03-31
 > **Status**: Aprovado
 > **Approach**: MVP Mínimo Funcional (Approach A)
