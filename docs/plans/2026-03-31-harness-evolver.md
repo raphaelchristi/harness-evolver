@@ -10,10 +10,12 @@
 
 **Spec:** `docs/specs/2026-03-31-harness-evolver-design.md`
 **LangSmith Integration Spec:** `docs/specs/2026-03-31-langsmith-integration.md`
+**Context7 Integration Spec:** `docs/specs/2026-03-31-context7-integration.md`
 
 **Phases:**
 - **Phase 1 (Tasks 1-11):** MVP — core loop with local traces and user-written eval
 - **Phase 2 (Tasks 12-14):** LangSmith integration — auto-tracing, LLM-as-Judge evaluators, dataset sync
+- **Phase 3 (Tasks 15-16):** Context7 integration — stack detection, documentation-aware proposer
 
 **LangSmith Hook Points (implemented in Phase 2, designed for in Phase 1):**
 The MVP code has clean phase boundaries where LangSmith plugs in:
@@ -3042,6 +3044,540 @@ git commit -m "feat: add LangSmith auto-detection in init + dataset support"
 
 ---
 
+---
+
+# Phase 3: Context7 Integration
+
+> **Spec:** `docs/specs/2026-03-31-context7-integration.md`
+> **Prerequisite:** Phase 1 (Tasks 1-11) complete
+> **Independent of:** Phase 2 (LangSmith) — can be implemented before, after, or in parallel
+> **Principle:** Context7 is optional. The proposer works without it but may propose outdated APIs. With Context7, it consults current documentation before writing code.
+
+**Why this is simpler than LangSmith:** The proposer is already a Claude Code subagent with MCP server access. Context7 is an MCP server. No adapter needed — just detect the stack, instruct the proposer to use docs, and suggest the user install Context7.
+
+```
+LangSmith = OBSERVABILITY (what happened? how to score?)  → enriches traces + scores
+Context7  = KNOWLEDGE (how to solve correctly?)            → enriches proposals
+```
+
+### Task 15: detect_stack.py
+
+**Files:**
+- Create: `tools/detect_stack.py`
+- Create: `tests/test_detect_stack.py`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/test_detect_stack.py`:
+
+```python
+"""Tests for detect_stack.py — AST-based stack detection."""
+
+import json
+import os
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+from detect_stack import detect_from_file, detect_from_directory
+
+
+class TestDetectFromFile(unittest.TestCase):
+    def _write_py(self, content):
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
+        f.write(content)
+        f.close()
+        return f.name
+
+    def test_detects_langchain(self):
+        path = self._write_py("from langchain_openai import ChatOpenAI\nimport langchain\n")
+        result = detect_from_file(path)
+        self.assertIn("langchain", result)
+        self.assertEqual(result["langchain"]["context7_id"], "/langchain-ai/langchain")
+        self.assertIn("langchain", result["langchain"]["modules_found"])
+        self.assertIn("langchain_openai", result["langchain"]["modules_found"])
+
+    def test_detects_langgraph(self):
+        path = self._write_py("from langgraph.graph import StateGraph\n")
+        result = detect_from_file(path)
+        self.assertIn("langgraph", result)
+        self.assertEqual(result["langgraph"]["context7_id"], "/langchain-ai/langgraph")
+
+    def test_detects_anthropic(self):
+        path = self._write_py("import anthropic\n")
+        result = detect_from_file(path)
+        self.assertIn("anthropic", result)
+
+    def test_detects_openai(self):
+        path = self._write_py("from openai import OpenAI\n")
+        result = detect_from_file(path)
+        self.assertIn("openai", result)
+
+    def test_detects_multiple(self):
+        path = self._write_py("import langchain\nimport chromadb\nimport fastapi\n")
+        result = detect_from_file(path)
+        self.assertIn("langchain", result)
+        self.assertIn("chromadb", result)
+        self.assertIn("fastapi", result)
+
+    def test_no_detection_for_stdlib(self):
+        path = self._write_py("import json\nimport os\nimport sys\n")
+        result = detect_from_file(path)
+        self.assertEqual(result, {})
+
+    def test_handles_syntax_error(self):
+        path = self._write_py("def broken(\n")
+        result = detect_from_file(path)
+        self.assertEqual(result, {})
+
+    def test_no_detection_for_unknown_lib(self):
+        path = self._write_py("import some_custom_library\n")
+        result = detect_from_file(path)
+        self.assertEqual(result, {})
+
+
+class TestDetectFromDirectory(unittest.TestCase):
+    def test_merges_across_files(self):
+        tmpdir = tempfile.mkdtemp()
+        with open(os.path.join(tmpdir, "a.py"), "w") as f:
+            f.write("import langchain\n")
+        with open(os.path.join(tmpdir, "b.py"), "w") as f:
+            f.write("from langchain_openai import ChatOpenAI\nimport chromadb\n")
+        result = detect_from_directory(tmpdir)
+        self.assertIn("langchain", result)
+        self.assertIn("chromadb", result)
+        self.assertIn("langchain_openai", result["langchain"]["modules_found"])
+        self.assertIn("langchain", result["langchain"]["modules_found"])
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+```bash
+cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest tests.test_detect_stack -v
+```
+
+Expected: `ModuleNotFoundError: No module named 'detect_stack'`
+
+- [ ] **Step 3: Write implementation**
+
+Create `tools/detect_stack.py`:
+
+```python
+#!/usr/bin/env python3
+"""Detect the technology stack of a harness by analyzing Python imports via AST.
+
+Usage:
+    detect_stack.py <file_or_directory> [-o output.json]
+
+Maps imports to known libraries and their Context7 IDs for documentation lookup.
+Stdlib-only. No external dependencies.
+"""
+
+import ast
+import json
+import os
+import sys
+
+KNOWN_LIBRARIES = {
+    "langchain": {
+        "context7_id": "/langchain-ai/langchain",
+        "display": "LangChain",
+        "modules": ["langchain", "langchain_core", "langchain_openai",
+                     "langchain_anthropic", "langchain_community"],
+    },
+    "langgraph": {
+        "context7_id": "/langchain-ai/langgraph",
+        "display": "LangGraph",
+        "modules": ["langgraph"],
+    },
+    "llamaindex": {
+        "context7_id": "/run-llama/llama_index",
+        "display": "LlamaIndex",
+        "modules": ["llama_index"],
+    },
+    "openai": {
+        "context7_id": "/openai/openai-python",
+        "display": "OpenAI Python SDK",
+        "modules": ["openai"],
+    },
+    "anthropic": {
+        "context7_id": "/anthropics/anthropic-sdk-python",
+        "display": "Anthropic Python SDK",
+        "modules": ["anthropic"],
+    },
+    "dspy": {
+        "context7_id": "/stanfordnlp/dspy",
+        "display": "DSPy",
+        "modules": ["dspy"],
+    },
+    "crewai": {
+        "context7_id": "/crewAIInc/crewAI",
+        "display": "CrewAI",
+        "modules": ["crewai"],
+    },
+    "autogen": {
+        "context7_id": "/microsoft/autogen",
+        "display": "AutoGen",
+        "modules": ["autogen"],
+    },
+    "chromadb": {
+        "context7_id": "/chroma-core/chroma",
+        "display": "ChromaDB",
+        "modules": ["chromadb"],
+    },
+    "pinecone": {
+        "context7_id": "/pinecone-io/pinecone-python-client",
+        "display": "Pinecone",
+        "modules": ["pinecone"],
+    },
+    "qdrant": {
+        "context7_id": "/qdrant/qdrant",
+        "display": "Qdrant",
+        "modules": ["qdrant_client"],
+    },
+    "weaviate": {
+        "context7_id": "/weaviate/weaviate",
+        "display": "Weaviate",
+        "modules": ["weaviate"],
+    },
+    "fastapi": {
+        "context7_id": "/fastapi/fastapi",
+        "display": "FastAPI",
+        "modules": ["fastapi"],
+    },
+    "flask": {
+        "context7_id": "/pallets/flask",
+        "display": "Flask",
+        "modules": ["flask"],
+    },
+    "pydantic": {
+        "context7_id": "/pydantic/pydantic",
+        "display": "Pydantic",
+        "modules": ["pydantic"],
+    },
+    "pandas": {
+        "context7_id": "/pandas-dev/pandas",
+        "display": "Pandas",
+        "modules": ["pandas"],
+    },
+    "numpy": {
+        "context7_id": "/numpy/numpy",
+        "display": "NumPy",
+        "modules": ["numpy"],
+    },
+}
+
+
+def detect_from_file(filepath):
+    """Analyze imports of a Python file and return detected stack."""
+    with open(filepath) as f:
+        try:
+            tree = ast.parse(f.read())
+        except SyntaxError:
+            return {}
+
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                imports.add(node.module.split(".")[0])
+
+    detected = {}
+    for lib_key, lib_info in KNOWN_LIBRARIES.items():
+        found = imports & set(lib_info["modules"])
+        if found:
+            detected[lib_key] = {
+                "context7_id": lib_info["context7_id"],
+                "display": lib_info["display"],
+                "modules_found": sorted(found),
+            }
+
+    return detected
+
+
+def detect_from_directory(directory):
+    """Analyze all .py files in a directory and consolidate the stack."""
+    all_detected = {}
+    for root, dirs, files in os.walk(directory):
+        for f in files:
+            if f.endswith(".py"):
+                filepath = os.path.join(root, f)
+                file_detected = detect_from_file(filepath)
+                for lib_key, lib_info in file_detected.items():
+                    if lib_key not in all_detected:
+                        all_detected[lib_key] = lib_info
+                    else:
+                        existing = set(all_detected[lib_key]["modules_found"])
+                        existing.update(lib_info["modules_found"])
+                        all_detected[lib_key]["modules_found"] = sorted(existing)
+    return all_detected
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Detect stack from Python files")
+    parser.add_argument("path", help="File or directory to analyze")
+    parser.add_argument("--output", "-o", help="Output JSON path")
+    args = parser.parse_args()
+
+    if os.path.isfile(args.path):
+        result = detect_from_file(args.path)
+    else:
+        result = detect_from_directory(args.path)
+
+    output = json.dumps(result, indent=2)
+
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(output)
+    else:
+        print(output)
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest tests.test_detect_stack -v
+```
+
+Expected: All 9 tests PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tools/detect_stack.py tests/test_detect_stack.py
+git commit -m "feat: add stack detection via AST for Context7 integration"
+```
+
+---
+
+### Task 16: Context7-aware init.py + proposer.md
+
+**Files:**
+- Modify: `tools/init.py`
+- Modify: `agents/harness-evolver-proposer.md`
+- Create: `tests/test_context7_init.py`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/test_context7_init.py`:
+
+```python
+"""Tests for Context7 stack detection in init.py."""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+
+REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+TOOLS_DIR = os.path.join(REPO_ROOT, "tools")
+INIT_PY = os.path.join(TOOLS_DIR, "init.py")
+
+
+class TestStackDetection(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.base_dir = os.path.join(self.tmpdir, ".harness-evolver")
+        self.tasks_dir = os.path.join(self.tmpdir, "tasks")
+        os.makedirs(self.tasks_dir)
+        # Create a minimal task
+        with open(os.path.join(self.tasks_dir, "task_001.json"), "w") as f:
+            json.dump({"id": "t1", "input": "test", "expected": "test"}, f)
+
+    def _write_harness(self, content):
+        path = os.path.join(self.tmpdir, "harness.py")
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def _write_eval(self):
+        path = os.path.join(self.tmpdir, "eval.py")
+        with open(path, "w") as f:
+            f.write(
+                'import argparse, json, os\n'
+                'p = argparse.ArgumentParser()\n'
+                'p.add_argument("--results-dir")\n'
+                'p.add_argument("--tasks-dir")\n'
+                'p.add_argument("--scores")\n'
+                'a = p.parse_args()\n'
+                'json.dump({"combined_score": 0.5, "per_task": {}}, open(a.scores, "w"))\n'
+            )
+        return path
+
+    def test_init_detects_langchain_stack(self):
+        harness = self._write_harness(
+            'import argparse, json, os\n'
+            'import langchain\n'
+            'from langgraph.graph import StateGraph\n'
+            'p = argparse.ArgumentParser()\n'
+            'p.add_argument("--input", required=True)\n'
+            'p.add_argument("--output", required=True)\n'
+            'p.add_argument("--traces-dir")\n'
+            'p.add_argument("--config")\n'
+            'a = p.parse_args()\n'
+            't = json.load(open(a.input))\n'
+            'json.dump({"id": t["id"], "output": "test"}, open(a.output, "w"))\n'
+        )
+        eval_py = self._write_eval()
+        r = subprocess.run(
+            ["python3", INIT_PY,
+             "--harness", harness,
+             "--eval", eval_py,
+             "--tasks", self.tasks_dir,
+             "--base-dir", self.base_dir,
+             "--tools-dir", TOOLS_DIR],
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(r.returncode, 0, f"stderr: {r.stderr}")
+        config = json.load(open(os.path.join(self.base_dir, "config.json")))
+        self.assertIn("stack", config)
+        self.assertIn("langchain", config["stack"]["detected"])
+        self.assertIn("langgraph", config["stack"]["detected"])
+
+    def test_init_empty_stack_for_stdlib_only(self):
+        harness = self._write_harness(
+            'import argparse, json, os\n'
+            'p = argparse.ArgumentParser()\n'
+            'p.add_argument("--input", required=True)\n'
+            'p.add_argument("--output", required=True)\n'
+            'p.add_argument("--traces-dir")\n'
+            'p.add_argument("--config")\n'
+            'a = p.parse_args()\n'
+            't = json.load(open(a.input))\n'
+            'json.dump({"id": t["id"], "output": "test"}, open(a.output, "w"))\n'
+        )
+        eval_py = self._write_eval()
+        r = subprocess.run(
+            ["python3", INIT_PY,
+             "--harness", harness,
+             "--eval", eval_py,
+             "--tasks", self.tasks_dir,
+             "--base-dir", self.base_dir,
+             "--tools-dir", TOOLS_DIR],
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(r.returncode, 0, f"stderr: {r.stderr}")
+        config = json.load(open(os.path.join(self.base_dir, "config.json")))
+        self.assertIn("stack", config)
+        self.assertEqual(config["stack"]["detected"], {})
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Modify init.py to detect stack**
+
+Add this import at the top of `tools/init.py`:
+
+```python
+# At the top, after existing imports
+```
+
+Add this function before `main()`:
+
+```python
+def _detect_stack(harness_path):
+    """Detect technology stack from harness imports."""
+    detect_stack_py = os.path.join(os.path.dirname(__file__), "detect_stack.py")
+    if not os.path.exists(detect_stack_py):
+        return {}
+    try:
+        r = subprocess.run(
+            ["python3", detect_stack_py, harness_path],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout)
+    except Exception:
+        pass
+    return {}
+
+
+def _check_context7_available():
+    """Check if Context7 MCP is configured in Claude Code."""
+    settings_paths = [
+        os.path.expanduser("~/.claude/settings.json"),
+        os.path.expanduser("~/.claude.json"),
+    ]
+    for path in settings_paths:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    settings = json.load(f)
+                mcp = settings.get("mcpServers", {})
+                if "context7" in mcp or "Context7" in mcp:
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+    return False
+```
+
+In `main()`, after generating `config` dict and before writing it, add:
+
+```python
+    # Detect stack
+    stack = _detect_stack(args.harness)
+    config["stack"] = {
+        "detected": stack,
+        "documentation_hint": "use context7",
+        "auto_detected": True,
+    }
+    if stack:
+        print(f"\nStack detected:")
+        for lib_info in stack.values():
+            print(f"  {lib_info['display']}")
+        if not _check_context7_available():
+            print(f"\nRecommendation: install Context7 MCP for up-to-date documentation:")
+            print(f"  claude mcp add context7 -- npx -y @upstash/context7-mcp@latest\n")
+```
+
+- [ ] **Step 3: Add Context7 documentation block to proposer.md**
+
+Append this section before the "## What You Do NOT Do" section in `agents/harness-evolver-proposer.md`:
+
+```markdown
+## Documentation Lookup (if Context7 available)
+
+- Read `config.json` field `stack.detected` to see which libraries the harness uses.
+- BEFORE writing code that uses a library from the detected stack,
+  use the `resolve-library-id` tool with the `context7_id` from the config, then
+  `get-library-docs` to fetch documentation relevant to your proposed change.
+- If Context7 is NOT available, proceed with model knowledge
+  but note in `proposal.md`: "API not verified against current docs."
+- Do NOT look up docs for every line of code — only when proposing
+  changes that involve specific APIs (new imports, new methods, new parameters).
+```
+
+- [ ] **Step 4: Run all tests**
+
+```bash
+cd /home/rp/Desktop/meta-harness/harness-evolver && python3 -m unittest discover -s tests -v
+```
+
+Expected: All tests pass (previous 28 + new detect_stack 9 + new context7_init 2 = 39 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tools/init.py tools/detect_stack.py agents/harness-evolver-proposer.md tests/test_detect_stack.py tests/test_context7_init.py
+git commit -m "feat: add Context7 integration (stack detection, documentation-aware proposer)"
+```
+
+---
+
 ## File Summary
 
 | File | Purpose | Lines (est.) |
@@ -3076,4 +3612,14 @@ git commit -m "feat: add LangSmith auto-detection in init + dataset support"
 | `tests/test_langsmith_adapter.py` | Unit tests (mocked API) | ~80 |
 | `tests/test_langsmith_init.py` | Init detection tests | ~50 |
 | **Phase 2 Total** | | **~370 lines** |
-| **Grand Total** | | **~1870 lines** |
+
+### Phase 3: Context7 Integration
+
+| File | Purpose | Lines (est.) |
+|------|---------|--------------|
+| `tools/detect_stack.py` | AST-based stack detection for Context7 IDs | ~120 |
+| `tests/test_detect_stack.py` | Unit tests (9 tests) | ~80 |
+| `tests/test_context7_init.py` | Init stack detection tests (2 tests) | ~70 |
+| **Phase 3 Total** | | **~270 lines** |
+| | | |
+| **Grand Total** | | **~2140 lines** |
