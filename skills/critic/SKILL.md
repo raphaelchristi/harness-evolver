@@ -22,13 +22,21 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 1. Read `summary.json` and identify the suspicious pattern (score jump, premature convergence).
 
-2. Dispatch subagent using the **Agent tool** with `subagent_type: "harness-evolver-critic"`:
+2. Read the critic agent definition:
+```bash
+cat ~/.claude/agents/harness-evolver-critic.md
+```
+
+3. Dispatch using the Agent tool — include the agent definition in the prompt:
 
 ```
 Agent(
-  subagent_type: "harness-evolver-critic",
   description: "Critic: analyze eval quality",
   prompt: |
+    <agent_instructions>
+    {paste the FULL content of harness-evolver-critic.md here}
+    </agent_instructions>
+
     <objective>
     Analyze eval quality for this harness evolution project.
     The best version is {version} with score {score} achieved in {iterations} iteration(s).

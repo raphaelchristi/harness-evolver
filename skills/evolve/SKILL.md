@@ -50,15 +50,23 @@ These files are included in the proposer's `<files_to_read>` so it has real trac
 
 ### 2. Propose
 
-Dispatch a subagent using the **Agent tool** with `subagent_type: "harness-evolver-proposer"`.
+Dispatch a subagent using the **Agent tool**.
 
-The prompt MUST be the full XML block below. The `<files_to_read>` MUST include the LangSmith/Context7 files if they were gathered in step 1.5.
+First, read the proposer agent definition to include in the prompt:
+```bash
+cat ~/.claude/agents/harness-evolver-proposer.md
+```
+
+Then dispatch the Agent with the agent definition + structured task:
 
 ```
 Agent(
-  subagent_type: "harness-evolver-proposer",
   description: "Propose harness {version}",
   prompt: |
+    <agent_instructions>
+    {paste the FULL content of harness-evolver-proposer.md here}
+    </agent_instructions>
+
     <objective>
     Propose harness version {version} that improves on the current best score of {best_score}.
     </objective>
@@ -73,7 +81,6 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/proposal.md
     - .harness-evolver/langsmith_diagnosis.json (if exists — LangSmith failure analysis)
     - .harness-evolver/langsmith_stats.json (if exists — LangSmith aggregate stats)
-    - .harness-evolver/context7_docs.md (if exists — current library documentation)
     - .harness-evolver/architecture.json (if exists — architect topology recommendation)
     </files_to_read>
 
@@ -87,13 +94,13 @@ Agent(
     <success_criteria>
     - harness.py maintains CLI interface (--input, --output, --traces-dir, --config)
     - proposal.md documents evidence-based reasoning
-    - Changes are motivated by trace analysis (LangSmith data if available), not guesswork
-    - If context7_docs.md was provided, API usage must match current documentation
+    - If proposing API changes, MUST use Context7 (resolve-library-id + get-library-docs) to verify current docs
+    - Changes motivated by LangSmith trace data (in langsmith_diagnosis.json) when available
     </success_criteria>
 )
 ```
 
-Wait for `## PROPOSAL COMPLETE` in the response. The subagent gets a fresh context window and loads the agent definition from `~/.claude/agents/harness-evolver-proposer.md`.
+Wait for `## PROPOSAL COMPLETE` in the response.
 
 ### 3. Validate
 
@@ -150,13 +157,21 @@ python3 $TOOLS/evaluate.py run \
     --timeout 60
 ```
 
-Dispatch critic subagent using the **Agent tool** with `subagent_type: "harness-evolver-critic"`:
+First read the critic agent definition:
+```bash
+cat ~/.claude/agents/harness-evolver-critic.md
+```
+
+Then dispatch:
 
 ```
 Agent(
-  subagent_type: "harness-evolver-critic",
   description: "Critic: analyze eval quality",
   prompt: |
+    <agent_instructions>
+    {paste the FULL content of harness-evolver-critic.md here}
+    </agent_instructions>
+
     <objective>
     EVAL GAMING DETECTED: Score jumped from {parent_score} to {score} in one iteration.
     Analyze the eval quality and propose a stricter eval.
@@ -219,13 +234,21 @@ python3 $TOOLS/analyze_architecture.py \
     -o .harness-evolver/architecture_signals.json
 ```
 
-Dispatch architect subagent using the **Agent tool** with `subagent_type: "harness-evolver-architect"`:
+First read the architect agent definition:
+```bash
+cat ~/.claude/agents/harness-evolver-architect.md
+```
+
+Then dispatch:
 
 ```
 Agent(
-  subagent_type: "harness-evolver-architect",
   description: "Architect: analyze topology after {stagnation/regression}",
   prompt: |
+    <agent_instructions>
+    {paste the FULL content of harness-evolver-architect.md here}
+    </agent_instructions>
+
     <objective>
     The evolution loop has {stagnated/regressed} after {iterations} iterations (best: {best_score}).
     Analyze the harness architecture and recommend a topology change.
