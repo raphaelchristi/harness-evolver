@@ -16,7 +16,8 @@ const PLUGIN_ROOT = path.resolve(__dirname, "..");
 const HOME = process.env.HOME || process.env.USERPROFILE;
 
 // ANSI colors
-const CYAN = "\x1b[36m";
+const MAGENTA = "\x1b[35m";
+const BRIGHT_MAGENTA = "\x1b[95m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
@@ -25,13 +26,13 @@ const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
 const LOGO = `
-${CYAN}  ██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗
+${BRIGHT_MAGENTA}  ██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗
   ██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝
   ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗
   ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║
   ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████║███████║
   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝
-  ${BOLD}███████╗██╗   ██╗ ██████╗ ██╗    ██╗   ██╗███████╗██████╗
+  ${MAGENTA}${BOLD}███████╗██╗   ██╗ ██████╗ ██╗    ██╗   ██╗███████╗██████╗
   ██╔════╝██║   ██║██╔═══██╗██║    ██║   ██║██╔════╝██╔══██╗
   █████╗  ██║   ██║██║   ██║██║    ██║   ██║█████╗  ██████╔╝
   ██╔══╝  ╚██╗ ██╔╝██║   ██║██║    ╚██╗ ██╔╝██╔══╝  ██╔══██╗
@@ -194,7 +195,7 @@ async function main() {
   // Install for each selected runtime
   for (const runtime of selectedRuntimes) {
     const target = scope === "local" ? `./${runtime.dir}` : `~/${runtime.dir}`;
-    console.log(`  Installing for ${CYAN}${runtime.name}${RESET} to ${target}`);
+    console.log(`  Installing for ${BRIGHT_MAGENTA}${runtime.name}${RESET} to ${target}`);
     console.log();
     installForRuntime(runtime.dir, scope);
   }
@@ -209,7 +210,7 @@ async function main() {
   fs.writeFileSync(versionPath, VERSION);
   console.log(`  ${GREEN}✓${RESET} Wrote VERSION (${VERSION})`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Open a project in Claude Code and run ${CYAN}/harness-evolver:init${RESET}`);
+  console.log(`\n  ${GREEN}Done!${RESET} Open a project in Claude Code and run ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}`);
   console.log(`\n  ${DIM}Quick start with example:${RESET}`);
   console.log(`    cp -r ~/.harness-evolver/examples/classifier ./my-project`);
   console.log(`    cd my-project && claude`);
