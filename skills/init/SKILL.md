@@ -103,6 +103,25 @@ python3 $TOOLS/init.py [directory] \
 
 Add `--harness-config config.json` if a config exists.
 
+For **LLM-powered agents** that make real API calls (LangGraph, CrewAI, etc.) and take
+more than 30 seconds per invocation, increase the validation timeout:
+
+```bash
+python3 $TOOLS/init.py [directory] \
+    --harness harness.py --eval eval.py --tasks tasks/ \
+    --tools-dir $TOOLS \
+    --validation-timeout 120
+```
+
+If validation keeps timing out but you've verified the harness works manually, skip it:
+
+```bash
+python3 $TOOLS/init.py [directory] \
+    --harness harness.py --eval eval.py --tasks tasks/ \
+    --tools-dir $TOOLS \
+    --skip-validation
+```
+
 ## After Init — Report
 
 - What was detected vs created
@@ -132,3 +151,6 @@ This is advisory only — do not spawn the architect agent.
 - The `expected` field is never shown to the harness — only the eval script sees it.
 - If `.harness-evolver/` already exists, warn before overwriting.
 - If no Python files exist in CWD, the user is probably in the wrong directory.
+- **Monorepo / venv mismatch**: In monorepos with dedicated venvs per app, the system `python3` may differ from the project's Python version. The harness wrapper should re-exec with the correct venv Python. The tools now use `sys.executable` instead of hardcoded `python3`.
+- **Stale site-packages**: If the project uses editable installs (`pip install -e .`), packages in `site-packages/` may have stale copies of data files (e.g. registry YAMLs). Run `uv pip install -e . --force-reinstall --no-deps` to sync.
+- **Validation timeout**: LLM agents making real API calls typically take 15-60s per invocation. Use `--validation-timeout 120` or `--skip-validation` to handle this.

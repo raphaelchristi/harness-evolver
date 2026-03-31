@@ -472,12 +472,60 @@ def analyze_scores(summary_path):
 
 # --- Main ---
 
+def analyze_multiple(file_paths):
+    """Analyze multiple Python files and merge their signals.
+
+    Useful in monorepo setups where the harness is a thin wrapper that
+    delegates to the actual agent code. Pass the harness AND the main
+    agent source files for a comprehensive topology classification.
+    """
+    merged = {
+        "llm_call_count": 0,
+        "has_loop_around_llm": False,
+        "has_tool_definitions": False,
+        "has_retrieval": False,
+        "has_graph_framework": False,
+        "has_parallel_execution": False,
+        "has_error_handling": False,
+        "code_lines": 0,
+        "function_count": 0,
+        "class_count": 0,
+        "files_analyzed": [],
+    }
+
+    for path in file_paths:
+        if not os.path.isfile(path):
+            continue
+        try:
+            signals = analyze_code(path)
+        except Exception:
+            continue
+
+        merged["llm_call_count"] += signals.get("llm_call_count", 0)
+        merged["code_lines"] += signals.get("code_lines", 0)
+        merged["function_count"] += signals.get("function_count", 0)
+        merged["class_count"] += signals.get("class_count", 0)
+        merged["files_analyzed"].append(os.path.basename(path))
+
+        for bool_key in ["has_loop_around_llm", "has_tool_definitions", "has_retrieval",
+                         "has_graph_framework", "has_parallel_execution", "has_error_handling"]:
+            if signals.get(bool_key):
+                merged[bool_key] = True
+
+    merged["estimated_topology"] = _estimate_topology(merged)
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analyze harness architecture and produce signals for the architect agent",
-        usage="analyze_architecture.py --harness PATH [--traces-dir PATH] [--summary PATH] [-o output.json]",
+        usage="analyze_architecture.py --harness PATH [--source-files PATH ...] "
+              "[--traces-dir PATH] [--summary PATH] [-o output.json]",
     )
     parser.add_argument("--harness", required=True, help="Path to harness Python file")
+    parser.add_argument("--source-files", nargs="*", default=None,
+                        help="Additional source files to analyze (e.g. the actual agent code). "
+                             "Useful when the harness is a thin wrapper around a larger system.")
     parser.add_argument("--traces-dir", default=None, help="Path to traces directory")
     parser.add_argument("--summary", default=None, help="Path to summary.json")
     parser.add_argument("-o", "--output", default=None, help="Output JSON path")
@@ -487,8 +535,14 @@ def main():
         print(json.dumps({"error": f"Harness file not found: {args.harness}"}))
         sys.exit(1)
 
+    if args.source_files:
+        all_files = [args.harness] + [f for f in args.source_files if os.path.isfile(f)]
+        code_signals = analyze_multiple(all_files)
+    else:
+        code_signals = analyze_code(args.harness)
+
     result = {
-        "code_signals": analyze_code(args.harness),
+        "code_signals": code_signals,
         "trace_signals": None,
         "score_signals": None,
     }

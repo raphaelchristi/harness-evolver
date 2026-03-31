@@ -2,7 +2,7 @@
 """Evaluation orchestrator for Harness Evolver.
 
 Commands:
-    validate --harness PATH [--config PATH]
+    validate --harness PATH [--config PATH] [--timeout SECONDS]
     run      --harness PATH --tasks-dir PATH --eval PATH --traces-dir PATH --scores PATH
              [--config PATH] [--timeout SECONDS]
 
@@ -20,9 +20,23 @@ import tempfile
 import time
 
 
+def _resolve_python():
+    """Resolve the Python interpreter to use for subprocesses.
+
+    Prefers the current interpreter (sys.executable) over a hardcoded 'python3'.
+    This is critical in monorepo setups where the harness may need a specific
+    venv Python (e.g. Python 3.12) while the system 'python3' is a different
+    version (e.g. 3.14) with incompatible site-packages.
+    """
+    exe = sys.executable
+    if exe and os.path.isfile(exe):
+        return exe
+    return "python3"
+
+
 def _run_harness_on_task(harness, config, task_input_path, output_path, task_traces_dir, timeout, env=None):
     """Run the harness on a single task. Returns (success, elapsed_ms, stdout, stderr)."""
-    cmd = ["python3", harness, "--input", task_input_path, "--output", output_path]
+    cmd = [_resolve_python(), harness, "--input", task_input_path, "--output", output_path]
     if task_traces_dir:
         extra_dir = os.path.join(task_traces_dir, "extra")
         os.makedirs(extra_dir, exist_ok=True)
@@ -48,6 +62,7 @@ def _run_harness_on_task(harness, config, task_input_path, output_path, task_tra
 def cmd_validate(args):
     harness = args.harness
     config = getattr(args, "config", None)
+    timeout = getattr(args, "timeout", 30) or 30
 
     if not os.path.exists(harness):
         print(f"FAIL: harness not found: {harness}", file=sys.stderr)
@@ -61,11 +76,17 @@ def cmd_validate(args):
             json.dump(dummy_task, f)
 
         success, elapsed, stdout, stderr = _run_harness_on_task(
-            harness, config, input_path, output_path, None, timeout=30,
+            harness, config, input_path, output_path, None, timeout=timeout,
         )
 
         if not success:
-            print(f"FAIL: harness exited with error.\nstderr: {stderr}", file=sys.stderr)
+            hint = ""
+            if "TIMEOUT" in stderr:
+                hint = (f"\nHint: validation timed out after {timeout}s. "
+                        "For LLM-powered agents that make real API calls, "
+                        "use --timeout to increase the limit: "
+                        f"evaluate.py validate --harness {harness} --timeout 120")
+            print(f"FAIL: harness exited with error.\nstderr: {stderr}{hint}", file=sys.stderr)
             sys.exit(1)
 
         if not os.path.exists(output_path):
@@ -171,7 +192,7 @@ def cmd_run(args):
         f.write("\n".join(all_stderr))
 
     eval_cmd = [
-        "python3", eval_script,
+        _resolve_python(), eval_script,
         "--results-dir", results_dir,
         "--tasks-dir", tasks_dir,
         "--scores", scores_path,
@@ -195,6 +216,9 @@ def main():
     p_val = sub.add_parser("validate")
     p_val.add_argument("--harness", required=True)
     p_val.add_argument("--config", default=None)
+    p_val.add_argument("--timeout", type=int, default=30,
+                       help="Validation timeout in seconds (default: 30). "
+                            "Increase for LLM-powered agents that make real API calls.")
 
     p_run = sub.add_parser("run")
     p_run.add_argument("--harness", required=True)
