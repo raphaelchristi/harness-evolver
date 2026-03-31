@@ -39,7 +39,7 @@ def classify_mock(text):
 def classify_llm(text, config):
     import urllib.request
 
-    api_key = config.get("api_key", os.environ.get("ANTHROPIC_API_KEY", ""))
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     model = config.get("model", "claude-haiku-4-5-20251001")
 
     prompt = (
