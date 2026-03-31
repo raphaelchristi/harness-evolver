@@ -92,3 +92,8 @@ Read `summary.json`. Print: `Iteration {i}/{N}: {version} scored {score} (best: 
 - Improvement over baseline (absolute and %)
 - Total iterations run
 - Suggest: "The best harness is at `.harness-evolver/harnesses/{best}/harness.py`. Copy it to your project."
+
+If the loop stopped due to stagnation AND `.harness-evolver/architecture.json` does NOT exist:
+
+> The proposer may have hit an architectural ceiling. Run `/harness-evolver:architect`
+> to analyze whether a different agent topology could help.

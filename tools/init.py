@@ -317,6 +317,29 @@ def main():
             print("\nRecommendation: install Context7 MCP for up-to-date documentation:")
             print("  claude mcp add context7 -- npx -y @upstash/context7-mcp@latest")
 
+    # Architecture analysis (quick, advisory)
+    analyze_py = os.path.join(tools, "analyze_architecture.py")
+    if os.path.exists(analyze_py):
+        try:
+            r = subprocess.run(
+                ["python3", analyze_py, "--harness", args.harness],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                arch_signals = json.loads(r.stdout)
+                config["architecture"] = {
+                    "current_topology": arch_signals.get("code_signals", {}).get("estimated_topology", "unknown"),
+                    "auto_analyzed": True,
+                }
+                # Re-write config with architecture
+                with open(os.path.join(base, "config.json"), "w") as f:
+                    json.dump(config, f, indent=2)
+                topo = config["architecture"]["current_topology"]
+                if topo != "unknown":
+                    print(f"Architecture: {topo}")
+        except Exception:
+            pass
+
     # 5. Validate baseline harness
     print("Validating baseline harness...")
     val_args = ["python3", evaluate_py, "validate",

@@ -57,6 +57,21 @@ Add `--harness-config config.json` if a config exists.
 - Baseline score
 - Next: `harness-evolver:evolve` to start
 
+## Architecture Hint
+
+After init completes, run a quick architecture analysis:
+
+```bash
+python3 $TOOLS/analyze_architecture.py --harness .harness-evolver/baseline/harness.py
+```
+
+If the analysis suggests the current topology may not be optimal for the task complexity, mention it:
+
+> Architecture note: Current topology is "{topology}". For tasks with {characteristics},
+> consider running `/harness-evolver:architect` for a detailed recommendation.
+
+This is advisory only — do not spawn the architect agent.
+
 ## Gotchas
 
 - The harness must write valid JSON to `--output`. If the user's code returns non-JSON, the wrapper must serialize it.

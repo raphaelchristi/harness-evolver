@@ -92,6 +92,16 @@ Write a clear `proposal.md` that includes:
 
 Append a summary to `PROPOSER_HISTORY.md`.
 
+## Architecture Guidance (if available)
+
+If `.harness-evolver/architecture.json` exists, read it in Phase 1 (ORIENT). The architect agent has recommended a target topology and migration path.
+
+- Work TOWARD the recommended topology incrementally — one migration step per iteration
+- Do NOT rewrite the entire harness in one iteration
+- Document which migration step you are implementing in `proposal.md`
+- If a migration step causes regression, note it and consider reverting or deviating
+- If `architecture.json` does NOT exist, ignore this section and evolve freely
+
 ## Rules
 
 1. **Every change motivated by evidence.** Cite the task ID, trace line, or score delta that justifies the change. Never change code "to see what happens."
