@@ -2,42 +2,52 @@
 
 End-to-end optimization of LLM agent harnesses, inspired by [Meta-Harness](https://yoonholee.com/meta-harness/) (Lee et al., 2026).
 
-## Overview
+## Install
 
-Harness Evolver automatically discovers better harnesses — the scaffolding code that determines what information to store, retrieve, and present to an LLM at each step. Instead of manual prompt engineering, it uses a search loop where a coding agent proposes, evaluates, and iterates on harness designs using full execution traces as feedback.
+```bash
+npx harness-evolver@latest
+```
+
+## Quick Start
+
+```bash
+# 1. Copy the example into a working directory
+cp -r ~/.harness-evolver/examples/classifier ./my-classifier
+cd my-classifier
+
+# 2. Initialize (runs baseline evaluation)
+/harness-evolve-init --harness harness.py --eval eval.py --tasks tasks/
+
+# 3. Evolve (runs the optimization loop)
+/harness-evolve --iterations 5
+
+# 4. Check progress
+/harness-evolve-status
+```
+
+## How It Works
+
+1. You provide a **harness** (any executable that processes tasks) and an **eval** (any executable that scores outputs).
+2. The plugin runs an autonomous loop: a proposer agent reads all prior candidates' code, execution traces, and scores, then writes a better harness.
+3. Each iteration stores full diagnostic traces — enabling the proposer to do counterfactual diagnosis across versions.
 
 ## Architecture
 
 ```
-harness-evolver/
-├── evolver/
-│   ├── proposer.py      # Coding agent that proposes new harnesses
-│   ├── evaluator.py     # Evaluates candidate harnesses on task sets
-│   ├── loop.py          # Main search loop orchestration
-│   └── filesystem.py    # Filesystem-based feedback store
-├── harnesses/           # Discovered harness candidates
-├── traces/              # Execution traces and evaluation logs
-├── tasks/               # Task definitions and datasets
-└── config.yaml          # Search configuration
-```
-
-## Key Ideas
-
-- **Filesystem as feedback channel**: All prior candidates, scores, and full execution traces are stored in a growing filesystem — providing orders of magnitude more diagnostic context than score-only or summary-based optimizers.
-- **Code-space search**: Harnesses are full Python programs, not prompt templates. The proposer can modify algorithmic structure, retrieval logic, memory management, and prompt construction.
-- **Coding agent as proposer**: A coding agent navigates the feedback filesystem using standard dev tools, enabling counterfactual diagnosis across execution traces.
-
-## Getting Started
-
-```bash
-pip install -e .
+Plugin (installed globally)          Project (.harness-evolver/)
+├── skills/  → slash commands        ├── baseline/     → original harness
+├── agents/  → proposer subagent     ├── eval/         → eval script + tasks
+├── tools/   → Python CLI tools      ├── harnesses/    → versioned candidates
+└── bin/     → npx installer         │   └── v001/
+                                     │       ├── harness.py
+                                     │       ├── scores.json
+                                     │       ├── proposal.md
+                                     │       └── traces/
+                                     ├── summary.json
+                                     └── PROPOSER_HISTORY.md
 ```
 
 ## References
 
-- [Meta-Harness: End-to-End Optimization of Model Harnesses](https://arxiv.org/abs/2603.28052)
-- [stanford-iris-lab/meta-harness-tbench2-artifact](https://github.com/stanford-iris-lab/meta-harness-tbench2-artifact)
-
-## License
-
-MIT
+- [Meta-Harness paper (arxiv 2603.28052)](https://arxiv.org/abs/2603.28052)
+- [Design spec](docs/specs/2026-03-31-harness-evolver-design.md)
