@@ -70,6 +70,15 @@ function checkPython() {
   }
 }
 
+function checkCommand(cmd) {
+  try {
+    execSync(cmd, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function installForRuntime(runtimeDir, scope) {
   const baseDir = scope === "local"
     ? path.join(process.cwd(), runtimeDir)
@@ -223,7 +232,90 @@ async function main() {
   fs.writeFileSync(versionPath, VERSION);
   console.log(`  ${GREEN}✓${RESET} VERSION ${VERSION}`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Run ${BRIGHT_MAGENTA}/reload-plugins${RESET} in Claude Code, then ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}`);
+  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}\n`);
+
+  // Optional integrations
+  console.log(`  ${YELLOW}Install optional integrations?${RESET}\n`);
+  console.log(`  These enhance the proposer with rich traces and up-to-date documentation.\n`);
+
+  // LangSmith CLI
+  const hasLangsmithCli = checkCommand("langsmith-cli --version");
+  if (hasLangsmithCli) {
+    console.log(`  ${GREEN}✓${RESET} langsmith-cli already installed`);
+  } else {
+    console.log(`  ${BOLD}LangSmith CLI${RESET} — rich trace analysis (error rates, latency, token usage)`);
+    console.log(`    ${DIM}uv tool install langsmith-cli && langsmith-cli auth login${RESET}`);
+    const lsAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [y/N]:${RESET} `);
+    if (lsAnswer.trim().toLowerCase() === "y") {
+      console.log(`\n  Installing langsmith-cli...`);
+      try {
+        execSync("uv tool install langsmith-cli", { stdio: "inherit" });
+        console.log(`\n  ${GREEN}✓${RESET} langsmith-cli installed`);
+        console.log(`  ${YELLOW}Run ${BOLD}langsmith-cli auth login${RESET}${YELLOW} to authenticate with your LangSmith API key.${RESET}\n`);
+      } catch {
+        console.log(`\n  ${RED}Failed.${RESET} Install manually: uv tool install langsmith-cli\n`);
+      }
+    }
+  }
+
+  // Context7 MCP
+  const hasContext7 = (() => {
+    try {
+      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
+        if (fs.existsSync(p)) {
+          const s = JSON.parse(fs.readFileSync(p, "utf8"));
+          if (s.mcpServers && (s.mcpServers.context7 || s.mcpServers.Context7)) return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+  if (hasContext7) {
+    console.log(`  ${GREEN}✓${RESET} Context7 MCP already configured`);
+  } else {
+    console.log(`\n  ${BOLD}Context7 MCP${RESET} — up-to-date library documentation (LangChain, OpenAI, etc.)`);
+    console.log(`    ${DIM}claude mcp add context7 -- npx -y @upstash/context7-mcp@latest${RESET}`);
+    const c7Answer = await ask(rl, `\n  ${YELLOW}Install Context7 MCP? [y/N]:${RESET} `);
+    if (c7Answer.trim().toLowerCase() === "y") {
+      console.log(`\n  Installing Context7 MCP...`);
+      try {
+        execSync("claude mcp add context7 -- npx -y @upstash/context7-mcp@latest", { stdio: "inherit" });
+        console.log(`\n  ${GREEN}✓${RESET} Context7 MCP configured`);
+      } catch {
+        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add context7 -- npx -y @upstash/context7-mcp@latest\n`);
+      }
+    }
+  }
+
+  // LangChain Docs MCP
+  const hasLcDocs = (() => {
+    try {
+      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
+        if (fs.existsSync(p)) {
+          const s = JSON.parse(fs.readFileSync(p, "utf8"));
+          if (s.mcpServers && (s.mcpServers["docs-langchain"] || s.mcpServers["LangChain Docs"])) return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+  if (hasLcDocs) {
+    console.log(`  ${GREEN}✓${RESET} LangChain Docs MCP already configured`);
+  } else {
+    console.log(`\n  ${BOLD}LangChain Docs MCP${RESET} — LangChain/LangGraph/LangSmith documentation search`);
+    console.log(`    ${DIM}claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp${RESET}`);
+    const lcAnswer = await ask(rl, `\n  ${YELLOW}Install LangChain Docs MCP? [y/N]:${RESET} `);
+    if (lcAnswer.trim().toLowerCase() === "y") {
+      console.log(`\n  Installing LangChain Docs MCP...`);
+      try {
+        execSync("claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp", { stdio: "inherit" });
+        console.log(`\n  ${GREEN}✓${RESET} LangChain Docs MCP configured`);
+      } catch {
+        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp\n`);
+      }
+    }
+  }
+
   console.log(`\n  ${DIM}Quick start with example:${RESET}`);
   console.log(`    cp -r ~/.harness-evolver/examples/classifier ./my-project`);
   console.log(`    cd my-project && claude`);
