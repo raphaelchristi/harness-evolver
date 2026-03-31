@@ -1,5 +1,5 @@
 ---
-name: diagnose
+name: harness-evolver:diagnose
 description: "Use when the user wants to understand why a specific harness version failed, investigate a regression, analyze trace data, or debug a low score. Also use when the user says 'why did v003 fail' or 'what went wrong'."
 argument-hint: "[version]"
 allowed-tools: [Read, Bash, Glob, Grep]

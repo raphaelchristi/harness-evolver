@@ -1,5 +1,5 @@
 ---
-name: init
+name: harness-evolver:init
 description: "Use when the user wants to set up harness optimization in their project, optimize an LLM agent, improve a harness, or mentions harness-evolver for the first time in a project without .harness-evolver/ directory."
 argument-hint: "[directory]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent]

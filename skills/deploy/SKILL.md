@@ -1,5 +1,5 @@
 ---
-name: deploy
+name: harness-evolver:deploy
 description: "Use when the user wants to use the best evolved harness in their project, promote a version to production, copy the winning harness back, or is done evolving and wants to apply the result."
 argument-hint: "[version]"
 allowed-tools: [Read, Write, Bash, Glob]

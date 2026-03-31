@@ -1,5 +1,5 @@
 ---
-name: compare
+name: harness-evolver:compare
 description: "Use when the user wants to compare two harness versions, understand what changed between iterations, see why one version scored better than another, or debug a regression."
 argument-hint: "<vA> <vB>"
 allowed-tools: [Read, Bash, Glob, Grep]

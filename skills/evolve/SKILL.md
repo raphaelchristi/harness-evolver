@@ -1,5 +1,5 @@
 ---
-name: evolve
+name: harness-evolver:evolve
 description: "Use when the user wants to run the optimization loop, improve harness performance, evolve the harness, or iterate on harness quality. Requires .harness-evolver/ to exist (run harness-evolver:init first)."
 argument-hint: "[--iterations N]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent]

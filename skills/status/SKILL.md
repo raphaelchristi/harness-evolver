@@ -1,5 +1,5 @@
 ---
-name: status
+name: harness-evolver:status
 description: "Use when the user asks about evolution progress, current scores, best harness version, how many iterations ran, or whether the loop is stagnating. Also use when the user says 'status', 'progress', or 'how is it going'."
 allowed-tools: [Read, Bash]
 ---
