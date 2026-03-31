@@ -48,21 +48,13 @@ python3 $TOOLS/analyze_architecture.py \
     -o .harness-evolver/architecture_signals.json
 ```
 
-3. Read the architect agent definition:
-```bash
-cat ~/.claude/agents/harness-evolver-architect.md
-```
-
-4. Dispatch using the Agent tool — include the agent definition in the prompt:
+3. Dispatch using the Agent tool with `subagent_type: "harness-evolver-architect"`:
 
 ```
 Agent(
+  subagent_type: "harness-evolver-architect",
   description: "Architect: topology analysis",
   prompt: |
-    <agent_instructions>
-    {paste the FULL content of harness-evolver-architect.md here}
-    </agent_instructions>
-
     <objective>
     Analyze the harness architecture and recommend the optimal multi-agent topology.
     {If called from evolve: "The evolution loop stagnated/regressed after N iterations."}

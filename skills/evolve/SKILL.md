@@ -73,28 +73,20 @@ These files are included in the proposer's `<files_to_read>` so it has real trac
 Spawn 3 proposer agents IN PARALLEL, each with a different evolutionary strategy.
 This follows the DGM/AlphaEvolve pattern: exploit + explore + crossover.
 
-First, read the proposer agent definition:
-```bash
-cat ~/.claude/agents/harness-evolver-proposer.md
-```
-
-Then determine parents for each strategy:
+Determine parents for each strategy:
 - **Exploiter parent**: current best version (from summary.json `best.version`)
 - **Explorer parent**: a non-best version with low offspring count (read summary.json history, pick one that scored >0 but is NOT the best and has NOT been parent to many children)
 - **Crossover parents**: best version + a different high-scorer from a different lineage
 
-Spawn all 3 using the Agent tool. The first 2 use `run_in_background: true`, the 3rd blocks:
+Spawn all 3 using the Agent tool with `subagent_type: "harness-evolver-proposer"`. The first 2 use `run_in_background: true`, the 3rd blocks:
 
 **Candidate A (Exploiter)** — `run_in_background: true`:
 ```
 Agent(
+  subagent_type: "harness-evolver-proposer",
   description: "Proposer A (exploit): targeted fix for {version}",
   run_in_background: true,
   prompt: |
-    <agent_instructions>
-    {FULL content of harness-evolver-proposer.md}
-    </agent_instructions>
-
     <strategy>
     APPROACH: exploitation
     You are the EXPLOITER. Make the SMALLEST, most targeted change that fixes
@@ -130,13 +122,10 @@ Agent(
 **Candidate B (Explorer)** — `run_in_background: true`:
 ```
 Agent(
+  subagent_type: "harness-evolver-proposer",
   description: "Proposer B (explore): bold change from {explorer_parent}",
   run_in_background: true,
   prompt: |
-    <agent_instructions>
-    {FULL content of harness-evolver-proposer.md}
-    </agent_instructions>
-
     <strategy>
     APPROACH: exploration
     You are the EXPLORER. Try a FUNDAMENTALLY DIFFERENT approach.
@@ -172,12 +161,9 @@ Agent(
 **Candidate C (Crossover)** — blocks (last one):
 ```
 Agent(
+  subagent_type: "harness-evolver-proposer",
   description: "Proposer C (crossover): combine {parent_a} + {parent_b}",
   prompt: |
-    <agent_instructions>
-    {FULL content of harness-evolver-proposer.md}
-    </agent_instructions>
-
     <strategy>
     APPROACH: crossover
     You are the CROSSOVER agent. Combine the STRENGTHS of two different versions:
@@ -269,21 +255,13 @@ python3 $TOOLS/evaluate.py run \
 
 For each evaluated candidate, read its scores.json. If `eval_type` is `"pending-judge"` (combined_score == -1), the eval was a passthrough and needs judge scoring.
 
-Read the judge agent definition:
-```bash
-cat ~/.claude/agents/harness-evolver-judge.md
-```
-
-Spawn judge subagent for EACH candidate that needs judging:
+Spawn judge subagent with `subagent_type: "harness-evolver-judge"` for EACH candidate that needs judging:
 
 ```
 Agent(
+  subagent_type: "harness-evolver-judge",
   description: "Judge: score {version}{suffix} outputs",
   prompt: |
-    <agent_instructions>
-    {FULL content of harness-evolver-judge.md}
-    </agent_instructions>
-
     <objective>
     Score the outputs of harness version {version}{suffix} across all {N} tasks.
     </objective>
@@ -354,21 +332,13 @@ python3 $TOOLS/evaluate.py run \
     --timeout 60
 ```
 
-First read the critic agent definition:
-```bash
-cat ~/.claude/agents/harness-evolver-critic.md
-```
-
-Then dispatch:
+Dispatch the critic agent:
 
 ```
 Agent(
+  subagent_type: "harness-evolver-critic",
   description: "Critic: analyze eval quality",
   prompt: |
-    <agent_instructions>
-    {paste the FULL content of harness-evolver-critic.md here}
-    </agent_instructions>
-
     <objective>
     EVAL GAMING DETECTED: Score jumped from {parent_score} to {score} in one iteration.
     Analyze the eval quality and propose a stricter eval.
@@ -431,21 +401,13 @@ python3 $TOOLS/analyze_architecture.py \
     -o .harness-evolver/architecture_signals.json
 ```
 
-First read the architect agent definition:
-```bash
-cat ~/.claude/agents/harness-evolver-architect.md
-```
-
-Then dispatch:
+Dispatch the architect agent:
 
 ```
 Agent(
+  subagent_type: "harness-evolver-architect",
   description: "Architect: analyze topology after {stagnation/regression}",
   prompt: |
-    <agent_instructions>
-    {paste the FULL content of harness-evolver-architect.md here}
-    </agent_instructions>
-
     <objective>
     The evolution loop has {stagnated/regressed} after {iterations} iterations (best: {best_score}).
     Analyze the harness architecture and recommend a topology change.

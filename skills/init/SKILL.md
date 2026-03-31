@@ -49,19 +49,12 @@ If NO eval exists:
 **Tasks** (`tasks/`): If test tasks exist, use them.
 
 If NO tasks exist:
-- Read the testgen agent definition:
-  ```bash
-  cat ~/.claude/agents/harness-evolver-testgen.md
-  ```
-- Spawn testgen subagent:
+- Spawn testgen subagent with `subagent_type: "harness-evolver-testgen"`:
   ```
   Agent(
+    subagent_type: "harness-evolver-testgen",
     description: "TestGen: generate test cases for this project",
     prompt: |
-      <agent_instructions>
-      {FULL content of harness-evolver-testgen.md}
-      </agent_instructions>
-
       <objective>
       Generate 30 diverse test cases for this project. Write them to tasks/ directory.
       </objective>
