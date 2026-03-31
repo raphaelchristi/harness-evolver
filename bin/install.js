@@ -75,23 +75,27 @@ function installForRuntime(runtimeDir, scope) {
     ? path.join(process.cwd(), runtimeDir)
     : path.join(HOME, runtimeDir);
 
-  const commandsDir = path.join(baseDir, "commands", "harness-evolver");
+  const skillsDir = path.join(baseDir, "skills");
   const agentsDir = path.join(baseDir, "agents");
 
-  // Skills → commands/harness-evolver/ as flat .md files
-  // Claude Code expects commands/name.md, not commands/name/SKILL.md
+  // Skills → ~/.claude/skills/<skill-name>/SKILL.md (proper skills format)
   const skillsSource = path.join(PLUGIN_ROOT, "skills");
   if (fs.existsSync(skillsSource)) {
-    fs.mkdirSync(commandsDir, { recursive: true });
     for (const skill of fs.readdirSync(skillsSource, { withFileTypes: true })) {
       if (skill.isDirectory()) {
-        const skillMd = path.join(skillsSource, skill.name, "SKILL.md");
-        if (fs.existsSync(skillMd)) {
-          fs.copyFileSync(skillMd, path.join(commandsDir, skill.name + ".md"));
-          console.log(`  ${GREEN}✓${RESET} Installed command: harness-evolver:${skill.name}`);
-        }
+        const src = path.join(skillsSource, skill.name);
+        const dest = path.join(skillsDir, "harness-evolver:" + skill.name);
+        copyDir(src, dest);
+        console.log(`  ${GREEN}✓${RESET} Installed skill: harness-evolver:${skill.name}`);
       }
     }
+  }
+
+  // Cleanup old commands/ install (from previous versions)
+  const oldCommandsDir = path.join(baseDir, "commands", "harness-evolver");
+  if (fs.existsSync(oldCommandsDir)) {
+    fs.rmSync(oldCommandsDir, { recursive: true, force: true });
+    console.log(`  ${GREEN}✓${RESET} Cleaned up old commands/ directory`);
   }
 
   // Agents → agents/
