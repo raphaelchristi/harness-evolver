@@ -49,6 +49,17 @@ Assess whether the current topology matches the task complexity:
 - Consider the current score — is there room for improvement?
 - Consider the task diversity — do different tasks need different approaches?
 
+### Consult Documentation (if Context7 available)
+
+Before recommending a topology that involves specific frameworks or libraries:
+1. Check `config.json` `stack.detected` for available libraries
+2. Use `resolve-library-id` + `get-library-docs` to verify:
+   - Does the recommended framework support the topology you're suggesting?
+   - What's the current API for implementing it?
+   - Are there examples in the docs?
+
+Include documentation references in `architecture.md` so the proposer can follow them.
+
 ### Phase 3: RECOMMEND
 
 Choose the optimal topology based on:

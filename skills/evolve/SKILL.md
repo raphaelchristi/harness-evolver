@@ -80,6 +80,23 @@ python3 $TOOLS/state.py update \
 
 Read `summary.json`. Print: `Iteration {i}/{N}: {version} scored {score} (best: {best} at {best_score})`
 
+### 6.5. Check for Eval Gaming
+
+After updating state, read the latest `summary.json` and check:
+- Did the score jump >0.3 from parent version?
+- Did we reach 1.0 in fewer than 3 total iterations?
+
+If either is true, warn:
+
+> Suspicious convergence detected: score jumped from {parent_score} to {score} in one iteration.
+> The eval may be too lenient. Run `/harness-evolver:critic` to analyze eval quality.
+
+If score is 1.0 and iterations < 3, STOP the loop and strongly recommend the critic:
+
+> Perfect score reached in only {iterations} iteration(s). This usually indicates
+> the eval is too easy, not that the harness is perfect. Run `/harness-evolver:critic`
+> before continuing.
+
 ### 7. Check Stop Conditions
 
 - **Stagnation**: last 3 scores within 1% of each other → stop

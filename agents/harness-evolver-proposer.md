@@ -55,23 +55,77 @@ You are working inside a `.harness-evolver/` directory with this structure:
 
 ### Phase 2: DIAGNOSE (deep trace analysis)
 
-Investigate the selected versions. Use standard tools:
-- `cat .harness-evolver/harnesses/v{N}/scores.json` — see per-task results
-- `cat .harness-evolver/harnesses/v{N}/traces/task_XXX/output.json` — see what went wrong
-- `cat .harness-evolver/harnesses/v{N}/traces/stderr.log` — look for errors
-- `diff .harness-evolver/harnesses/v{A}/harness.py .harness-evolver/harnesses/v{B}/harness.py` — compare
-- `grep -r "error\|Error\|FAIL\|exception" .harness-evolver/harnesses/v{N}/traces/`
+**Step 1: Try LangSmith first (if available)**
 
-Ask yourself:
+Check if `langsmith-cli` is available and if LangSmith tracing is enabled in `config.json`:
+
+```bash
+which langsmith-cli && cat .harness-evolver/config.json | python3 -c "import sys,json; c=json.load(sys.stdin); print(c.get('eval',{}).get('langsmith',{}).get('enabled',False))"
+```
+
+If both are true, use langsmith-cli as your PRIMARY diagnostic tool:
+
+```bash
+# Overview of the version's runs
+langsmith-cli --json runs stats --project harness-evolver-v{N}
+
+# Find failures with full details
+langsmith-cli --json runs list --project harness-evolver-v{N} --failed --fields id,name,error,inputs,outputs
+
+# Compare two versions
+langsmith-cli --json runs stats --project harness-evolver-v{A}
+langsmith-cli --json runs stats --project harness-evolver-v{B}
+
+# Search for specific error patterns
+langsmith-cli --json runs list --grep "error_pattern" --grep-in error --project harness-evolver-v{N} --fields id,error
+```
+
+ALWAYS use `--json` as the first flag and `--fields` to limit output.
+LangSmith traces are richer than local traces — they capture every LLM call, token usage, latency, and tool invocations.
+
+**Step 2: Fall back to local traces (if LangSmith not available)**
+
+Only if langsmith-cli is not available or LangSmith is not enabled:
+
+- Select 2-3 versions for deep analysis: best, worst recent, different failure mode
+- Read traces: `cat .harness-evolver/harnesses/v{N}/traces/{task_id}/output.json`
+- Search errors: `grep -r "error\|Error\|FAIL" .harness-evolver/harnesses/v{N}/traces/`
+- Compare: `diff .harness-evolver/harnesses/v{A}/harness.py .harness-evolver/harnesses/v{B}/harness.py`
+
+**Step 3: Counterfactual diagnosis (always)**
+
+Regardless of trace source:
 - Which tasks fail? Is there a pattern?
 - What changed between a version that passed and one that failed?
 - Is this a code bug, a prompt issue, a retrieval problem, or a parameter problem?
+- Identify 1-3 specific failure modes with evidence (task IDs, trace lines, score deltas)
 
 **Do NOT read traces of all versions.** Focus on 2-3. Use summary.json to filter.
 
 ### Phase 3: PROPOSE (write new harness)
 
-Based on your diagnosis, create a new version directory and write:
+**Step 1: Consult documentation first (if Context7 available)**
+
+Read `config.json` field `stack.detected` to see which libraries the harness uses.
+
+BEFORE writing any code that uses a library API:
+1. Use `resolve-library-id` with the `context7_id` from the stack config
+2. Use `get-library-docs` to fetch current documentation for the specific API you're about to use
+3. Verify your proposed code matches the current API (not deprecated patterns)
+
+If Context7 is NOT available, proceed with model knowledge but note in `proposal.md`:
+"API not verified against current docs."
+
+Do NOT look up docs for every line — only for new imports, new methods, new parameters.
+
+**Step 2: Write the harness**
+
+Based on your diagnosis (Phase 2) and documentation (Step 1):
+- Write new `harness.py` based on the best candidate + corrections
+- Write `config.json` if parameters changed
+- Prefer additive changes when risk is high (after regressions)
+
+Create a new version directory with:
 
 1. `harnesses/v{NEXT}/harness.py` — the new harness code
 2. `harnesses/v{NEXT}/config.json` — parameters (copy from parent, modify if needed)
@@ -82,15 +136,16 @@ Based on your diagnosis, create a new version directory and write:
 python3 harness.py --input INPUT.json --output OUTPUT.json [--traces-dir DIR] [--config CONFIG.json]
 ```
 
-### Phase 4: DOCUMENT
+**Step 3: Document**
 
-Write a clear `proposal.md` that includes:
-- `Based on v{PARENT}` on the first line
-- What failure modes you identified
-- What specific changes you made and why
-- What you expect to improve
+Write `proposal.md`:
+- `Based on v{PARENT}` on first line
+- What failure modes you identified (with evidence from LangSmith or local traces)
+- What documentation you consulted (Context7 or model knowledge)
+- What changes you made and why
+- Expected impact on score
 
-Append a summary to `PROPOSER_HISTORY.md`.
+Append summary to `PROPOSER_HISTORY.md`.
 
 ## Architecture Guidance (if available)
 
@@ -118,16 +173,21 @@ If `.harness-evolver/architecture.json` exists, read it in Phase 1 (ORIENT). The
 
 7. **Use available API keys from environment.** Check `config.json` field `api_keys` to see which LLM APIs are available (Anthropic, OpenAI, Gemini, OpenRouter, etc.). Always read keys via `os.environ.get("KEY_NAME")` — never hardcode values. If an evolution strategy requires an API that isn't available, note it in `proposal.md` and choose an alternative.
 
-## Documentation Lookup (if Context7 available)
+## Documentation Lookup (Context7-first)
 
-- Read `config.json` field `stack.detected` to see which libraries the harness uses.
-- BEFORE writing code that uses a library from the detected stack,
-  use the `resolve-library-id` tool with the `context7_id` from the config, then
-  `get-library-docs` to fetch documentation relevant to your proposed change.
-- If Context7 is NOT available, proceed with model knowledge
-  but note in `proposal.md`: "API not verified against current docs."
-- Do NOT look up docs for every line of code — only when proposing
-  changes that involve specific APIs (new imports, new methods, new parameters).
+Context7 is the PRIMARY documentation source. In Phase 3, Step 1:
+
+1. Read `config.json` field `stack.detected` to see which libraries the harness uses.
+2. BEFORE writing code that uses a library from the detected stack,
+   use the `resolve-library-id` tool with the `context7_id` from the config, then
+   `get-library-docs` to fetch documentation relevant to your proposed change.
+3. Verify your proposed code matches the current API (not deprecated patterns).
+
+If Context7 is NOT available, proceed with model knowledge
+but note in `proposal.md`: "API not verified against current docs."
+
+Do NOT look up docs for every line of code — only when proposing
+changes that involve specific APIs (new imports, new methods, new parameters).
 
 ## What You Do NOT Do
 
@@ -137,13 +197,16 @@ If `.harness-evolver/architecture.json` exists, read it in Phase 1 (ORIENT). The
 - Do NOT modify any prior version's files — history is immutable.
 - Do NOT create files outside of `harnesses/v{NEXT}/` and `PROPOSER_HISTORY.md`.
 
-## LangSmith Traces (when langsmith-cli is available)
+## LangSmith Traces (LangSmith-first)
 
-If LangSmith tracing is enabled (check `config.json` field `eval.langsmith.enabled`),
-each harness run is automatically traced to a LangSmith project named
-`{project_prefix}-v{NNN}`.
+LangSmith is the PRIMARY diagnostic tool. In Phase 2, Step 1:
 
-Use `langsmith-cli` to query traces directly:
+1. Check if `langsmith-cli` is available and LangSmith tracing is enabled in `config.json`.
+2. If both are true, use langsmith-cli BEFORE falling back to local traces.
+
+LangSmith traces are richer than local traces — they capture every LLM call, token usage,
+latency, and tool invocations. Each harness run is automatically traced to a LangSmith
+project named `{project_prefix}-v{NNN}`.
 
 ```bash
 # Find failures in this version
@@ -164,7 +227,7 @@ langsmith-cli --json runs get-latest --project harness-evolver-v{N} --failed
 ```
 
 ALWAYS use `--json` as the first flag and `--fields` to limit output size.
-If `langsmith-cli` is not available, fall back to local traces in `traces/` as usual.
+Only fall back to local traces in `traces/` if langsmith-cli is not available or LangSmith is not enabled.
 
 ## Output
 
