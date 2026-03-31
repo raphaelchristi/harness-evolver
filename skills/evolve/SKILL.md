@@ -206,15 +206,41 @@ Agent(
 )
 ```
 
-Wait for all 3 to complete. The background agents will notify when done.
+**Also spawn these additional candidates:**
 
-**Special case — iteration 1**: Only the exploiter and explorer can run (no second parent for crossover yet). Spawn 2 agents: exploiter (from baseline) and explorer (also from baseline but with bold strategy). Skip crossover.
+**Candidate D (Prompt Specialist)** — `run_in_background: true`:
+Same as Exploiter but with a different focus:
+```
+<strategy>
+APPROACH: prompt-engineering
+You are the PROMPT SPECIALIST. Focus ONLY on improving the system prompt,
+few-shot examples, output format instructions, and prompt structure.
+Do NOT change the retrieval logic, pipeline structure, or code architecture.
+</strategy>
+```
+Output to: `.harness-evolver/harnesses/{version}d/`
 
-**Special case — iteration 2+**: All 3 strategies. Explorer parent = fitness-weighted random from history excluding current best.
+**Candidate E (Data/Retrieval Specialist)** — `run_in_background: true`:
+```
+<strategy>
+APPROACH: retrieval-optimization  
+You are the RETRIEVAL SPECIALIST. Focus ONLY on improving how data is
+retrieved, filtered, ranked, and presented to the LLM. 
+Do NOT change the system prompt text or output formatting.
+Improve: search logic, relevance scoring, cross-domain retrieval, chunking.
+</strategy>
+```
+Output to: `.harness-evolver/harnesses/{version}e/`
+
+Wait for all 5 to complete. The background agents will notify when done.
+
+**Minimum 3 candidates ALWAYS, even on iteration 1.** On iteration 1, the crossover agent uses baseline as both parents but with instruction to "combine the best retrieval strategy with the best prompt strategy from your analysis of the baseline." On iteration 2+, crossover uses two genuinely different parents.
+
+**On iteration 3+**: If scores are improving, keep all 5 strategies. If stagnating, replace Candidate D with a "Radical" strategy that rewrites the harness from scratch.
 
 ### 3. Validate All Candidates
 
-For each candidate (a, b, c):
+For each candidate (a, b, c, d, e):
 ```bash
 python3 $TOOLS/evaluate.py validate --harness .harness-evolver/harnesses/{version}{suffix}/harness.py --config .harness-evolver/harnesses/{version}{suffix}/config.json
 ```
