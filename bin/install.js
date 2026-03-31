@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Harness Evolver installer.
- * Copies plugin to Claude Code plugin cache and registers it.
+ * Copies skills/agents/tools directly to runtime directories (GSD pattern).
  *
  * Usage: npx harness-evolver@latest
  */
@@ -49,12 +49,16 @@ function copyDir(src, dest) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "__pycache__" || entry.name === "tests" || entry.name === "docs") continue;
       copyDir(srcPath, destPath);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+function copyFile(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
 }
 
 function checkPython() {
@@ -66,80 +70,47 @@ function checkPython() {
   }
 }
 
-function readJSON(filepath) {
-  try {
-    return JSON.parse(fs.readFileSync(filepath, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function writeJSON(filepath, data) {
-  fs.mkdirSync(path.dirname(filepath), { recursive: true });
-  fs.writeFileSync(filepath, JSON.stringify(data, null, 2) + "\n");
-}
-
-function installPlugin(runtimeDir, scope) {
+function installForRuntime(runtimeDir, scope) {
   const baseDir = scope === "local"
     ? path.join(process.cwd(), runtimeDir)
     : path.join(HOME, runtimeDir);
 
-  // 1. Copy plugin to cache
-  const cacheDir = path.join(baseDir, "plugins", "cache", "local", "harness-evolver", VERSION);
-  console.log(`  Copying plugin to ${scope === "local" ? "." : "~"}/${runtimeDir}/plugins/cache/...`);
-  copyDir(PLUGIN_ROOT, cacheDir);
-  console.log(`  ${GREEN}✓${RESET} Plugin files copied`);
+  const commandsDir = path.join(baseDir, "commands", "harness-evolver");
+  const agentsDir = path.join(baseDir, "agents");
 
-  // 2. Register in installed_plugins.json
-  const installedPath = path.join(baseDir, "plugins", "installed_plugins.json");
-  let installed = readJSON(installedPath) || { version: 2, plugins: {} };
-  if (!installed.plugins) installed.plugins = {};
+  // Skills → commands/harness-evolver/
+  const skillsSource = path.join(PLUGIN_ROOT, "skills");
+  if (fs.existsSync(skillsSource)) {
+    for (const skill of fs.readdirSync(skillsSource, { withFileTypes: true })) {
+      if (skill.isDirectory()) {
+        copyDir(path.join(skillsSource, skill.name), path.join(commandsDir, skill.name));
+        console.log(`  ${GREEN}✓${RESET} Installed command: harness-evolver:${skill.name}`);
+      }
+    }
+  }
 
-  installed.plugins["harness-evolver@local"] = [{
-    scope: "user",
-    installPath: cacheDir,
-    version: VERSION,
-    installedAt: new Date().toISOString(),
-    lastUpdated: new Date().toISOString(),
-  }];
-  writeJSON(installedPath, installed);
-  console.log(`  ${GREEN}✓${RESET} Registered in installed_plugins.json`);
-
-  // 3. Enable in settings.json
-  const settingsPath = path.join(baseDir, "settings.json");
-  let settings = readJSON(settingsPath) || {};
-  if (!settings.enabledPlugins) settings.enabledPlugins = {};
-  settings.enabledPlugins["harness-evolver@local"] = true;
-  writeJSON(settingsPath, settings);
-  console.log(`  ${GREEN}✓${RESET} Enabled in settings.json`);
-
-  // Count installed items
-  const skillCount = fs.existsSync(path.join(cacheDir, "skills"))
-    ? fs.readdirSync(path.join(cacheDir, "skills")).filter(f =>
-        fs.statSync(path.join(cacheDir, "skills", f)).isDirectory()
-      ).length
-    : 0;
-  const agentCount = fs.existsSync(path.join(cacheDir, "agents"))
-    ? fs.readdirSync(path.join(cacheDir, "agents")).length
-    : 0;
-  const toolCount = fs.existsSync(path.join(cacheDir, "tools"))
-    ? fs.readdirSync(path.join(cacheDir, "tools")).filter(f => f.endsWith(".py")).length
-    : 0;
-
-  console.log(`  ${GREEN}✓${RESET} ${skillCount} skills, ${agentCount} agent, ${toolCount} tools`);
+  // Agents → agents/
+  const agentsSource = path.join(PLUGIN_ROOT, "agents");
+  if (fs.existsSync(agentsSource)) {
+    fs.mkdirSync(agentsDir, { recursive: true });
+    for (const agent of fs.readdirSync(agentsSource)) {
+      copyFile(path.join(agentsSource, agent), path.join(agentsDir, agent));
+      console.log(`  ${GREEN}✓${RESET} Installed agent: ${agent}`);
+    }
+  }
 }
 
-function installToolsGlobal() {
+function installTools() {
   const toolsDir = path.join(HOME, ".harness-evolver", "tools");
   const toolsSource = path.join(PLUGIN_ROOT, "tools");
   if (fs.existsSync(toolsSource)) {
     fs.mkdirSync(toolsDir, { recursive: true });
     for (const tool of fs.readdirSync(toolsSource)) {
       if (tool.endsWith(".py")) {
-        fs.copyFileSync(path.join(toolsSource, tool), path.join(toolsDir, tool));
+        copyFile(path.join(toolsSource, tool), path.join(toolsDir, tool));
       }
     }
-    console.log(`  ${GREEN}✓${RESET} Tools copied to ~/.harness-evolver/tools/`);
+    console.log(`  ${GREEN}✓${RESET} Installed tools to ~/.harness-evolver/tools/`);
   }
 }
 
@@ -148,8 +119,29 @@ function installExamples() {
   const examplesSource = path.join(PLUGIN_ROOT, "examples");
   if (fs.existsSync(examplesSource)) {
     copyDir(examplesSource, examplesDir);
-    console.log(`  ${GREEN}✓${RESET} Examples copied to ~/.harness-evolver/examples/`);
+    console.log(`  ${GREEN}✓${RESET} Installed examples to ~/.harness-evolver/examples/`);
   }
+}
+
+function cleanupBrokenPluginEntry(runtimeDir) {
+  // Remove the harness-evolver@local entry that doesn't work
+  const installedPath = path.join(HOME, runtimeDir, "plugins", "installed_plugins.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(installedPath, "utf8"));
+    if (data.plugins && data.plugins["harness-evolver@local"]) {
+      delete data.plugins["harness-evolver@local"];
+      fs.writeFileSync(installedPath, JSON.stringify(data, null, 2) + "\n");
+    }
+  } catch {}
+
+  const settingsPath = path.join(HOME, runtimeDir, "settings.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    if (data.enabledPlugins && data.enabledPlugins["harness-evolver@local"] !== undefined) {
+      delete data.enabledPlugins["harness-evolver@local"];
+      fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2) + "\n");
+    }
+  } catch {}
 }
 
 async function main() {
@@ -164,7 +156,6 @@ async function main() {
   }
   console.log(`  ${GREEN}✓${RESET} python3 found`);
 
-  // Detect runtimes
   const RUNTIMES = [
     { name: "Claude Code", dir: ".claude" },
     { name: "Cursor", dir: ".cursor" },
@@ -180,7 +171,6 @@ async function main() {
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-  // Runtime selection
   console.log(`\n  ${YELLOW}Which runtime(s) would you like to install for?${RESET}\n`);
   RUNTIMES.forEach((r, i) => console.log(`  ${i + 1}) ${r.name.padEnd(14)} (~/${r.dir})`));
   if (RUNTIMES.length > 1) {
@@ -200,7 +190,6 @@ async function main() {
   }
   if (selected.length === 0) selected = [RUNTIMES[0]];
 
-  // Scope selection
   console.log(`\n  ${YELLOW}Where would you like to install?${RESET}\n`);
   console.log(`  1) Global  (~/${selected[0].dir}) - available in all projects`);
   console.log(`  2) Local   (./${selected[0].dir}) - this project only`);
@@ -210,23 +199,22 @@ async function main() {
 
   console.log();
 
-  // Install
   for (const runtime of selected) {
     console.log(`  Installing for ${BRIGHT_MAGENTA}${runtime.name}${RESET}\n`);
-    installPlugin(runtime.dir, scope);
+    cleanupBrokenPluginEntry(runtime.dir);
+    installForRuntime(runtime.dir, scope);
     console.log();
   }
 
-  installToolsGlobal();
+  installTools();
   installExamples();
 
-  // Version marker
   const versionPath = path.join(HOME, ".harness-evolver", "VERSION");
   fs.mkdirSync(path.dirname(versionPath), { recursive: true });
   fs.writeFileSync(versionPath, VERSION);
   console.log(`  ${GREEN}✓${RESET} VERSION ${VERSION}`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Open a project in Claude Code and run ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}`);
+  console.log(`\n  ${GREEN}Done!${RESET} Run ${BRIGHT_MAGENTA}/reload-plugins${RESET} in Claude Code, then ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}`);
   console.log(`\n  ${DIM}Quick start with example:${RESET}`);
   console.log(`    cp -r ~/.harness-evolver/examples/classifier ./my-project`);
   console.log(`    cd my-project && claude`);
