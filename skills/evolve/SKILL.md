@@ -97,20 +97,50 @@ If score is 1.0 and iterations < 3, STOP the loop and strongly recommend the cri
 > the eval is too easy, not that the harness is perfect. Run `/harness-evolver:critic`
 > before continuing.
 
-### 7. Check Stop Conditions
+### 7. Auto-trigger Architect (on stagnation or regression)
 
-- **Stagnation**: last 3 scores within 1% of each other → stop
+Check if the architect should be auto-spawned. This happens when:
+- **Stagnation**: 3 consecutive iterations within 1% of each other
+- **Regression**: score dropped below parent score (even once)
+
+AND `.harness-evolver/architecture.json` does NOT already exist.
+
+If triggered:
+
+```bash
+python3 $TOOLS/analyze_architecture.py \
+    --harness .harness-evolver/harnesses/{best_version}/harness.py \
+    --traces-dir .harness-evolver/harnesses/{best_version}/traces \
+    --summary .harness-evolver/summary.json \
+    -o .harness-evolver/architecture_signals.json
+```
+
+Then spawn the `harness-evolver-architect` agent:
+
+> The evolution loop has stagnated/regressed after {iterations} iterations (best: {best_score}).
+> Analyze the harness architecture and recommend a topology change.
+> Raw signals at `.harness-evolver/architecture_signals.json`.
+> Write `.harness-evolver/architecture.json` and `.harness-evolver/architecture.md`.
+
+After the architect completes, report:
+
+> Architect recommends: {current} → {recommended} ({confidence} confidence)
+> Migration path: {N} steps. Continuing evolution with architecture guidance.
+
+Then **continue the loop** — the proposer will read `architecture.json` in the next iteration.
+
+If `architecture.json` already exists (architect already ran), skip — don't re-run.
+
+### 8. Check Stop Conditions
+
 - **Target**: `combined_score >= target_score` → stop
 - **N reached**: done
+- **Stagnation post-architect**: 3 more iterations without improvement AFTER architect ran → stop (architecture change didn't help)
 
 ## When Loop Ends — Final Report
 
 - Best version and score
 - Improvement over baseline (absolute and %)
 - Total iterations run
+- Whether architect was triggered and what it recommended
 - Suggest: "The best harness is at `.harness-evolver/harnesses/{best}/harness.py`. Copy it to your project."
-
-If the loop stopped due to stagnation AND `.harness-evolver/architecture.json` does NOT exist:
-
-> The proposer may have hit an architectural ceiling. Run `/harness-evolver:architect`
-> to analyze whether a different agent topology could help.
