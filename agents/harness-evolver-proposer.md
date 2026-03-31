@@ -106,6 +106,8 @@ Append a summary to `PROPOSER_HISTORY.md`.
 
 6. **Prefer readable harnesses over defensive ones.** If the harness has grown past 2x the baseline size without proportional score improvement, consider simplifying. Accumulated try/catch blocks, redundant fallbacks, and growing if-chains are a code smell in evolved harnesses.
 
+7. **Use available API keys from environment.** Check `config.json` field `api_keys` to see which LLM APIs are available (Anthropic, OpenAI, Gemini, OpenRouter, etc.). Always read keys via `os.environ.get("KEY_NAME")` — never hardcode values. If an evolution strategy requires an API that isn't available, note it in `proposal.md` and choose an alternative.
+
 ## Documentation Lookup (if Context7 available)
 
 - Read `config.json` field `stack.detected` to see which libraries the harness uses.

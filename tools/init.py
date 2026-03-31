@@ -89,6 +89,30 @@ def _auto_detect(search_dir):
     return harness, eval_script, tasks, config
 
 
+def _detect_api_keys():
+    """Detect which LLM/service API keys are available in the environment."""
+    KNOWN_KEYS = {
+        "ANTHROPIC_API_KEY": "Anthropic (Claude)",
+        "OPENAI_API_KEY": "OpenAI (GPT)",
+        "GOOGLE_API_KEY": "Google (Gemini)",
+        "GEMINI_API_KEY": "Google Gemini",
+        "OPENROUTER_API_KEY": "OpenRouter",
+        "LANGSMITH_API_KEY": "LangSmith",
+        "TOGETHER_API_KEY": "Together AI",
+        "GROQ_API_KEY": "Groq",
+        "MISTRAL_API_KEY": "Mistral",
+        "COHERE_API_KEY": "Cohere",
+        "FIREWORKS_API_KEY": "Fireworks AI",
+        "DEEPSEEK_API_KEY": "DeepSeek",
+        "XAI_API_KEY": "xAI (Grok)",
+    }
+    detected = {}
+    for env_var, display_name in KNOWN_KEYS.items():
+        if os.environ.get(env_var):
+            detected[env_var] = {"name": display_name, "status": "detected"}
+    return detected
+
+
 def _detect_langsmith():
     """Auto-detect LangSmith API key and return config section."""
     if os.environ.get("LANGSMITH_API_KEY"):
@@ -252,8 +276,18 @@ def main():
             "harnesses": "harnesses/",
         },
     }
+    # Detect API keys available in environment
+    api_keys = _detect_api_keys()
+    config["api_keys"] = api_keys
+
     with open(os.path.join(base, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
+
+    if api_keys:
+        print("API keys detected:")
+        for env_var, info in api_keys.items():
+            print(f"  {info['name']} ({env_var})")
+        print()
 
     ls_config = config["eval"].get("langsmith", {})
     if ls_config.get("enabled"):
