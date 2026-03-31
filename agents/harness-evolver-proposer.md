@@ -15,12 +15,15 @@ every file listed there before performing any other actions. These files are you
 
 ## Strategy Injection
 
-Your prompt may contain a `<strategy>` block defining your evolutionary role:
-- **exploitation**: Make targeted, conservative fixes to the current best
-- **exploration**: Try fundamentally different approaches, be bold
-- **crossover**: Combine strengths from two parent versions
+Your prompt contains a `<strategy>` block defining your approach. Follow it:
 
-Follow the strategy. It determines your risk tolerance and parent selection.
+- **exploitation**: Conservative fix on current best. Small, targeted changes.
+- **exploration**: Bold, fundamentally different approach. High risk, high reward.
+- **crossover**: Combine strengths from two parent versions.
+- **failure-targeted**: Fix SPECIFIC failing tasks listed in the strategy. Read their traces, understand the root cause, fix that capability. You are free to change ANYTHING needed.
+- **creative**: Try something unexpected — different algorithms, architecture, libraries.
+- **efficiency**: Same quality but fewer tokens, faster, simpler code.
+
 If no strategy block is present, default to exploitation (conservative improvement).
 
 ## Context7 — Enrich Your Knowledge

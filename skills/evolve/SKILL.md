@@ -132,6 +132,58 @@ The resulting `langsmith_runs.json` has clean, readable entries:
 
 These files are included in the proposer's `<files_to_read>` so it has readable trace data for diagnosis.
 
+### 1.8. Analyze Per-Task Failures (adaptive briefings for Candidates D and E)
+
+Before spawning proposers, analyze which tasks are failing and cluster them:
+
+```bash
+python3 -c "
+import json, os, sys
+
+# Find best version scores
+summary = json.load(open('.harness-evolver/summary.json'))
+best = summary['best']['version']
+scores_path = f'.harness-evolver/harnesses/{best}/scores.json'
+if not os.path.exists(scores_path):
+    scores_path = '.harness-evolver/baseline/scores.json' if os.path.exists('.harness-evolver/baseline/scores.json') else None
+
+if not scores_path or not os.path.exists(scores_path):
+    print('NO_SCORES')
+    sys.exit(0)
+
+scores = json.load(open(scores_path))
+tasks_dir = '.harness-evolver/eval/tasks/'
+failures = {}
+
+for tid, tdata in scores.get('per_task', {}).items():
+    score = tdata.get('score', 0)
+    if score < 0.7:
+        tfile = os.path.join(tasks_dir, tid + '.json')
+        cat = 'unknown'
+        if os.path.exists(tfile):
+            task = json.load(open(tfile))
+            meta = task.get('metadata', {})
+            cat = meta.get('category', meta.get('type', meta.get('difficulty', 'unknown')))
+        failures.setdefault(cat, []).append({'id': tid, 'score': score})
+
+if not failures:
+    print('ALL_PASSING')
+else:
+    sorted_clusters = sorted(failures.items(), key=lambda x: -len(x[1]))
+    for i, (cat, tasks) in enumerate(sorted_clusters[:2]):
+        task_ids = [t['id'] for t in tasks]
+        avg_score = sum(t['score'] for t in tasks) / len(tasks)
+        print(f'CLUSTER_{i+1}|{cat}|{json.dumps(task_ids)}|{avg_score:.2f}')
+" 2>/dev/null
+```
+
+Parse the output:
+- If `NO_SCORES` or `ALL_PASSING`: D gets "creative" brief, E gets "efficiency" brief
+- If clusters found: D targets cluster 1, E targets cluster 2
+- If only 1 cluster: D targets it, E gets "creative" brief
+
+Save clusters for use in step 2.
+
 ### 2. Propose (3 parallel candidates)
 
 Spawn 3 proposer agents IN PARALLEL, each with a different evolutionary strategy.
@@ -140,7 +192,10 @@ This follows the DGM/AlphaEvolve pattern: exploit + explore + crossover.
 Determine parents for each strategy:
 - **Exploiter parent**: current best version (from summary.json `best.version`)
 - **Explorer parent**: a non-best version with low offspring count (read summary.json history, pick one that scored >0 but is NOT the best and has NOT been parent to many children)
-- **Crossover parents**: best version + a different high-scorer from a different lineage
+- **Crossover parents**: 
+  - Parent A = current best version
+  - Parent B = per-task champion from previous iteration (read `.harness-evolver/per_task_champion.json`). 
+    If no champion file exists, fall back to a non-best version from the archive.
 
 Spawn all 3 using the Agent tool with `subagent_type: "harness-evolver-proposer"`. The first 2 use `run_in_background: true`, the 3rd blocks:
 
@@ -262,35 +317,131 @@ Agent(
 
 **Also spawn these additional candidates:**
 
-**Candidate D (Prompt Specialist)** — `run_in_background: true`:
-Same as Exploiter but with a different focus:
-```
-<strategy>
-APPROACH: prompt-engineering
-You are the PROMPT SPECIALIST. Focus ONLY on improving the system prompt,
-few-shot examples, output format instructions, and prompt structure.
-Do NOT change the retrieval logic, pipeline structure, or code architecture.
-</strategy>
-```
-Output to: `.harness-evolver/harnesses/{version}d/`
+**Candidate D (Failure-Targeted or Creative)** — `run_in_background: true`:
 
-**Candidate E (Data/Retrieval Specialist)** — `run_in_background: true`:
+If failure clusters were found in step 1.8:
 ```
-<strategy>
-APPROACH: retrieval-optimization  
-You are the RETRIEVAL SPECIALIST. Focus ONLY on improving how data is
-retrieved, filtered, ranked, and presented to the LLM. 
-Do NOT change the system prompt text or output formatting.
-Improve: search logic, relevance scoring, cross-domain retrieval, chunking.
-</strategy>
+Agent(
+  subagent_type: "harness-evolver-proposer",
+  description: "Proposer D: fix {cluster_1_category} failures",
+  run_in_background: true,
+  prompt: |
+    <strategy>
+    APPROACH: failure-targeted
+    Focus on fixing these SPECIFIC failing tasks: {cluster_1_task_ids}
+    They share the pattern: {cluster_1_category} (avg score: {cluster_1_avg})
+    Read the traces of these specific tasks to understand WHY they fail.
+    Your changes should improve these tasks WITHOUT regressing others.
+    You are free to change anything — prompts, code, retrieval, architecture — 
+    whatever is needed to fix THIS specific failure mode.
+    </strategy>
+
+    <objective>
+    Propose harness version {version}d targeting {cluster_1_category} failures.
+    </objective>
+
+    <files_to_read>
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/architecture.json (if exists)
+    </files_to_read>
+
+    <output>
+    Create directory .harness-evolver/harnesses/{version}d/ containing:
+    - harness.py, config.json, proposal.md
+    </output>
+)
 ```
-Output to: `.harness-evolver/harnesses/{version}e/`
+
+If ALL_PASSING (no failures):
+```
+Agent(
+  subagent_type: "harness-evolver-proposer",
+  description: "Proposer D: creative approach",
+  run_in_background: true,
+  prompt: |
+    <strategy>
+    APPROACH: creative
+    All tasks are scoring well. Try something UNEXPECTED:
+    - Different algorithm or library
+    - Completely different prompt architecture
+    - Novel error handling or output validation
+    - Something no one would think of
+    The goal is to discover improvements that incremental fixes would miss.
+    </strategy>
+    ...same files_to_read and output as above...
+)
+```
+
+**Candidate E (Failure-Targeted or Efficiency)** — `run_in_background: true`:
+
+If a second failure cluster exists:
+```
+Agent(
+  subagent_type: "harness-evolver-proposer",
+  description: "Proposer E: fix {cluster_2_category} failures",
+  run_in_background: true,
+  prompt: |
+    <strategy>
+    APPROACH: failure-targeted
+    Focus on fixing these SPECIFIC failing tasks: {cluster_2_task_ids}
+    They share the pattern: {cluster_2_category} (avg score: {cluster_2_avg})
+    Read the traces of these specific tasks to understand WHY they fail.
+    Your changes should improve these tasks WITHOUT regressing others.
+    You are free to change anything — prompts, code, retrieval, architecture — 
+    whatever is needed to fix THIS specific failure mode.
+    </strategy>
+
+    <objective>
+    Propose harness version {version}e targeting {cluster_2_category} failures.
+    </objective>
+
+    <files_to_read>
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/architecture.json (if exists)
+    </files_to_read>
+
+    <output>
+    Create directory .harness-evolver/harnesses/{version}e/ containing:
+    - harness.py, config.json, proposal.md
+    </output>
+)
+```
+
+If no second cluster (or ALL_PASSING):
+```
+Agent(
+  subagent_type: "harness-evolver-proposer",
+  description: "Proposer E: efficiency optimization",
+  run_in_background: true,
+  prompt: |
+    <strategy>
+    APPROACH: efficiency
+    Maintain the current quality but optimize for:
+    - Fewer LLM tokens (shorter prompts, less context)
+    - Faster execution (reduce unnecessary steps)
+    - Simpler code (remove redundant logic)
+    - Better error handling (graceful degradation)
+    Do NOT sacrifice accuracy for speed — same quality, less cost.
+    </strategy>
+    ...same files_to_read and output as above...
+)
+```
 
 Wait for all 5 to complete. The background agents will notify when done.
 
 **Minimum 3 candidates ALWAYS, even on iteration 1.** On iteration 1, the crossover agent uses baseline as both parents but with instruction to "combine the best retrieval strategy with the best prompt strategy from your analysis of the baseline." On iteration 2+, crossover uses two genuinely different parents.
 
-**On iteration 3+**: If scores are improving, keep all 5 strategies. If stagnating, replace Candidate D with a "Radical" strategy that rewrites the harness from scratch.
+**On iteration 3+**: If scores are improving, keep all 5 strategies. If stagnating, step 1.8 will naturally shift D and E toward failure-targeted or creative strategies based on actual task performance.
 
 ### 3. Validate All Candidates
 
@@ -345,16 +496,67 @@ Wait for `## JUDGE COMPLETE`.
 
 If eval_type is NOT "pending-judge", the eval.py already produced real scores — skip this step.
 
-### 5. Select Winner + Update State
+### 5. Select Winner + Track Per-Task Champions
 
-Compare scores of all evaluated candidates. The winner is the one with highest combined_score.
+**5a. Find overall winner (highest combined_score):**
 
-Rename the winner directory to the official version name:
+Compare all evaluated candidates. The winner is the one with highest combined_score.
+
+**5b. Find per-task champion (candidate that beats the winner on most individual tasks):**
+
+```bash
+python3 -c "
+import json, os
+
+version = '{version}'
+candidates = {}
+for suffix in ['a', 'b', 'c', 'd', 'e']:
+    path = f'.harness-evolver/harnesses/{version}{suffix}/scores.json'
+    if os.path.exists(path):
+        candidates[suffix] = json.load(open(path))
+
+if not candidates:
+    print('NO_CANDIDATES')
+    exit()
+
+# Overall winner
+winner_suffix = max(candidates, key=lambda s: candidates[s].get('combined_score', 0))
+winner_score = candidates[winner_suffix]['combined_score']
+print(f'WINNER: {winner_suffix} (score: {winner_score:.3f})')
+
+# Per-task champion: which NON-WINNER candidate beats the winner on the most tasks?
+task_wins = {}
+winner_tasks = candidates[winner_suffix].get('per_task', {})
+for suffix, data in candidates.items():
+    if suffix == winner_suffix:
+        continue
+    wins = 0
+    for tid, tdata in data.get('per_task', {}).items():
+        winner_task_score = winner_tasks.get(tid, {}).get('score', 0)
+        if tdata.get('score', 0) > winner_task_score:
+            wins += 1
+    if wins > 0:
+        task_wins[suffix] = wins
+
+if task_wins:
+    champion_suffix = max(task_wins, key=task_wins.get)
+    print(f'PER_TASK_CHAMPION: {champion_suffix} (beats winner on {task_wins[champion_suffix]} tasks)')
+    # Save champion info for next iteration's crossover parent
+    with open('.harness-evolver/per_task_champion.json', 'w') as f:
+        json.dump({'suffix': champion_suffix, 'version': f'{version}{champion_suffix}', 'task_wins': task_wins[champion_suffix]}, f)
+else:
+    print('NO_CHAMPION: winner dominates all tasks')
+" 2>/dev/null
+```
+
+**5c. Promote winner and report ALL candidates:**
+
+Rename winner directory to official version:
 ```bash
 mv .harness-evolver/harnesses/{version}{winning_suffix} .harness-evolver/harnesses/{version}
 ```
 
-Update state with the winner:
+Update state:
 ```bash
 python3 $TOOLS/state.py update \
     --base-dir .harness-evolver \
@@ -363,13 +565,17 @@ python3 $TOOLS/state.py update \
     --proposal .harness-evolver/harnesses/{version}/proposal.md
 ```
 
-Report ALL candidates:
+Report ALL candidates with their scores and strategies:
 ```
-Iteration {i}/{N} — 3 candidates evaluated:
-  {version}a (exploit): {score_a} — {1-line summary from proposal.md}
-  {version}b (explore): {score_b} — {1-line summary}
-  {version}c (cross):   {score_c} — {1-line summary}
-  Winner: {version}{suffix} ({score}) ← promoted to {version}
+Iteration {i}/{N} — {num_candidates} candidates evaluated:
+  {version}a (exploit):          {score_a} — {summary}
+  {version}b (explore):          {score_b} — {summary}
+  {version}c (crossover):        {score_c} — {summary}
+  {version}d ({strategy_d}):     {score_d} — {summary}
+  {version}e ({strategy_e}):     {score_e} — {summary}
+  
+  Winner: {version}{suffix} ({score})
+  Per-task champion: {champion_suffix} (beats winner on {N} tasks) — saved for next crossover
 ```
 
 Keep losing candidates in their directories (they're part of the archive — never discard, per DGM).
