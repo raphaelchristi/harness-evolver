@@ -4,6 +4,7 @@ description: |
   Use this agent to assess eval quality, detect eval gaming, and propose stricter evaluation.
   Triggered when scores converge suspiciously fast or on user request.
 tools: Read, Write, Bash, Grep, Glob
+color: red
 ---
 
 ## Bootstrap

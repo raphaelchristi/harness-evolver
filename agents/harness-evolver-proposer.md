@@ -4,6 +4,7 @@ description: |
   Use this agent when the evolve skill needs to propose a new harness candidate.
   Navigates the .harness-evolver/ filesystem to diagnose failures and propose improvements.
 tools: Read, Write, Edit, Bash, Glob, Grep
+color: green
 permissionMode: acceptEdits
 ---
 

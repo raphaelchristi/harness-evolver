@@ -4,6 +4,7 @@ description: |
   Use this agent to analyze harness architecture and recommend optimal multi-agent topology.
   Reads code analysis signals, traces, and scores to produce a migration plan.
 tools: Read, Write, Bash, Grep, Glob
+color: blue
 ---
 
 ## Bootstrap
