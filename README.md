@@ -4,46 +4,102 @@ End-to-end optimization of LLM agent harnesses, inspired by [Meta-Harness](https
 
 **The harness is the 80% factor.** Changing just the scaffolding around a fixed LLM can produce a [6x performance gap](https://arxiv.org/abs/2603.28052) on the same benchmark. Harness Evolver automates the search for better harnesses using an autonomous propose-evaluate-iterate loop with full execution traces as feedback.
 
-## Why
-
-Manual harness engineering is slow and doesn't scale. Existing optimizers work in prompt-space (OPRO, TextGrad, GEPA) or use compressed summaries. Meta-Harness showed that **code-space search with full diagnostic context** (10M+ tokens of traces) outperforms all of them by 10+ points.
-
-Harness Evolver brings that approach to any domain as a Claude Code plugin.
-
 ## Install
 
 ```bash
-# Via npx (recommended)
 npx harness-evolver@latest
+```
 
-# Or as a Claude Code plugin
-/plugin install harness-evolver
+Select your runtime (Claude Code, Cursor, Codex, Windsurf) and scope (global/local). Then **restart your AI coding agent** for the skills to appear.
+
+## Prerequisites
+
+### API Keys (set in your shell before launching Claude Code)
+
+The harness you're evolving may call LLM APIs. Set the keys your harness needs:
+
+```bash
+# Required: at least one LLM provider
+export ANTHROPIC_API_KEY="sk-ant-..."       # For Claude-based harnesses
+export OPENAI_API_KEY="sk-..."              # For OpenAI-based harnesses
+export GEMINI_API_KEY="AIza..."             # For Gemini-based harnesses
+export OPENROUTER_API_KEY="sk-or-..."       # For OpenRouter (multi-model)
+
+# Optional: enhanced tracing
+export LANGSMITH_API_KEY="lsv2_pt_..."      # Auto-enables LangSmith tracing
+```
+
+The plugin auto-detects which keys are available during `/harness-evolver:init` and shows them. The proposer agent knows which APIs are available and uses them accordingly.
+
+**No API key needed for the example** — the classifier example uses keyword matching (mock mode), no LLM calls.
+
+### Optional: Enhanced Integrations
+
+```bash
+# LangSmith — rich trace analysis for the proposer
+uv tool install langsmith-cli && langsmith-cli auth login
+
+# Context7 — up-to-date library documentation for the proposer
+claude mcp add context7 -- npx -y @upstash/context7-mcp@latest
+
+# LangChain Docs — LangChain/LangGraph-specific documentation
+claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp
 ```
 
 ## Quick Start
 
+### Try the Example (no API key needed)
+
 ```bash
-# 1. Copy the example into a working directory
+# 1. Copy the example
 cp -r ~/.harness-evolver/examples/classifier ./my-classifier
 cd my-classifier
 
-# 2. Initialize (validates harness, evaluates baseline)
-/harness-evolve-init --harness harness.py --eval eval.py --tasks tasks/
+# 2. Open Claude Code
+claude
 
-# 3. Run the evolution loop
-/harness-evolve --iterations 5
+# 3. Initialize — auto-detects harness.py, eval.py, tasks/
+/harness-evolver:init
 
-# 4. Check progress anytime
-/harness-evolve-status
+# 4. Run the evolution loop
+/harness-evolver:evolve --iterations 3
+
+# 5. Check progress
+/harness-evolver:status
 ```
 
-The classifier example runs in mock mode (no API key needed) and demonstrates the full loop in under 2 minutes.
+### Use with Your Own Project
+
+```bash
+cd my-llm-project
+claude
+
+# Init scans your project, identifies the entry point,
+# and helps create harness wrapper + eval + tasks if missing
+/harness-evolver:init
+
+# Run optimization
+/harness-evolver:evolve --iterations 10
+```
+
+The init skill adapts to your project — if you have `graph.py` instead of `harness.py`, it creates a thin wrapper. If you don't have an eval script, it helps you write one.
+
+## Available Commands
+
+| Command | What it does |
+|---|---|
+| `/harness-evolver:init` | Scan project, create harness/eval/tasks, run baseline |
+| `/harness-evolver:evolve` | Run the autonomous optimization loop |
+| `/harness-evolver:status` | Show progress (scores, iterations, stagnation) |
+| `/harness-evolver:compare` | Diff two versions with per-task analysis |
+| `/harness-evolver:diagnose` | Deep trace analysis of a specific version |
+| `/harness-evolver:deploy` | Copy the best harness back to your project |
 
 ## How It Works
 
 ```
                     ┌─────────────────────────────┐
-                    │     /harness-evolve          │
+                    │   /harness-evolver:evolve    │
                     │     (orchestrator skill)     │
                     └──────────┬──────────────────┘
                                │
@@ -63,10 +119,10 @@ The classifier example runs in mock mode (no API key needed) and demonstrates th
         scores.json
 ```
 
-1. **Propose** — A proposer agent (Claude Code subagent) reads all prior candidates' code, execution traces, and scores. It diagnoses failure modes via counterfactual analysis and writes a new harness.
-2. **Evaluate** — The harness runs against every task. Traces are captured per-task (input, output, stdout, stderr, timing). The user's eval script scores the results.
+1. **Propose** — A proposer agent reads all prior candidates' code, execution traces, and scores. Diagnoses failure modes via counterfactual analysis and writes a new harness.
+2. **Evaluate** — The harness runs against every task. Traces are captured per-task (input, output, stdout, stderr, timing). Your eval script scores the results.
 3. **Update** — State files are updated with the new score, parent lineage, and regression detection.
-4. **Repeat** — The loop continues until N iterations, stagnation (3 rounds without >1% improvement), or a target score is reached.
+4. **Repeat** — Until N iterations, stagnation (3 rounds without >1% improvement), or target score reached.
 
 ## The Harness Contract
 
@@ -78,8 +134,8 @@ python3 harness.py --input task.json --output result.json [--traces-dir DIR] [--
 
 - `--input`: JSON with `{id, input, metadata}` (never sees expected answers)
 - `--output`: JSON with `{id, output}`
-- `--traces-dir`: optional directory for the harness to write rich traces
-- `--config`: optional JSON with evolvable parameters (model, temperature, etc.)
+- `--traces-dir`: optional directory for rich traces
+- `--config`: optional JSON with evolvable parameters
 
 The eval script is also any executable:
 
@@ -87,165 +143,104 @@ The eval script is also any executable:
 python3 eval.py --results-dir results/ --tasks-dir tasks/ --scores scores.json
 ```
 
-This means Harness Evolver works with **any language, any framework, any domain**.
+Works with **any language, any framework, any domain**.
 
-## Project Structure
+## Project Structure (after init)
 
 ```
-.harness-evolver/                     # Created in your project by /harness-evolve-init
-├── config.json                       # Project config (harness cmd, eval cmd, evolution params)
+.harness-evolver/                     # Created by /harness-evolver:init
+├── config.json                       # Project config (harness cmd, eval, API keys detected)
 ├── summary.json                      # Source of truth (versions, scores, parents)
-├── STATE.md                          # Human-readable status (generated)
+├── STATE.md                          # Human-readable status
 ├── PROPOSER_HISTORY.md               # Log of all proposals and outcomes
-├── baseline/                         # Original harness (read-only reference)
-│   ├── harness.py
-│   └── config.json
+├── baseline/                         # Original harness (read-only)
+│   └── harness.py
 ├── eval/
-│   ├── eval.py                       # Scoring script
-│   └── tasks/                        # Test cases (JSON files)
+│   ├── eval.py                       # Your scoring script
+│   └── tasks/                        # Test cases
 └── harnesses/
     └── v001/
-        ├── harness.py                # Candidate code
-        ├── config.json               # Evolvable parameters
-        ├── proposal.md               # Proposer's reasoning
-        ├── scores.json               # Evaluation results
+        ├── harness.py                # Evolved candidate
+        ├── proposal.md               # Why this version was created
+        ├── scores.json               # How it scored
         └── traces/                   # Full execution traces
             ├── stdout.log
             ├── stderr.log
             ├── timing.json
             └── task_001/
-                ├── input.json        # What the harness received
-                └── output.json       # What the harness returned
+                ├── input.json
+                └── output.json
 ```
 
-## Plugin Architecture
+## The Proposer
 
-Three-layer design inspired by [GSD](https://github.com/gsd-build/get-shit-done):
+The core of the system. 4-phase workflow from the Meta-Harness paper:
 
-```
-Layer 1: Skills + Agents (markdown)     → AI orchestration
-Layer 2: Tools (Python stdlib-only)     → Deterministic operations
-Layer 3: Installer (Node.js)            → Distribution via npx
-```
+| Phase | What it does |
+|---|---|
+| **Orient** | Read `summary.json` + `PROPOSER_HISTORY.md`. Pick 2-3 versions to investigate. |
+| **Diagnose** | Deep trace analysis. grep for errors, diff versions, counterfactual diagnosis. |
+| **Propose** | Write new harness. Prefer additive changes after regressions. |
+| **Document** | Write `proposal.md` with evidence. Update history. |
 
-| Component | Files | Purpose |
-|---|---|---|
-| **Skills** | `skills/harness-evolve-init/`, `skills/harness-evolve/`, `skills/harness-evolve-status/` | Slash commands that orchestrate the loop |
-| **Agent** | `agents/harness-evolver-proposer.md` | The proposer — 4-phase workflow (orient, diagnose, propose, document) with 6 rules |
-| **Tools** | `tools/evaluate.py`, `tools/state.py`, `tools/init.py`, `tools/detect_stack.py`, `tools/trace_logger.py` | CLI tools called via subprocess — zero LLM tokens spent on deterministic work |
-| **Installer** | `bin/install.js`, `package.json` | Copies skills/agents/tools to the right locations |
-| **Example** | `examples/classifier/` | 10-task medical classifier with mock mode |
+**7 rules:** evidence-based changes, conservative after regression, don't repeat mistakes, one hypothesis at a time, maintain interface, prefer readability, use available API keys from environment.
 
 ## Integrations
 
-### LangSmith (optional)
-
-If `LANGSMITH_API_KEY` is set, the plugin automatically:
-- Enables `LANGCHAIN_TRACING_V2` for auto-tracing of LangChain/LangGraph harnesses
-- Detects [langsmith-cli](https://github.com/gigaverse-app/langsmith-cli) for the proposer to query traces directly
+### LangSmith (optional, recommended for LangChain/LangGraph harnesses)
 
 ```bash
-# Setup
 export LANGSMITH_API_KEY=lsv2_...
 uv tool install langsmith-cli && langsmith-cli auth login
+```
 
-# The proposer can then do:
+When detected, the plugin:
+- Sets `LANGCHAIN_TRACING_V2=true` automatically — all LLM calls are traced
+- The proposer queries traces directly via `langsmith-cli`:
+
+```bash
 langsmith-cli --json runs list --project harness-evolver-v003 --failed --fields id,name,error
 langsmith-cli --json runs stats --project harness-evolver-v003
 ```
 
-No custom API client — the proposer uses `langsmith-cli` like it uses `grep` and `diff`.
-
-### Context7 (optional)
-
-The plugin detects the harness's technology stack via AST analysis (17 libraries supported) and instructs the proposer to consult current documentation before proposing API changes.
+### Context7 (optional, recommended for any library-heavy harness)
 
 ```bash
-# Setup
 claude mcp add context7 -- npx -y @upstash/context7-mcp@latest
-
-# The proposer automatically:
-# 1. Reads config.json → stack.detected (e.g., LangChain, ChromaDB)
-# 2. Queries Context7 for current docs before writing code
-# 3. Annotates proposal.md with "API verified via Context7"
 ```
 
-Without Context7, the proposer uses model knowledge and annotates "API not verified against current docs."
-
-### LangChain Docs MCP (optional)
-
-```bash
-claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp
-```
-
-Complements Context7 with LangChain/LangGraph/LangSmith-specific documentation search.
-
-## The Proposer
-
-The proposer agent is the core of the system. It follows a 4-phase workflow derived from the Meta-Harness paper:
-
-| Phase | Context % | What it does |
-|---|---|---|
-| **Orient** | ~6% | Read `summary.json` and `PROPOSER_HISTORY.md`. Decide which 2-3 versions to investigate. |
-| **Diagnose** | ~80% | Deep trace analysis on selected versions. grep for errors, diff between good/bad versions, counterfactual diagnosis. |
-| **Propose** | ~10% | Write new `harness.py` + `config.json`. Prefer additive changes after regressions. |
-| **Document** | ~4% | Write `proposal.md` with evidence. Append to `PROPOSER_HISTORY.md`. |
-
-**6 rules:**
-1. Every change motivated by evidence (cite task ID, trace line, or score delta)
-2. After regression, prefer additive changes
-3. Don't repeat past mistakes (read PROPOSER_HISTORY.md)
-4. One hypothesis at a time when possible
-5. Maintain the CLI interface
-6. Prefer readable harnesses over defensive ones
-
-## Supported Libraries (Stack Detection)
-
-The AST-based stack detector recognizes 17 libraries:
-
-| Category | Libraries |
-|---|---|
-| **AI Frameworks** | LangChain, LangGraph, LlamaIndex, OpenAI, Anthropic, DSPy, CrewAI, AutoGen |
-| **Vector Stores** | ChromaDB, Pinecone, Qdrant, Weaviate |
-| **Web** | FastAPI, Flask, Pydantic |
-| **Data** | Pandas, NumPy |
+The plugin detects your stack via AST analysis (17 libraries: LangChain, LangGraph, OpenAI, Anthropic, ChromaDB, FastAPI, etc.) and instructs the proposer to consult current docs before proposing API changes.
 
 ## Development
 
 ```bash
-# Run all tests (41 tests, stdlib-only, no pip install needed)
+# Run all tests (41 tests, stdlib-only)
 python3 -m unittest discover -s tests -v
 
-# Test the example manually
-cd examples/classifier
-python3 harness.py --input tasks/task_001.json --output /tmp/result.json --config config.json
-cat /tmp/result.json
+# Test example manually
+python3 examples/classifier/harness.py --input examples/classifier/tasks/task_001.json --output /tmp/result.json --config examples/classifier/config.json
 
-# Run the installer locally
+# Install locally for development
 node bin/install.js
 ```
 
-## Comparison with Related Work
+## Comparison
 
-| | Meta-Harness (paper) | A-Evolve | ECC /evolve | **Harness Evolver** |
+| | Meta-Harness | A-Evolve | ECC | **Harness Evolver** |
 |---|---|---|---|---|
 | **Format** | Paper artifact | Framework (Docker) | Plugin (passive) | **Plugin (active)** |
-| **Search space** | Code-space | Code-space | Prompt-space | **Code-space** |
-| **Context/iter** | 10M tokens | Variable | N/A | **Full filesystem** |
+| **Search** | Code-space | Code-space | Prompt-space | **Code-space** |
 | **Domain** | TerminalBench-2 | Coding benchmarks | Dev workflow | **Any domain** |
-| **Install** | Manual Python | Docker CLI | `/plugin install` | **`npx` or `/plugin install`** |
-| **LangSmith** | No | No | No | **Yes (langsmith-cli)** |
-| **Context7** | No | No | No | **Yes (MCP)** |
+| **Install** | Manual Python | Docker CLI | `/plugin install` | **`npx`** |
+| **LangSmith** | No | No | No | **Yes** |
+| **Context7** | No | No | No | **Yes** |
 
 ## References
 
-- [Meta-Harness: End-to-End Optimization of Model Harnesses](https://arxiv.org/abs/2603.28052) — Lee et al., 2026
-- [GSD (Get Shit Done)](https://github.com/gsd-build/get-shit-done) — CLI architecture inspiration
-- [LangSmith CLI](https://github.com/gigaverse-app/langsmith-cli) — Trace analysis for the proposer
-- [Context7](https://github.com/upstash/context7) — Documentation lookup via MCP
+- [Meta-Harness paper (arxiv 2603.28052)](https://arxiv.org/abs/2603.28052) — Lee et al., 2026
 - [Design Spec](docs/specs/2026-03-31-harness-evolver-design.md)
-- [LangSmith Integration Spec](docs/specs/2026-03-31-langsmith-integration.md)
-- [Context7 Integration Spec](docs/specs/2026-03-31-context7-integration.md)
+- [LangSmith Integration](docs/specs/2026-03-31-langsmith-integration.md)
+- [Context7 Integration](docs/specs/2026-03-31-context7-integration.md)
 
 ## License
 
