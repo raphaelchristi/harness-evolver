@@ -231,20 +231,48 @@ async function main() {
 
   // LangSmith CLI
   const hasLangsmithCli = checkCommand("langsmith-cli --version");
-  if (hasLangsmithCli) {
-    console.log(`  ${GREEN}✓${RESET} langsmith-cli already installed`);
+  const langsmithCredsDir = process.platform === "darwin"
+    ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
+    : path.join(HOME, ".config", "langsmith-cli");
+  const langsmithCredsFile = path.join(langsmithCredsDir, "credentials");
+  const hasLangsmithCreds = fs.existsSync(langsmithCredsFile);
+
+  if (hasLangsmithCli && hasLangsmithCreds) {
+    console.log(`  ${GREEN}✓${RESET} langsmith-cli installed and authenticated`);
   } else {
-    console.log(`  ${BOLD}LangSmith CLI${RESET} — rich trace analysis (error rates, latency, token usage)`);
-    console.log(`    ${DIM}uv tool install langsmith-cli && langsmith-cli auth login${RESET}`);
-    const lsAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [y/N]:${RESET} `);
-    if (lsAnswer.trim().toLowerCase() === "y") {
-      console.log(`\n  Installing langsmith-cli...`);
-      try {
-        execSync("uv tool install langsmith-cli", { stdio: "inherit" });
-        console.log(`\n  ${GREEN}✓${RESET} langsmith-cli installed`);
-        console.log(`  ${YELLOW}Run ${BOLD}langsmith-cli auth login${RESET}${YELLOW} to authenticate with your LangSmith API key.${RESET}\n`);
-      } catch {
-        console.log(`\n  ${RED}Failed.${RESET} Install manually: uv tool install langsmith-cli\n`);
+    if (!hasLangsmithCli) {
+      console.log(`  ${BOLD}LangSmith CLI${RESET} — rich trace analysis (error rates, latency, token usage)`);
+      const lsAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [y/N]:${RESET} `);
+      if (lsAnswer.trim().toLowerCase() === "y") {
+        console.log(`\n  Installing langsmith-cli...`);
+        try {
+          execSync("uv tool install langsmith-cli", { stdio: "inherit" });
+          console.log(`\n  ${GREEN}✓${RESET} langsmith-cli installed`);
+        } catch {
+          console.log(`\n  ${RED}Failed.${RESET} Install manually: uv tool install langsmith-cli\n`);
+        }
+      }
+    } else {
+      console.log(`  ${GREEN}✓${RESET} langsmith-cli already installed`);
+    }
+
+    // Auth — ask for API key inline if not already configured
+    if (!hasLangsmithCreds) {
+      console.log(`\n  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
+      const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key (or Enter to skip):${RESET} `);
+      const key = apiKey.trim();
+      if (key && key.startsWith("lsv2_")) {
+        try {
+          fs.mkdirSync(langsmithCredsDir, { recursive: true });
+          fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
+          console.log(`  ${GREEN}✓${RESET} LangSmith API key saved`);
+        } catch {
+          console.log(`  ${RED}Failed to save credentials.${RESET} Set LANGSMITH_API_KEY in your shell instead.`);
+        }
+      } else if (key) {
+        console.log(`  ${YELLOW}Doesn't look like a LangSmith key (should start with lsv2_). Skipped.${RESET}`);
+      } else {
+        console.log(`  ${DIM}Skipped. Set LANGSMITH_API_KEY later or run: langsmith-cli auth login${RESET}`);
       }
     }
   }
