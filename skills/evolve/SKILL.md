@@ -70,45 +70,50 @@ If Context7 MCP is not available, skip silently.
 
 ### 2. Propose
 
-Spawn the `harness-evolver-proposer` agent with a structured prompt.
+Dispatch a subagent using the **Agent tool** with `subagent_type: "harness-evolver-proposer"`.
 
-The `<files_to_read>` MUST include the LangSmith/Context7 files if they were gathered:
+The prompt MUST be the full XML block below. The `<files_to_read>` MUST include the LangSmith/Context7 files if they were gathered in step 1.5.
 
-```xml
-<objective>
-Propose harness version {version} that improves on the current best score of {best_score}.
-</objective>
+```
+Agent(
+  subagent_type: "harness-evolver-proposer",
+  description: "Propose harness {version}",
+  prompt: |
+    <objective>
+    Propose harness version {version} that improves on the current best score of {best_score}.
+    </objective>
 
-<files_to_read>
-- .harness-evolver/summary.json
-- .harness-evolver/PROPOSER_HISTORY.md
-- .harness-evolver/config.json
-- .harness-evolver/baseline/harness.py
-- .harness-evolver/harnesses/{best_version}/harness.py
-- .harness-evolver/harnesses/{best_version}/scores.json
-- .harness-evolver/harnesses/{best_version}/proposal.md
-- .harness-evolver/langsmith_diagnosis.json (if exists — LangSmith failure analysis)
-- .harness-evolver/langsmith_stats.json (if exists — LangSmith aggregate stats)
-- .harness-evolver/context7_docs.md (if exists — current library documentation)
-- .harness-evolver/architecture.json (if exists — architect topology recommendation)
-</files_to_read>
+    <files_to_read>
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/baseline/harness.py
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/harnesses/{best_version}/proposal.md
+    - .harness-evolver/langsmith_diagnosis.json (if exists — LangSmith failure analysis)
+    - .harness-evolver/langsmith_stats.json (if exists — LangSmith aggregate stats)
+    - .harness-evolver/context7_docs.md (if exists — current library documentation)
+    - .harness-evolver/architecture.json (if exists — architect topology recommendation)
+    </files_to_read>
 
-<output>
-Create directory .harness-evolver/harnesses/{version}/ containing:
-- harness.py (the improved harness)
-- config.json (parameters, copy from parent if unchanged)
-- proposal.md (reasoning, must start with "Based on v{PARENT}")
-</output>
+    <output>
+    Create directory .harness-evolver/harnesses/{version}/ containing:
+    - harness.py (the improved harness)
+    - config.json (parameters, copy from parent if unchanged)
+    - proposal.md (reasoning, must start with "Based on v{PARENT}")
+    </output>
 
-<success_criteria>
-- harness.py maintains CLI interface (--input, --output, --traces-dir, --config)
-- proposal.md documents evidence-based reasoning
-- Changes are motivated by trace analysis (LangSmith data if available), not guesswork
-- If context7_docs.md was provided, API usage must match current documentation
-</success_criteria>
+    <success_criteria>
+    - harness.py maintains CLI interface (--input, --output, --traces-dir, --config)
+    - proposal.md documents evidence-based reasoning
+    - Changes are motivated by trace analysis (LangSmith data if available), not guesswork
+    - If context7_docs.md was provided, API usage must match current documentation
+    </success_criteria>
+)
 ```
 
-Wait for the agent to complete. Look for `## PROPOSAL COMPLETE` in the response.
+Wait for `## PROPOSAL COMPLETE` in the response. The subagent gets a fresh context window and loads the agent definition from `~/.claude/agents/harness-evolver-proposer.md`.
 
 ### 3. Validate
 
@@ -165,36 +170,41 @@ python3 $TOOLS/evaluate.py run \
     --timeout 60
 ```
 
-Spawn the `harness-evolver-critic` agent:
+Dispatch critic subagent using the **Agent tool** with `subagent_type: "harness-evolver-critic"`:
 
-```xml
-<objective>
-EVAL GAMING DETECTED: Score jumped from {parent_score} to {score} in one iteration.
-Analyze the eval quality and propose a stricter eval.
-</objective>
+```
+Agent(
+  subagent_type: "harness-evolver-critic",
+  description: "Critic: analyze eval quality",
+  prompt: |
+    <objective>
+    EVAL GAMING DETECTED: Score jumped from {parent_score} to {score} in one iteration.
+    Analyze the eval quality and propose a stricter eval.
+    </objective>
 
-<files_to_read>
-- .harness-evolver/eval/eval.py
-- .harness-evolver/summary.json
-- .harness-evolver/harnesses/{version}/scores.json
-- .harness-evolver/harnesses/{version}/harness.py
-- .harness-evolver/harnesses/{version}/proposal.md
-- .harness-evolver/config.json
-- .harness-evolver/langsmith_stats.json (if exists)
-</files_to_read>
+    <files_to_read>
+    - .harness-evolver/eval/eval.py
+    - .harness-evolver/summary.json
+    - .harness-evolver/harnesses/{version}/scores.json
+    - .harness-evolver/harnesses/{version}/harness.py
+    - .harness-evolver/harnesses/{version}/proposal.md
+    - .harness-evolver/config.json
+    - .harness-evolver/langsmith_stats.json (if exists)
+    </files_to_read>
 
-<output>
-Write:
-- .harness-evolver/critic_report.md
-- .harness-evolver/eval/eval_improved.py (if weaknesses found)
-</output>
+    <output>
+    Write:
+    - .harness-evolver/critic_report.md
+    - .harness-evolver/eval/eval_improved.py (if weaknesses found)
+    </output>
 
-<success_criteria>
-- Identifies specific weaknesses in eval.py with task/output examples
-- If gaming detected, shows exact tasks that expose the weakness
-- Improved eval preserves the --results-dir/--tasks-dir/--scores interface
-- Re-scores the best version with improved eval to show the difference
-</success_criteria>
+    <success_criteria>
+    - Identifies specific weaknesses in eval.py with task/output examples
+    - If gaming detected, shows exact tasks that expose the weakness
+    - Improved eval preserves the --results-dir/--tasks-dir/--scores interface
+    - Re-scores the best version with improved eval to show the difference
+    </success_criteria>
+)
 ```
 
 Wait for `## CRITIC REPORT COMPLETE`.
@@ -229,35 +239,40 @@ python3 $TOOLS/analyze_architecture.py \
     -o .harness-evolver/architecture_signals.json
 ```
 
-Spawn the `harness-evolver-architect` agent:
+Dispatch architect subagent using the **Agent tool** with `subagent_type: "harness-evolver-architect"`:
 
-```xml
-<objective>
-The evolution loop has {stagnated/regressed} after {iterations} iterations (best: {best_score}).
-Analyze the harness architecture and recommend a topology change.
-</objective>
+```
+Agent(
+  subagent_type: "harness-evolver-architect",
+  description: "Architect: analyze topology after {stagnation/regression}",
+  prompt: |
+    <objective>
+    The evolution loop has {stagnated/regressed} after {iterations} iterations (best: {best_score}).
+    Analyze the harness architecture and recommend a topology change.
+    </objective>
 
-<files_to_read>
-- .harness-evolver/architecture_signals.json
-- .harness-evolver/summary.json
-- .harness-evolver/PROPOSER_HISTORY.md
-- .harness-evolver/config.json
-- .harness-evolver/harnesses/{best_version}/harness.py
-- .harness-evolver/harnesses/{best_version}/scores.json
-- .harness-evolver/context7_docs.md (if exists)
-</files_to_read>
+    <files_to_read>
+    - .harness-evolver/architecture_signals.json
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/context7_docs.md (if exists)
+    </files_to_read>
 
-<output>
-Write:
-- .harness-evolver/architecture.json (structured recommendation)
-- .harness-evolver/architecture.md (human-readable analysis)
-</output>
+    <output>
+    Write:
+    - .harness-evolver/architecture.json (structured recommendation)
+    - .harness-evolver/architecture.md (human-readable analysis)
+    </output>
 
-<success_criteria>
-- Recommendation includes concrete migration steps
-- Each step is implementable in one proposer iteration
-- Considers detected stack and available API keys
-</success_criteria>
+    <success_criteria>
+    - Recommendation includes concrete migration steps
+    - Each step is implementable in one proposer iteration
+    - Considers detected stack and available API keys
+    </success_criteria>
+)
 ```
 
 Wait for `## ARCHITECTURE ANALYSIS COMPLETE`.

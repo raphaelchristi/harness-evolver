@@ -22,36 +22,42 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 1. Read `summary.json` and identify the suspicious pattern (score jump, premature convergence).
 
-2. Spawn the `harness-evolver-critic` agent:
+2. Dispatch subagent using the **Agent tool** with `subagent_type: "harness-evolver-critic"`:
 
-```xml
-<objective>
-Analyze eval quality for this harness evolution project.
-The best version is {version} with score {score} achieved in {iterations} iteration(s).
-{Specific concern: "Score jumped from X to Y in one iteration" or "Perfect score in N iterations"}
-</objective>
+```
+Agent(
+  subagent_type: "harness-evolver-critic",
+  description: "Critic: analyze eval quality",
+  prompt: |
+    <objective>
+    Analyze eval quality for this harness evolution project.
+    The best version is {version} with score {score} achieved in {iterations} iteration(s).
+    {Specific concern: "Score jumped from X to Y in one iteration" or "Perfect score in N iterations"}
+    </objective>
 
-<files_to_read>
-- .harness-evolver/eval/eval.py
-- .harness-evolver/summary.json
-- .harness-evolver/harnesses/{best_version}/scores.json
-- .harness-evolver/harnesses/{best_version}/harness.py
-- .harness-evolver/harnesses/{best_version}/proposal.md
-- .harness-evolver/config.json
-</files_to_read>
+    <files_to_read>
+    - .harness-evolver/eval/eval.py
+    - .harness-evolver/summary.json
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/proposal.md
+    - .harness-evolver/config.json
+    - .harness-evolver/langsmith_stats.json (if exists)
+    </files_to_read>
 
-<output>
-Write:
-- .harness-evolver/critic_report.md (human-readable analysis)
-- .harness-evolver/eval/eval_improved.py (if weaknesses found)
-</output>
+    <output>
+    Write:
+    - .harness-evolver/critic_report.md (human-readable analysis)
+    - .harness-evolver/eval/eval_improved.py (if weaknesses found)
+    </output>
 
-<success_criteria>
-- Identifies specific weaknesses in eval.py with examples
-- If gaming detected, shows exact tasks/outputs that expose the weakness
-- Improved eval preserves the --results-dir/--tasks-dir/--scores interface
-- Re-scores the best version with improved eval to quantify the difference
-</success_criteria>
+    <success_criteria>
+    - Identifies specific weaknesses in eval.py with examples
+    - If gaming detected, shows exact tasks/outputs that expose the weakness
+    - Improved eval preserves the --results-dir/--tasks-dir/--scores interface
+    - Re-scores the best version with improved eval to quantify the difference
+    </success_criteria>
+)
 ```
 
 3. Wait for `## CRITIC REPORT COMPLETE`.

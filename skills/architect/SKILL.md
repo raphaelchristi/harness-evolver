@@ -48,35 +48,40 @@ python3 $TOOLS/analyze_architecture.py \
     -o .harness-evolver/architecture_signals.json
 ```
 
-3. Spawn the `harness-evolver-architect` agent:
+3. Dispatch subagent using the **Agent tool** with `subagent_type: "harness-evolver-architect"`:
 
-```xml
-<objective>
-Analyze the harness architecture and recommend the optimal multi-agent topology.
-{If called from evolve: "The evolution loop stagnated/regressed after N iterations."}
-{If called by user: "The user requested an architecture analysis."}
-</objective>
+```
+Agent(
+  subagent_type: "harness-evolver-architect",
+  description: "Architect: topology analysis",
+  prompt: |
+    <objective>
+    Analyze the harness architecture and recommend the optimal multi-agent topology.
+    {If called from evolve: "The evolution loop stagnated/regressed after N iterations."}
+    {If called by user: "The user requested an architecture analysis."}
+    </objective>
 
-<files_to_read>
-- .harness-evolver/architecture_signals.json
-- .harness-evolver/config.json
-- .harness-evolver/baseline/harness.py
-- .harness-evolver/summary.json (if exists)
-- .harness-evolver/PROPOSER_HISTORY.md (if exists)
-</files_to_read>
+    <files_to_read>
+    - .harness-evolver/architecture_signals.json
+    - .harness-evolver/config.json
+    - .harness-evolver/baseline/harness.py
+    - .harness-evolver/summary.json (if exists)
+    - .harness-evolver/PROPOSER_HISTORY.md (if exists)
+    </files_to_read>
 
-<output>
-Write:
-- .harness-evolver/architecture.json
-- .harness-evolver/architecture.md
-</output>
+    <output>
+    Write:
+    - .harness-evolver/architecture.json
+    - .harness-evolver/architecture.md
+    </output>
 
-<success_criteria>
-- Classifies current topology correctly
-- Recommendation includes migration path with concrete steps
-- Considers detected stack and API key availability
-- Confidence rating is honest (low/medium/high)
-</success_criteria>
+    <success_criteria>
+    - Classifies current topology correctly
+    - Recommendation includes migration path with concrete steps
+    - Considers detected stack and API key availability
+    - Confidence rating is honest (low/medium/high)
+    </success_criteria>
+)
 ```
 
 4. Wait for `## ARCHITECTURE ANALYSIS COMPLETE`.
