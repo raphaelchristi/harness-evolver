@@ -48,27 +48,85 @@ For the first iteration, use `baseline` as the version. For subsequent iteration
 
 These files are included in the proposer's `<files_to_read>` so it has real trace data for diagnosis.
 
-### 2. Propose
+### 2. Propose (3 parallel candidates)
 
-Dispatch a subagent using the **Agent tool**.
+Spawn 3 proposer agents IN PARALLEL, each with a different evolutionary strategy.
+This follows the DGM/AlphaEvolve pattern: exploit + explore + crossover.
 
-First, read the proposer agent definition to include in the prompt:
+First, read the proposer agent definition:
 ```bash
 cat ~/.claude/agents/harness-evolver-proposer.md
 ```
 
-Then dispatch the Agent with the agent definition + structured task:
+Then determine parents for each strategy:
+- **Exploiter parent**: current best version (from summary.json `best.version`)
+- **Explorer parent**: a non-best version with low offspring count (read summary.json history, pick one that scored >0 but is NOT the best and has NOT been parent to many children)
+- **Crossover parents**: best version + a different high-scorer from a different lineage
 
+Spawn all 3 using the Agent tool. The first 2 use `run_in_background: true`, the 3rd blocks:
+
+**Candidate A (Exploiter)** — `run_in_background: true`:
 ```
 Agent(
-  description: "Propose harness {version}",
+  description: "Proposer A (exploit): targeted fix for {version}",
+  run_in_background: true,
   prompt: |
     <agent_instructions>
-    {paste the FULL content of harness-evolver-proposer.md here}
+    {FULL content of harness-evolver-proposer.md}
     </agent_instructions>
 
+    <strategy>
+    APPROACH: exploitation
+    You are the EXPLOITER. Make the SMALLEST, most targeted change that fixes
+    the highest-impact failing tasks. Base your work on the current best version.
+    Do NOT restructure the code. Do NOT change the architecture.
+    Focus on: prompt tweaks, parameter tuning, fixing specific failure modes.
+    </strategy>
+
     <objective>
-    Propose harness version {version} that improves on the current best score of {best_score}.
+    Propose harness version {version}a that improves on {best_score}.
+    </objective>
+
+    <files_to_read>
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/harnesses/{best_version}/harness.py
+    - .harness-evolver/harnesses/{best_version}/scores.json
+    - .harness-evolver/harnesses/{best_version}/proposal.md
+    - .harness-evolver/langsmith_diagnosis.json (if exists)
+    - .harness-evolver/langsmith_stats.json (if exists)
+    - .harness-evolver/architecture.json (if exists)
+    </files_to_read>
+
+    <output>
+    Create directory .harness-evolver/harnesses/{version}a/ containing:
+    - harness.py, config.json, proposal.md
+    </output>
+)
+```
+
+**Candidate B (Explorer)** — `run_in_background: true`:
+```
+Agent(
+  description: "Proposer B (explore): bold change from {explorer_parent}",
+  run_in_background: true,
+  prompt: |
+    <agent_instructions>
+    {FULL content of harness-evolver-proposer.md}
+    </agent_instructions>
+
+    <strategy>
+    APPROACH: exploration
+    You are the EXPLORER. Try a FUNDAMENTALLY DIFFERENT approach.
+    Base your work on {explorer_parent} (NOT the current best — intentionally diverging).
+    Consider: different retrieval strategy, different prompt structure,
+    different output parsing, different error handling philosophy.
+    Be bold. A creative failure teaches more than a timid success.
+    </strategy>
+
+    <objective>
+    Propose harness version {version}b that takes a different approach.
     </objective>
 
     <files_to_read>
@@ -76,57 +134,98 @@ Agent(
     - .harness-evolver/PROPOSER_HISTORY.md
     - .harness-evolver/config.json
     - .harness-evolver/baseline/harness.py
-    - .harness-evolver/harnesses/{best_version}/harness.py
-    - .harness-evolver/harnesses/{best_version}/scores.json
-    - .harness-evolver/harnesses/{best_version}/proposal.md
-    - .harness-evolver/langsmith_diagnosis.json (if exists — LangSmith failure analysis)
-    - .harness-evolver/langsmith_stats.json (if exists — LangSmith aggregate stats)
-    - .harness-evolver/architecture.json (if exists — architect topology recommendation)
+    - .harness-evolver/harnesses/{explorer_parent}/harness.py
+    - .harness-evolver/harnesses/{explorer_parent}/scores.json
+    - .harness-evolver/langsmith_diagnosis.json (if exists)
+    - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
     <output>
-    Create directory .harness-evolver/harnesses/{version}/ containing:
-    - harness.py (the improved harness)
-    - config.json (parameters, copy from parent if unchanged)
-    - proposal.md (reasoning, must start with "Based on v{PARENT}")
+    Create directory .harness-evolver/harnesses/{version}b/ containing:
+    - harness.py, config.json, proposal.md
     </output>
-
-    <success_criteria>
-    - harness.py maintains CLI interface (--input, --output, --traces-dir, --config)
-    - proposal.md documents evidence-based reasoning
-    - If proposing API changes, MUST use Context7 (resolve-library-id + get-library-docs) to verify current docs
-    - Changes motivated by LangSmith trace data (in langsmith_diagnosis.json) when available
-    </success_criteria>
 )
 ```
 
-Wait for `## PROPOSAL COMPLETE` in the response.
+**Candidate C (Crossover)** — blocks (last one):
+```
+Agent(
+  description: "Proposer C (crossover): combine {parent_a} + {parent_b}",
+  prompt: |
+    <agent_instructions>
+    {FULL content of harness-evolver-proposer.md}
+    </agent_instructions>
 
-### 3. Validate
+    <strategy>
+    APPROACH: crossover
+    You are the CROSSOVER agent. Combine the STRENGTHS of two different versions:
+    - {parent_a} (score: {score_a}): {summary of what it does well}
+    - {parent_b} (score: {score_b}): {summary of what it does well}
+    Take the best elements from each and merge them into a single harness.
+    </strategy>
 
-```bash
-python3 $TOOLS/evaluate.py validate \
-    --harness .harness-evolver/harnesses/{version}/harness.py \
-    --config .harness-evolver/harnesses/{version}/config.json
+    <objective>
+    Propose harness version {version}c that combines the best of {parent_a} and {parent_b}.
+    </objective>
+
+    <files_to_read>
+    - .harness-evolver/summary.json
+    - .harness-evolver/PROPOSER_HISTORY.md
+    - .harness-evolver/config.json
+    - .harness-evolver/harnesses/{parent_a}/harness.py
+    - .harness-evolver/harnesses/{parent_a}/scores.json
+    - .harness-evolver/harnesses/{parent_b}/harness.py
+    - .harness-evolver/harnesses/{parent_b}/scores.json
+    - .harness-evolver/langsmith_diagnosis.json (if exists)
+    - .harness-evolver/architecture.json (if exists)
+    </files_to_read>
+
+    <output>
+    Create directory .harness-evolver/harnesses/{version}c/ containing:
+    - harness.py, config.json, proposal.md
+    </output>
+)
 ```
 
-If fails: one retry via proposer. If still fails: score 0.0, continue.
+Wait for all 3 to complete. The background agents will notify when done.
 
-### 4. Evaluate
+**Special case — iteration 1**: Only the exploiter and explorer can run (no second parent for crossover yet). Spawn 2 agents: exploiter (from baseline) and explorer (also from baseline but with bold strategy). Skip crossover.
 
+**Special case — iteration 2+**: All 3 strategies. Explorer parent = fitness-weighted random from history excluding current best.
+
+### 3. Validate All Candidates
+
+For each candidate (a, b, c):
+```bash
+python3 $TOOLS/evaluate.py validate --harness .harness-evolver/harnesses/{version}{suffix}/harness.py --config .harness-evolver/harnesses/{version}{suffix}/config.json
+```
+
+Remove any that fail validation.
+
+### 4. Evaluate All Candidates
+
+For each valid candidate:
 ```bash
 python3 $TOOLS/evaluate.py run \
-    --harness .harness-evolver/harnesses/{version}/harness.py \
-    --config .harness-evolver/harnesses/{version}/config.json \
+    --harness .harness-evolver/harnesses/{version}{suffix}/harness.py \
+    --config .harness-evolver/harnesses/{version}{suffix}/config.json \
     --tasks-dir .harness-evolver/eval/tasks/ \
     --eval .harness-evolver/eval/eval.py \
-    --traces-dir .harness-evolver/harnesses/{version}/traces/ \
-    --scores .harness-evolver/harnesses/{version}/scores.json \
+    --traces-dir .harness-evolver/harnesses/{version}{suffix}/traces/ \
+    --scores .harness-evolver/harnesses/{version}{suffix}/scores.json \
     --timeout 60
 ```
 
-### 5. Update State
+### 5. Select Winner + Update State
 
+Compare scores of all evaluated candidates. The winner is the one with highest combined_score.
+
+Rename the winner directory to the official version name:
+```bash
+mv .harness-evolver/harnesses/{version}{winning_suffix} .harness-evolver/harnesses/{version}
+```
+
+Update state with the winner:
 ```bash
 python3 $TOOLS/state.py update \
     --base-dir .harness-evolver \
@@ -134,6 +233,17 @@ python3 $TOOLS/state.py update \
     --scores .harness-evolver/harnesses/{version}/scores.json \
     --proposal .harness-evolver/harnesses/{version}/proposal.md
 ```
+
+Report ALL candidates:
+```
+Iteration {i}/{N} — 3 candidates evaluated:
+  {version}a (exploit): {score_a} — {1-line summary from proposal.md}
+  {version}b (explore): {score_b} — {1-line summary}
+  {version}c (cross):   {score_c} — {1-line summary}
+  Winner: {version}{suffix} ({score}) ← promoted to {version}
+```
+
+Keep losing candidates in their directories (they're part of the archive — never discard, per DGM).
 
 ### 6. Report
 

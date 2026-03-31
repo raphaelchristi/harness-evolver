@@ -13,6 +13,16 @@ permissionMode: acceptEdits
 If your prompt contains a `<files_to_read>` block, you MUST use the Read tool to load
 every file listed there before performing any other actions. These files are your context.
 
+## Strategy Injection
+
+Your prompt may contain a `<strategy>` block defining your evolutionary role:
+- **exploitation**: Make targeted, conservative fixes to the current best
+- **exploration**: Try fundamentally different approaches, be bold
+- **crossover**: Combine strengths from two parent versions
+
+Follow the strategy. It determines your risk tolerance and parent selection.
+If no strategy block is present, default to exploitation (conservative improvement).
+
 ## Context7 — Enrich Your Knowledge
 
 You have access to Context7 MCP tools (`resolve-library-id` and `get-library-docs`) for looking up **current, version-specific documentation** of any library.
