@@ -15,28 +15,19 @@ const VERSION = require("../package.json").version;
 const PLUGIN_ROOT = path.resolve(__dirname, "..");
 const HOME = process.env.HOME || process.env.USERPROFILE;
 
-const MAGENTA = "\x1b[35m";
-const BRIGHT_MAGENTA = "\x1b[95m";
-const GREEN = "\x1b[32m";
+const GREEN = "\x1b[38;2;0;255;136m";
 const YELLOW = "\x1b[33m";
 const RED = "\x1b[31m";
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
 
-const LOGO = `
-${BRIGHT_MAGENTA}  ██╗  ██╗ █████╗ ██████╗ ███╗   ██╗███████╗███████╗███████╗
-  ██║  ██║██╔══██╗██╔══██╗████╗  ██║██╔════╝██╔════╝██╔════╝
-  ███████║███████║██████╔╝██╔██╗ ██║█████╗  ███████╗███████╗
-  ██╔══██║██╔══██║██╔══██╗██║╚██╗██║██╔══╝  ╚════██║╚════██║
-  ██║  ██║██║  ██║██║  ██║██║ ╚████║███████╗███████║███████║
-  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝╚══════╝
-  ${MAGENTA}${BOLD}███████╗██╗   ██╗ ██████╗ ██╗    ██╗   ██╗███████╗██████╗
-  ██╔════╝██║   ██║██╔═══██╗██║    ██║   ██║██╔════╝██╔══██╗
-  █████╗  ██║   ██║██║   ██║██║    ██║   ██║█████╗  ██████╔╝
-  ██╔══╝  ╚██╗ ██╔╝██║   ██║██║    ╚██╗ ██╔╝██╔══╝  ██╔══██╗
-  ███████╗ ╚████╔╝ ╚██████╔╝███████╗╚████╔╝ ███████╗██║  ██║
-  ╚══════╝  ╚═══╝   ╚═════╝ ╚══════╝ ╚═══╝  ╚══════╝╚═╝  ╚═╝${RESET}
+const LOGO = `${BOLD}${GREEN}
+  ╦ ╦╔═╗╦═╗╔╗╔╔═╗╔═╗╔═╗  ╔═╗╦  ╦╔═╗╦  ╦  ╦╔═╗╦═╗
+  ╠═╣╠═╣╠╦╝║║║║╣ ╚═╗╚═╗  ║╣ ╚╗╔╝║ ║║  ╚╗╔╝║╣ ╠╦╝
+  ╩ ╩╩ ╩╩╚═╝╚╝╚═╝╚═╝╚═╝  ╚═╝ ╚╝ ╚═╝╩═╝ ╚╝ ╚═╝╩╚═
+${RESET}
+${DIM}${GREEN}  End-to-end harness optimization for AI agents${RESET}
 `;
 
 function ask(rl, question) {
@@ -218,7 +209,7 @@ async function main() {
   console.log();
 
   for (const runtime of selected) {
-    console.log(`  Installing for ${BRIGHT_MAGENTA}${runtime.name}${RESET}\n`);
+    console.log(`  Installing for ${GREEN}${runtime.name}${RESET}\n`);
     cleanupBrokenPluginEntry(runtime.dir);
     installForRuntime(runtime.dir, scope);
     console.log();
@@ -232,7 +223,7 @@ async function main() {
   fs.writeFileSync(versionPath, VERSION);
   console.log(`  ${GREEN}✓${RESET} VERSION ${VERSION}`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${BRIGHT_MAGENTA}/harness-evolver:init${RESET}\n`);
+  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${GREEN}/harness-evolver:init${RESET}\n`);
 
   // Optional integrations
   console.log(`  ${YELLOW}Install optional integrations?${RESET}\n`);
