@@ -106,6 +106,17 @@ Append a summary to `PROPOSER_HISTORY.md`.
 
 6. **Prefer readable harnesses over defensive ones.** If the harness has grown past 2x the baseline size without proportional score improvement, consider simplifying. Accumulated try/catch blocks, redundant fallbacks, and growing if-chains are a code smell in evolved harnesses.
 
+## Documentation Lookup (if Context7 available)
+
+- Read `config.json` field `stack.detected` to see which libraries the harness uses.
+- BEFORE writing code that uses a library from the detected stack,
+  use the `resolve-library-id` tool with the `context7_id` from the config, then
+  `get-library-docs` to fetch documentation relevant to your proposed change.
+- If Context7 is NOT available, proceed with model knowledge
+  but note in `proposal.md`: "API not verified against current docs."
+- Do NOT look up docs for every line of code — only when proposing
+  changes that involve specific APIs (new imports, new methods, new parameters).
+
 ## What You Do NOT Do
 
 - Do NOT run the evaluation. The evolve skill handles that after you propose.

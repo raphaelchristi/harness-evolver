@@ -40,6 +40,42 @@ def _check_langsmith_cli():
         return False
 
 
+def _detect_stack(harness_path):
+    """Detect technology stack from harness imports."""
+    detect_stack_py = os.path.join(os.path.dirname(__file__), "detect_stack.py")
+    if not os.path.exists(detect_stack_py):
+        return {}
+    try:
+        r = subprocess.run(
+            ["python3", detect_stack_py, harness_path],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return json.loads(r.stdout)
+    except Exception:
+        pass
+    return {}
+
+
+def _check_context7_available():
+    """Check if Context7 MCP is configured in Claude Code."""
+    settings_paths = [
+        os.path.expanduser("~/.claude/settings.json"),
+        os.path.expanduser("~/.claude.json"),
+    ]
+    for path in settings_paths:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    settings = json.load(f)
+                mcp = settings.get("mcpServers", {})
+                if "context7" in mcp or "Context7" in mcp:
+                    return True
+            except (json.JSONDecodeError, KeyError):
+                pass
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Initialize Harness Evolver project")
     parser.add_argument("--harness", required=True, help="Path to harness script")
@@ -114,6 +150,25 @@ def main():
         else:
             print("  Recommendation: install langsmith-cli for rich trace analysis:")
             print("    uv tool install langsmith-cli && langsmith-cli auth login")
+
+    # Detect stack
+    stack = _detect_stack(args.harness)
+    config["stack"] = {
+        "detected": stack,
+        "documentation_hint": "use context7",
+        "auto_detected": True,
+    }
+    # Re-write config.json with stack section added
+    with open(os.path.join(base, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
+    if stack:
+        print("Stack detected:")
+        for lib_info in stack.values():
+            print(f"  {lib_info['display']}")
+        if not _check_context7_available():
+            print("\nRecommendation: install Context7 MCP for up-to-date documentation:")
+            print("  claude mcp add context7 -- npx -y @upstash/context7-mcp@latest")
 
     # 5. Validate baseline harness
     print("Validating baseline harness...")
