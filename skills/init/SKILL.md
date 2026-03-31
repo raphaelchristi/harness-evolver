@@ -48,30 +48,50 @@ If NO eval exists:
 
 **Tasks** (`tasks/`): If test tasks exist, use them.
 
-If NO tasks exist:
-- Spawn testgen subagent with `subagent_type: "harness-evolver-testgen"`:
-  ```
-  Agent(
-    subagent_type: "harness-evolver-testgen",
-    description: "TestGen: generate test cases for this project",
-    prompt: |
-      <objective>
-      Generate 30 diverse test cases for this project. Write them to tasks/ directory.
-      </objective>
+If NO tasks exist, generate them. First, identify all relevant source files:
 
-      <files_to_read>
-      - {harness source file path}
-      - {any data files found in the project}
-      </files_to_read>
+```bash
+find . -name "*.py" -not -path "./.venv/*" -not -path "./.harness-evolver/*" | head -10
+find . -name "*.json" -o -name "*.md" -o -name "*.txt" -o -name "*.yaml" -o -name "*.yml" | grep -v .venv | grep -v .harness-evolver | head -10
+```
 
-      <output>
-      Create tasks/ directory with task_001.json through task_030.json.
-      No expected field needed (judge subagent will score outputs).
-      </output>
-  )
-  ```
-- Wait for `## TESTGEN COMPLETE`.
-- Print: "Generated {N} test cases from code analysis."
+Then spawn testgen subagent with CONCRETE file paths (not placeholders):
+
+```
+Agent(
+  subagent_type: "harness-evolver-testgen",
+  description: "TestGen: generate 30 test cases",
+  prompt: |
+    <objective>
+    Generate 30 diverse test cases for this project. Write them to the tasks/ directory
+    in the current working directory.
+    </objective>
+
+    <project_context>
+    This project is at: {absolute path to project root}
+    Entry point: {the harness/agent file you identified, e.g., crew.py or pipeline/moderator.py}
+    Framework: {what you detected — CrewAI, LangGraph, etc.}
+    </project_context>
+
+    <files_to_read>
+    {LIST EVERY .py file and data file you found above — use ABSOLUTE PATHS}
+    Example:
+    - /home/rp/Desktop/test-crewai/crew.py
+    - /home/rp/Desktop/test-crewai/README.md
+    </files_to_read>
+
+    <output>
+    Create directory tasks/ (at project root) with 30 files: task_001.json through task_030.json.
+    Format: {"id": "task_001", "input": "...", "metadata": {"difficulty": "easy|medium|hard", "type": "standard|edge|cross_domain|adversarial"}}
+    No "expected" field needed — the judge subagent will score outputs.
+    Distribution: 40% standard, 20% edge, 20% cross-domain, 20% adversarial.
+    </output>
+)
+```
+
+Wait for `## TESTGEN COMPLETE`. If the subagent fails or returns with no tasks, generate them yourself inline (fallback).
+
+Print: "Generated {N} test cases from code analysis."
 
 ## Phase 3: Run Init
 
