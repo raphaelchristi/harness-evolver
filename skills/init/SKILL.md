@@ -36,9 +36,49 @@ Three artifacts needed. For each — use existing if found, create if not.
 
 **Harness** (`harness.py`): If user's entry point doesn't match our CLI interface (`--input`, `--output`, `--traces-dir`, `--config`), create a thin wrapper that imports their code. Read their entry point first to understand the I/O format. Ask if unsure.
 
-**Eval** (`eval.py`): Ask the user what "correct" means for their domain. Generate the simplest eval that gives signal. Even rough scoring works — the evolver iterates.
+**Eval** (`eval.py`): If an eval script exists, use it.
 
-**Tasks** (`tasks/`): If no test data exists, ask the user for 5-10 example input/output pairs. Each task is `{"id": "task_001", "input": "...", "expected": "...", "metadata": {}}`.
+If NO eval exists:
+- Copy `eval_passthrough.py` from `$TOOLS/eval_passthrough.py` as the project's eval.py:
+  ```bash
+  cp $TOOLS/eval_passthrough.py eval.py
+  ```
+- This passthrough eval collects outputs for the judge subagent to score during evolve.
+- Print: "No eval found. Using LLM-as-judge (Claude Code scores outputs directly)."
+
+**Tasks** (`tasks/`): If test tasks exist, use them.
+
+If NO tasks exist:
+- Read the testgen agent definition:
+  ```bash
+  cat ~/.claude/agents/harness-evolver-testgen.md
+  ```
+- Spawn testgen subagent:
+  ```
+  Agent(
+    description: "TestGen: generate test cases for this project",
+    prompt: |
+      <agent_instructions>
+      {FULL content of harness-evolver-testgen.md}
+      </agent_instructions>
+
+      <objective>
+      Generate 30 diverse test cases for this project. Write them to tasks/ directory.
+      </objective>
+
+      <files_to_read>
+      - {harness source file path}
+      - {any data files found in the project}
+      </files_to_read>
+
+      <output>
+      Create tasks/ directory with task_001.json through task_030.json.
+      No expected field needed (judge subagent will score outputs).
+      </output>
+  )
+  ```
+- Wait for `## TESTGEN COMPLETE`.
+- Print: "Generated {N} test cases from code analysis."
 
 ## Phase 3: Run Init
 

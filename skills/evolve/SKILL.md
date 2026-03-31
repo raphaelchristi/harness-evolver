@@ -57,6 +57,7 @@ If `LS_PROJECT` is empty, langsmith-cli is not available or no projects exist â€
 ```bash
 if [ -n "$LS_PROJECT" ]; then
   langsmith-cli --json runs list --project "$LS_PROJECT" --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
+  langsmith-cli --json runs list --project "$LS_PROJECT" --fields id,name,inputs,outputs,latency_ms,total_tokens --limit 20 > .harness-evolver/langsmith_runs.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_runs.json
   langsmith-cli --json runs stats --project "$LS_PROJECT" > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
   echo "$LS_PROJECT" > .harness-evolver/langsmith_project.txt
 else
@@ -115,6 +116,7 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/proposal.md
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_stats.json (if exists)
+    - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -156,6 +158,7 @@ Agent(
     - .harness-evolver/harnesses/{explorer_parent}/harness.py
     - .harness-evolver/harnesses/{explorer_parent}/scores.json
     - .harness-evolver/langsmith_diagnosis.json (if exists)
+    - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -196,6 +199,7 @@ Agent(
     - .harness-evolver/harnesses/{parent_b}/harness.py
     - .harness-evolver/harnesses/{parent_b}/scores.json
     - .harness-evolver/langsmith_diagnosis.json (if exists)
+    - .harness-evolver/langsmith_runs.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -260,6 +264,44 @@ python3 $TOOLS/evaluate.py run \
     --scores .harness-evolver/harnesses/{version}{suffix}/scores.json \
     --timeout 60
 ```
+
+### 4.5. Judge (if eval returned pending scores)
+
+For each evaluated candidate, read its scores.json. If `eval_type` is `"pending-judge"` (combined_score == -1), the eval was a passthrough and needs judge scoring.
+
+Read the judge agent definition:
+```bash
+cat ~/.claude/agents/harness-evolver-judge.md
+```
+
+Spawn judge subagent for EACH candidate that needs judging:
+
+```
+Agent(
+  description: "Judge: score {version}{suffix} outputs",
+  prompt: |
+    <agent_instructions>
+    {FULL content of harness-evolver-judge.md}
+    </agent_instructions>
+
+    <objective>
+    Score the outputs of harness version {version}{suffix} across all {N} tasks.
+    </objective>
+
+    <files_to_read>
+    - .harness-evolver/harnesses/{version}{suffix}/scores.json
+    - .harness-evolver/eval/tasks/ (read all task files)
+    </files_to_read>
+
+    <output>
+    Overwrite .harness-evolver/harnesses/{version}{suffix}/scores.json with real scores.
+    </output>
+)
+```
+
+Wait for `## JUDGE COMPLETE`.
+
+If eval_type is NOT "pending-judge", the eval.py already produced real scores â€” skip this step.
 
 ### 5. Select Winner + Update State
 
