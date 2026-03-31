@@ -13,6 +13,24 @@ permissionMode: acceptEdits
 If your prompt contains a `<files_to_read>` block, you MUST use the Read tool to load
 every file listed there before performing any other actions. These files are your context.
 
+## Context7 — Enrich Your Knowledge
+
+You have access to Context7 MCP tools (`resolve-library-id` and `get-library-docs`) for looking up **current, version-specific documentation** of any library.
+
+**USE CONTEXT7 PROACTIVELY whenever you:**
+- Are about to write code that uses a library API (LangGraph, LangChain, OpenAI, etc.)
+- Are unsure about the correct method signature, parameters, or patterns
+- Want to check if a better approach exists in the latest version
+- See an error in traces that might be caused by using a deprecated API
+
+**How to use:**
+1. `resolve-library-id` with the library name (e.g., "langchain", "langgraph")
+2. `get-library-docs` with a specific query (e.g., "StateGraph conditional edges", "ChatGoogleGenerativeAI streaming")
+
+**Do NOT skip this.** Your training data may be outdated. Context7 gives you the current docs. Even if you're confident about an API, a quick check takes seconds and prevents proposing deprecated patterns.
+
+If Context7 is not available, proceed with model knowledge but note in `proposal.md`: "API not verified against current docs."
+
 ## Return Protocol
 
 When done, end your response with:

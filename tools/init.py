@@ -298,10 +298,26 @@ def main():
             print("  Recommendation: install langsmith-cli for rich trace analysis:")
             print("    uv tool install langsmith-cli && langsmith-cli auth login")
 
-    # Detect stack
-    stack = _detect_stack(args.harness)
+    # Detect stack — try original harness first, then baseline copy, then scan entire source dir
+    stack = _detect_stack(os.path.abspath(args.harness))
+    if not stack:
+        stack = _detect_stack(os.path.join(base, "baseline", "harness.py"))
+    if not stack:
+        # Scan the original directory for any .py files with known imports
+        harness_dir = os.path.dirname(os.path.abspath(args.harness))
+        detect_stack_py = os.path.join(os.path.dirname(__file__), "detect_stack.py")
+        if os.path.exists(detect_stack_py):
+            try:
+                r = subprocess.run(
+                    ["python3", detect_stack_py, harness_dir],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    stack = json.loads(r.stdout)
+            except Exception:
+                pass
     config["stack"] = {
-        "detected": stack,
+        "detected": stack if stack else {},
         "documentation_hint": "use context7",
         "auto_detected": True,
     }

@@ -34,39 +34,19 @@ For each iteration:
 python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); print(f'v{s[\"iterations\"]+1:03d}')"
 ```
 
-### 1.5. Gather Diagnostic Context (LangSmith + Context7)
+### 1.5. Gather LangSmith Traces (MANDATORY after every evaluation)
 
-**This step is MANDATORY before every propose.** The orchestrator gathers data so the proposer receives it as files.
+**Run these commands unconditionally after EVERY evaluation** (including baseline). If langsmith-cli is not installed or there are no runs, the commands fail silently — that's fine. But you MUST attempt them.
 
-**LangSmith (if enabled):**
-
-Check if LangSmith is enabled and langsmith-cli is available:
 ```bash
-cat .harness-evolver/config.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('eval',{}).get('langsmith',{}).get('enabled',False))"
-which langsmith-cli 2>/dev/null
+langsmith-cli --json runs list --project harness-evolver-{last_evaluated_version} --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
+
+langsmith-cli --json runs stats --project harness-evolver-{last_evaluated_version} > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
 ```
 
-If BOTH are true AND at least one iteration has run, gather LangSmith data:
-```bash
-langsmith-cli --json runs list --project harness-evolver-{best_version} --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
+For the first iteration, use `baseline` as the version. For subsequent iterations, use the latest evaluated version.
 
-langsmith-cli --json runs stats --project harness-evolver-{best_version} > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
-```
-
-**Context7 (if available):**
-
-Check `config.json` field `stack.detected`. For each detected library, use the Context7 MCP tools to fetch relevant documentation:
-
-```
-For each library in stack.detected:
-  1. resolve-library-id with the context7_id
-  2. get-library-docs with a query relevant to the current failure modes
-  3. Save output to .harness-evolver/context7_docs.md (append each library's docs)
-```
-
-This runs ONCE per iteration, not per library. Focus on the library most relevant to the current failures.
-
-If Context7 MCP is not available, skip silently.
+These files are included in the proposer's `<files_to_read>` so it has real trace data for diagnosis.
 
 ### 2. Propose
 
