@@ -36,15 +36,34 @@ python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); pri
 
 ### 1.5. Gather LangSmith Traces (MANDATORY after every evaluation)
 
-**Run these commands unconditionally after EVERY evaluation** (including baseline). If langsmith-cli is not installed or there are no runs, the commands fail silently — that's fine. But you MUST attempt them.
+**Run these commands unconditionally after EVERY evaluation** (including baseline). Do NOT guess project names — discover them.
+
+**Step 1: Find the actual LangSmith project name**
 
 ```bash
-langsmith-cli --json runs list --project harness-evolver-{last_evaluated_version} --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
-
-langsmith-cli --json runs stats --project harness-evolver-{last_evaluated_version} > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
+langsmith-cli --json projects list --name-pattern "harness-evolver*" --limit 10 2>/dev/null
 ```
 
-For the first iteration, use `baseline` as the version. For subsequent iterations, use the latest evaluated version.
+This returns all projects matching the prefix. Pick the most recently updated one, or the one matching the current version. Save the project name:
+
+```bash
+LS_PROJECT=$(langsmith-cli --json projects list --name-pattern "harness-evolver*" --limit 1 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['name'] if data else '')" 2>/dev/null || echo "")
+```
+
+If `LS_PROJECT` is empty, langsmith-cli is not available or no projects exist — skip to step 2.
+
+**Step 2: Gather traces from the discovered project**
+
+```bash
+if [ -n "$LS_PROJECT" ]; then
+  langsmith-cli --json runs list --project "$LS_PROJECT" --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
+  langsmith-cli --json runs stats --project "$LS_PROJECT" > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
+  echo "$LS_PROJECT" > .harness-evolver/langsmith_project.txt
+else
+  echo "[]" > .harness-evolver/langsmith_diagnosis.json
+  echo "{}" > .harness-evolver/langsmith_stats.json
+fi
+```
 
 These files are included in the proposer's `<files_to_read>` so it has real trace data for diagnosis.
 

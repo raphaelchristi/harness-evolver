@@ -118,12 +118,17 @@ def cmd_run(args):
             api_key = os.environ.get(ls.get("api_key_env", "LANGSMITH_API_KEY"), "")
             if api_key:
                 version = os.path.basename(os.path.dirname(traces_dir))
+                ls_project = f"{ls.get('project_prefix', 'harness-evolver')}-{version}"
                 langsmith_env = {
                     **os.environ,
                     "LANGCHAIN_TRACING_V2": "true",
                     "LANGCHAIN_API_KEY": api_key,
-                    "LANGCHAIN_PROJECT": f"{ls.get('project_prefix', 'harness-evolver')}-{version}",
+                    "LANGCHAIN_PROJECT": ls_project,
                 }
+                # Write the project name so the evolve skill knows where to find traces
+                ls_project_file = os.path.join(os.path.dirname(os.path.dirname(traces_dir)), "langsmith_project.txt")
+                with open(ls_project_file, "w") as f:
+                    f.write(ls_project)
 
     for task_file in task_files:
         task_path = os.path.join(tasks_dir, task_file)
