@@ -391,11 +391,21 @@ def main():
             print("  claude mcp add context7 -- npx -y @upstash/context7-mcp@latest")
 
     # Architecture analysis (quick, advisory)
+    # Auto-detect additional source files by scanning for .py files near the harness
     analyze_py = os.path.join(tools, "analyze_architecture.py")
     if os.path.exists(analyze_py):
         try:
+            harness_dir = os.path.dirname(os.path.abspath(args.harness))
+            source_files = []
+            for fname in os.listdir(harness_dir):
+                fpath = os.path.join(harness_dir, fname)
+                if fname.endswith(".py") and os.path.isfile(fpath) and fpath != os.path.abspath(args.harness):
+                    source_files.append(fpath)
+            arch_cmd = [_resolve_python(), analyze_py, "--harness", args.harness]
+            if source_files:
+                arch_cmd.extend(["--source-files"] + source_files[:10])
             r = subprocess.run(
-                [_resolve_python(), analyze_py, "--harness", args.harness],
+                arch_cmd,
                 capture_output=True, text=True, timeout=30,
             )
             if r.returncode == 0 and r.stdout.strip():
@@ -461,7 +471,10 @@ def main():
         print(r.stdout.strip())
 
     # 6. Evaluate baseline
-    print("Evaluating baseline harness...")
+    num_tasks = len([f for f in os.listdir(os.path.join(base, "eval", "tasks")) if f.endswith(".json")])
+    per_task_timeout = max(args.validation_timeout, 60)
+    eval_timeout = max(num_tasks * per_task_timeout + 60, 300)
+    print(f"Evaluating baseline harness ({num_tasks} tasks, timeout: {eval_timeout}s)...")
     baseline_traces = tempfile.mkdtemp()
     baseline_scores = os.path.join(base, "baseline_scores.json")
     eval_args = [
@@ -471,18 +484,28 @@ def main():
         "--eval", os.path.join(base, "eval", "eval.py"),
         "--traces-dir", baseline_traces,
         "--scores", baseline_scores,
-        "--timeout", str(max(args.validation_timeout, 60)),
+        "--timeout", str(per_task_timeout),
     ]
     if os.path.exists(config_path):
         eval_args.extend(["--config", config_path])
-    r = subprocess.run(eval_args, capture_output=True, text=True, timeout=300)
-    if r.returncode != 0:
+    try:
+        r = subprocess.run(eval_args, capture_output=True, text=True, timeout=eval_timeout)
+    except subprocess.TimeoutExpired:
+        print(f"WARNING: baseline evaluation timed out after {eval_timeout}s "
+              f"({num_tasks} tasks at {per_task_timeout}s/task). "
+              f"Using score 0.0. Run evaluation separately with more time.",
+              file=sys.stderr)
+        r = None
+    if r is not None and r.returncode != 0:
         print(f"WARNING: baseline evaluation failed. Using score 0.0.\n{r.stderr}", file=sys.stderr)
-        baseline_score = 0.0
-    else:
+    if r is not None and r.returncode == 0:
         print(r.stdout.strip())
-        scores = json.load(open(baseline_scores))
+    if r is not None and r.returncode == 0 and os.path.exists(baseline_scores):
+        with open(baseline_scores) as f:
+            scores = json.load(f)
         baseline_score = scores.get("combined_score", 0.0)
+    else:
+        baseline_score = 0.0
 
     if os.path.exists(baseline_scores):
         os.remove(baseline_scores)

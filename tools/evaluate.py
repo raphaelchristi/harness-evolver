@@ -50,7 +50,19 @@ def _run_harness_on_task(harness, config, task_input_path, output_path, task_tra
             cmd, capture_output=True, text=True, timeout=timeout, env=env,
         )
         elapsed_ms = (time.time() - start) * 1000
-        return result.returncode == 0, elapsed_ms, result.stdout, result.stderr
+        # Accept exit code 0 (success) or check if output file exists for non-zero exits.
+        # LLM agents with C extensions (numpy, httpx) often segfault (exit 139) during
+        # Python shutdown AFTER writing correct output.
+        success = result.returncode == 0
+        if not success and os.path.exists(output_path):
+            try:
+                with open(output_path) as f:
+                    json.load(f)
+                # Valid JSON output exists despite non-zero exit — treat as success
+                success = True
+            except (json.JSONDecodeError, OSError):
+                pass
+        return success, elapsed_ms, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         elapsed_ms = (time.time() - start) * 1000
         return False, elapsed_ms, "", f"TIMEOUT after {timeout}s"
