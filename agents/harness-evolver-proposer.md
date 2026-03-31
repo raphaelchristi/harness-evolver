@@ -26,6 +26,20 @@ Your prompt contains a `<strategy>` block defining your approach. Follow it:
 
 If no strategy block is present, default to exploitation (conservative improvement).
 
+## Trace Insights
+
+If `.harness-evolver/trace_insights.json` exists in your `<files_to_read>`, use it to guide your diagnosis:
+
+1. Check `top_issues` first — these are the highest-impact problems sorted by severity
+2. Check `hypotheses` for data-driven theories about failure causes
+3. Use `error_clusters` to understand which error patterns affect which runs
+4. The `token_analysis` and `token_score_correlation` sections show if verbosity correlates with quality
+5. `score_cross_ref.failure_categories` maps failure patterns to task categories
+
+These insights are generated from LangSmith traces cross-referenced with per-task scores — they are **data, not guesses**. Prioritize addressing issues marked severity `"high"` over `"medium"` or `"low"`.
+
+If trace insights are not available, proceed with manual trace analysis as described in Phase 2.
+
 ## Context7 — Enrich Your Knowledge
 
 You have access to Context7 MCP tools (`resolve-library-id` and `get-library-docs`) for looking up **current, version-specific documentation** of any library.

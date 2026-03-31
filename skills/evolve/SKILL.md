@@ -132,6 +132,32 @@ The resulting `langsmith_runs.json` has clean, readable entries:
 
 These files are included in the proposer's `<files_to_read>` so it has readable trace data for diagnosis.
 
+### 1.6. Generate Trace Insights (systematic analysis)
+
+If LangSmith traces were gathered, run systematic analysis to cluster errors, analyze token usage, and cross-reference with scores:
+
+```bash
+if [ -f ".harness-evolver/langsmith_runs.json" ]; then
+    BEST=$(python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); print(s['best']['version'])")
+    SCORES_PATH=".harness-evolver/harnesses/$BEST/scores.json"
+    [ ! -f "$SCORES_PATH" ] && SCORES_PATH=".harness-evolver/baseline/scores.json"
+    python3 $TOOLS/trace_insights.py \
+        --langsmith-runs .harness-evolver/langsmith_runs.json \
+        --langsmith-stats .harness-evolver/langsmith_stats.json \
+        --scores "$SCORES_PATH" \
+        --tasks-dir .harness-evolver/eval/tasks/ \
+        --output .harness-evolver/trace_insights.json 2>/dev/null
+fi
+```
+
+The resulting `trace_insights.json` contains:
+- `error_clusters`: grouped error patterns with counts
+- `token_analysis`: score distribution by token usage bucket (low/medium/high)
+- `hypotheses`: data-driven theories about failure causes
+- `top_issues`: highest-impact problems sorted by severity
+
+This file is included in all proposers' `<files_to_read>` so they have structured diagnostic data.
+
 ### 1.8. Analyze Per-Task Failures (adaptive briefings for Candidates D and E)
 
 Before spawning proposers, analyze which tasks are failing and cluster them:
@@ -228,6 +254,7 @@ Agent(
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_stats.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/trace_insights.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -267,6 +294,7 @@ Agent(
     - .harness-evolver/harnesses/{explorer_parent}/scores.json
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/trace_insights.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -305,6 +333,7 @@ Agent(
     - .harness-evolver/harnesses/{parent_b}/scores.json
     - .harness-evolver/langsmith_diagnosis.json (if exists)
     - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/trace_insights.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -347,6 +376,7 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/harness.py
     - .harness-evolver/harnesses/{best_version}/scores.json
     - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/trace_insights.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -407,6 +437,7 @@ Agent(
     - .harness-evolver/harnesses/{best_version}/harness.py
     - .harness-evolver/harnesses/{best_version}/scores.json
     - .harness-evolver/langsmith_runs.json (if exists)
+    - .harness-evolver/trace_insights.json (if exists)
     - .harness-evolver/architecture.json (if exists)
     </files_to_read>
 
@@ -579,6 +610,34 @@ Iteration {i}/{N} — {num_candidates} candidates evaluated:
 ```
 
 Keep losing candidates in their directories (they're part of the archive — never discard, per DGM).
+
+### 5.5. Test Suite Growth (Durable Regression Gates)
+
+After the winner is promoted, check if any previously-failing tasks are now passing.
+Generate regression tasks to lock in improvements and prevent future regressions:
+
+```bash
+PREV_BEST=$(python3 -c "
+import json
+s = json.load(open('.harness-evolver/summary.json'))
+versions = s.get('versions', [])
+print(versions[-2]['version'] if len(versions) >= 2 else '')
+" 2>/dev/null)
+if [ -n "$PREV_BEST" ] && [ -f ".harness-evolver/harnesses/$PREV_BEST/scores.json" ]; then
+    python3 $TOOLS/test_growth.py \
+        --current-scores .harness-evolver/harnesses/{version}/scores.json \
+        --previous-scores ".harness-evolver/harnesses/$PREV_BEST/scores.json" \
+        --tasks-dir .harness-evolver/eval/tasks/ \
+        --output-dir .harness-evolver/eval/tasks/ \
+        --max-total-tasks 60 2>/dev/null
+fi
+```
+
+If new tasks were added, print: "Added {N} regression tasks to lock in improvements on: {task_ids}"
+
+This is the "durable test gates" pattern: every fixed failure becomes a permanent regression test.
+New tasks are tagged with `metadata.type: "regression"` and `metadata.source: "regression"` so they
+can be distinguished from original tasks. The test suite only grows — regression tasks are never removed.
 
 ### 6. Report
 

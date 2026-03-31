@@ -46,12 +46,20 @@ claude
 
 <table>
 <tr>
-<td><b>5 Proposers</b></td>
-<td>Each iteration spawns 5 parallel agents with different strategies: exploit (targeted fix), explore (bold rewrite), crossover (combine two parents), prompt specialist, retrieval specialist. Best candidate wins.</td>
+<td><b>5 Adaptive Proposers</b></td>
+<td>Each iteration spawns 5 parallel agents: exploit (targeted fix), explore (bold rewrite), crossover (combine two parents), and 2 failure-focused agents that target the weakest task clusters. Strategies adapt every iteration based on actual per-task scores — no fixed specialists.</td>
 </tr>
 <tr>
-<td><b>Full Traces</b></td>
-<td>Every harness run captures stdout, stderr, timing, and per-task I/O. LangSmith auto-tracing for LangChain/LangGraph agents. Proposers read actual LLM prompts and responses.</td>
+<td><b>Trace Insights</b></td>
+<td>Every harness run captures stdout, stderr, timing, and per-task I/O. LangSmith auto-tracing for LangChain/LangGraph agents. Traces are systematically clustered by error pattern, token usage, and response type — proposers receive structured diagnostic data, not raw logs.</td>
+</tr>
+<tr>
+<td><b>Quality-Diversity Selection</b></td>
+<td>Not winner-take-all. Tracks per-task champions — a candidate that loses overall but excels at specific tasks is preserved as the next crossover parent. The archive never discards variants.</td>
+</tr>
+<tr>
+<td><b>Durable Test Gates</b></td>
+<td>When the loop fixes a failure, regression tasks are automatically generated to lock in the improvement. The test suite grows over iterations — fixed bugs can never silently return.</td>
 </tr>
 <tr>
 <td><b>Critic</b></td>
@@ -74,13 +82,14 @@ claude
 | Command | What it does |
 |---|---|
 | `/harness-evolver:init` | Scan project, create harness/eval/tasks, run baseline |
-| `/harness-evolver:evolve` | Run the autonomous optimization loop (5 parallel proposers) |
+| `/harness-evolver:evolve` | Run the autonomous optimization loop (5 adaptive proposers) |
 | `/harness-evolver:status` | Show progress, scores, stagnation detection |
 | `/harness-evolver:compare` | Diff two versions with per-task analysis |
 | `/harness-evolver:diagnose` | Deep trace analysis of a specific version |
 | `/harness-evolver:deploy` | Promote the best harness back to your project |
 | `/harness-evolver:architect` | Analyze and recommend optimal agent topology |
 | `/harness-evolver:critic` | Evaluate eval quality and detect gaming |
+| `/harness-evolver:import-traces` | Pull production LangSmith traces as eval tasks |
 
 ---
 
@@ -139,16 +148,20 @@ Works with any language, any framework, any domain. If your project doesn't have
 ```
 /harness-evolver:evolve
   │
-  ├─ 1. Gather LangSmith traces (processed into readable format)
-  ├─ 2. Spawn 5 proposers in parallel (exploit/explore/crossover/prompt/retrieval)
-  ├─ 3. Validate all candidates
-  ├─ 4. Evaluate all candidates
+  ├─ 1.  Get next version
+  ├─ 1.5 Gather LangSmith traces (processed into readable format)
+  ├─ 1.6 Generate Trace Insights (cluster errors, analyze tokens, cross-ref scores)
+  ├─ 1.8 Analyze per-task failures (cluster by category for adaptive briefings)
+  ├─ 2.  Spawn 5 proposers in parallel (exploit / explore / crossover / 2× failure-targeted)
+  ├─ 3.  Validate all candidates
+  ├─ 4.  Evaluate all candidates
   ├─ 4.5 Judge (if using LLM-as-judge eval)
-  ├─ 5. Select winner (highest combined_score)
-  ├─ 6. Report results
+  ├─ 5.  Select winner + track per-task champion
+  ├─ 5.5 Test suite growth (generate regression tasks for fixed failures)
+  ├─ 6.  Report results
   ├─ 6.5 Auto-trigger Critic (if score jumped >0.3 or reached 1.0 too fast)
-  ├─ 7. Auto-trigger Architect (if regression or stagnation)
-  └─ 8. Check stop conditions (target reached, N iterations, stagnation post-architect)
+  ├─ 7.  Auto-trigger Architect (if regression or stagnation)
+  └─ 8.  Check stop conditions (target reached, N iterations, stagnation post-architect)
 ```
 
 ---
@@ -175,9 +188,12 @@ The plugin auto-detects available keys. No key needed for the included example.
 |---|---|---|---|---|
 | **Format** | Paper artifact | Framework (Docker) | Plugin (passive) | **Plugin (active)** |
 | **Search** | Code-space | Code-space | Prompt-space | **Code-space** |
-| **Candidates/iter** | 1 | 1 | N/A | **5 parallel** |
+| **Candidates/iter** | 1 | 1 | N/A | **5 parallel (adaptive)** |
+| **Selection** | Single best | Single best | N/A | **Quality-diversity (per-task)** |
 | **Auto-critique** | No | No | No | **Yes (critic + judge)** |
 | **Architecture** | Fixed | Fixed | N/A | **Auto-recommended** |
+| **Trace analysis** | Manual | No | No | **Systematic (clustering + insights)** |
+| **Test growth** | No | No | No | **Yes (durable regression gates)** |
 | **LangSmith** | No | No | No | **Yes** |
 | **Context7** | No | No | No | **Yes** |
 | **Zero-config** | No | No | No | **Yes** |
