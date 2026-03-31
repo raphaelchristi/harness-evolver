@@ -1,0 +1,29 @@
+{
+  "name": "harness-evolver",
+  "version": "0.1.0",
+  "description": "Meta-Harness-style autonomous harness optimization for Claude Code",
+  "author": "Raphael Valdetaro Christi Cordeiro",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raphaelchristi/harness-evolver.git"
+  },
+  "keywords": [
+    "claude-code",
+    "harness",
+    "meta-harness",
+    "llm",
+    "optimization",
+    "agent"
+  ],
+  "bin": {
+    "harness-evolver": "bin/install.js"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "agents/",
+    "tools/",
+    "examples/"
+  ]
+}
