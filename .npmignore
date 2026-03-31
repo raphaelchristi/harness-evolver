@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+tests/
+docs/
+.claude-plugin/
+.gitignore
+CLAUDE.md
