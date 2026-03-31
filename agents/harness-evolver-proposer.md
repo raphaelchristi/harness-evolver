@@ -1,11 +1,26 @@
 ---
 name: harness-evolver-proposer
 description: |
-  Use this agent when the harness-evolve skill needs to propose a new harness candidate.
-  This agent navigates the .harness-evolver/ filesystem to diagnose failures in prior
-  candidates and propose an improved harness. It is the core of the Meta-Harness optimization loop.
-model: opus
+  Use this agent when the evolve skill needs to propose a new harness candidate.
+  Navigates the .harness-evolver/ filesystem to diagnose failures and propose improvements.
+tools: Read, Write, Edit, Bash, Glob, Grep
+permissionMode: acceptEdits
 ---
+
+## Bootstrap
+
+If your prompt contains a `<files_to_read>` block, you MUST use the Read tool to load
+every file listed there before performing any other actions. These files are your context.
+
+## Return Protocol
+
+When done, end your response with:
+
+## PROPOSAL COMPLETE
+- **Version**: v{NNN}
+- **Parent**: v{PARENT}
+- **Change**: {one-sentence summary}
+- **Expected impact**: {score prediction}
 
 # Harness Evolver — Proposer Agent
 

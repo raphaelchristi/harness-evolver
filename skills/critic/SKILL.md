@@ -20,18 +20,42 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 ## What To Do
 
-1. Read `summary.json` to check for suspicious patterns:
-   - Score jump >0.3 in a single iteration
-   - Score reached 1.0 in <3 iterations
-   - All tasks suddenly pass after failing
+1. Read `summary.json` and identify the suspicious pattern (score jump, premature convergence).
 
 2. Spawn the `harness-evolver-critic` agent:
-   > Analyze the eval quality for this harness evolution project.
-   > Check if the eval at `.harness-evolver/eval/eval.py` is rigorous enough.
-   > The best version is {version} with score {score} achieved in {iterations} iterations.
 
-3. After the critic reports:
-   - Show the eval quality assessment
-   - If `eval_improved.py` was created, show the score comparison
-   - Ask user: "Adopt the improved eval? This will re-baseline all scores."
-   - If adopted: copy `eval_improved.py` to `eval/eval.py`, re-run baseline, update state
+```xml
+<objective>
+Analyze eval quality for this harness evolution project.
+The best version is {version} with score {score} achieved in {iterations} iteration(s).
+{Specific concern: "Score jumped from X to Y in one iteration" or "Perfect score in N iterations"}
+</objective>
+
+<files_to_read>
+- .harness-evolver/eval/eval.py
+- .harness-evolver/summary.json
+- .harness-evolver/harnesses/{best_version}/scores.json
+- .harness-evolver/harnesses/{best_version}/harness.py
+- .harness-evolver/harnesses/{best_version}/proposal.md
+- .harness-evolver/config.json
+</files_to_read>
+
+<output>
+Write:
+- .harness-evolver/critic_report.md (human-readable analysis)
+- .harness-evolver/eval/eval_improved.py (if weaknesses found)
+</output>
+
+<success_criteria>
+- Identifies specific weaknesses in eval.py with examples
+- If gaming detected, shows exact tasks/outputs that expose the weakness
+- Improved eval preserves the --results-dir/--tasks-dir/--scores interface
+- Re-scores the best version with improved eval to quantify the difference
+</success_criteria>
+```
+
+3. Wait for `## CRITIC REPORT COMPLETE`.
+
+4. Report findings to user. If `eval_improved.py` was written:
+   - Show score comparison (current eval vs improved eval)
+   - Ask: "Adopt the improved eval? This will affect future iterations."

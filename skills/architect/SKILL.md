@@ -28,80 +28,60 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 Use `$TOOLS` prefix for all tool calls below.
 
-## Step 1: Run Architecture Analysis
+## What To Do
 
-Build the command based on what exists:
+1. Check `.harness-evolver/` exists.
 
+2. Run architecture analysis tool:
 ```bash
-CMD="python3 $TOOLS/analyze_architecture.py --harness .harness-evolver/baseline/harness.py"
-
-# Add traces from best version if evolution has run
-if [ -f ".harness-evolver/summary.json" ]; then
-  BEST=$(python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); print(s.get('best',{}).get('version',''))")
-  if [ -n "$BEST" ] && [ -d ".harness-evolver/harnesses/$BEST/traces" ]; then
-    CMD="$CMD --traces-dir .harness-evolver/harnesses/$BEST/traces"
-  fi
-  CMD="$CMD --summary .harness-evolver/summary.json"
-fi
-
-CMD="$CMD -o .harness-evolver/architecture_signals.json"
-
-eval $CMD
+python3 $TOOLS/analyze_architecture.py \
+    --harness .harness-evolver/baseline/harness.py \
+    -o .harness-evolver/architecture_signals.json
 ```
 
-Check exit code. If it fails, report the error and stop.
-
-## Step 2: Spawn Architect Agent
-
-Spawn the `harness-evolver-architect` agent with:
-
-> Analyze the harness and recommend the optimal multi-agent topology.
-> Raw signals are at `.harness-evolver/architecture_signals.json`.
-> Write `.harness-evolver/architecture.json` and `.harness-evolver/architecture.md`.
-
-The architect agent will:
-1. Read the signals JSON
-2. Read the harness code and config
-3. Classify the current topology
-4. Assess if it matches task complexity
-5. Recommend the optimal topology with migration steps
-6. Write `architecture.json` and `architecture.md`
-
-## Step 3: Report
-
-After the architect agent completes, read the outputs and print a summary:
-
-```
-Architecture Analysis Complete
-==============================
-Current topology:     {current_topology}
-Recommended topology: {recommended_topology}
-Confidence:           {confidence}
-
-Reasoning: {reasoning}
-
-Migration Path:
-  1. {step 1 description}
-  2. {step 2 description}
-  ...
-
-Risks:
-  - {risk 1}
-  - {risk 2}
-
-Next: Run /harness-evolver:evolve — the proposer will follow the migration path.
+If evolution has run, add trace and score data:
+```bash
+python3 $TOOLS/analyze_architecture.py \
+    --harness .harness-evolver/harnesses/{best}/harness.py \
+    --traces-dir .harness-evolver/harnesses/{best}/traces \
+    --summary .harness-evolver/summary.json \
+    -o .harness-evolver/architecture_signals.json
 ```
 
-If the architect recommends no change (current = recommended), report:
+3. Spawn the `harness-evolver-architect` agent:
 
-```
-Architecture Analysis Complete
-==============================
-Current topology: {topology} — looks optimal for these tasks.
-No architecture change recommended. Score: {score}
+```xml
+<objective>
+Analyze the harness architecture and recommend the optimal multi-agent topology.
+{If called from evolve: "The evolution loop stagnated/regressed after N iterations."}
+{If called by user: "The user requested an architecture analysis."}
+</objective>
 
-The proposer can continue evolving within the current topology.
+<files_to_read>
+- .harness-evolver/architecture_signals.json
+- .harness-evolver/config.json
+- .harness-evolver/baseline/harness.py
+- .harness-evolver/summary.json (if exists)
+- .harness-evolver/PROPOSER_HISTORY.md (if exists)
+</files_to_read>
+
+<output>
+Write:
+- .harness-evolver/architecture.json
+- .harness-evolver/architecture.md
+</output>
+
+<success_criteria>
+- Classifies current topology correctly
+- Recommendation includes migration path with concrete steps
+- Considers detected stack and API key availability
+- Confidence rating is honest (low/medium/high)
+</success_criteria>
 ```
+
+4. Wait for `## ARCHITECTURE ANALYSIS COMPLETE`.
+
+5. Print summary: current -> recommended, confidence, migration steps.
 
 ## Arguments
 

@@ -36,12 +36,38 @@ python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); pri
 
 ### 2. Propose
 
-Spawn the `harness-evolver-proposer` agent:
+Spawn the `harness-evolver-proposer` agent with a structured prompt:
 
-> You are proposing iteration {i}. Create version {version} in `.harness-evolver/harnesses/{version}/`.
-> Working directory contains `.harness-evolver/` with all prior candidates and traces.
+```xml
+<objective>
+Propose harness version {version} that improves on the current best score of {best_score}.
+</objective>
 
-The proposer creates: `harness.py`, `config.json`, `proposal.md`.
+<files_to_read>
+- .harness-evolver/summary.json
+- .harness-evolver/PROPOSER_HISTORY.md
+- .harness-evolver/config.json
+- .harness-evolver/baseline/harness.py
+- .harness-evolver/harnesses/{best_version}/harness.py
+- .harness-evolver/harnesses/{best_version}/scores.json
+- .harness-evolver/harnesses/{best_version}/proposal.md
+</files_to_read>
+
+<output>
+Create directory .harness-evolver/harnesses/{version}/ containing:
+- harness.py (the improved harness)
+- config.json (parameters, copy from parent if unchanged)
+- proposal.md (reasoning, must start with "Based on v{PARENT}")
+</output>
+
+<success_criteria>
+- harness.py maintains CLI interface (--input, --output, --traces-dir, --config)
+- proposal.md documents evidence-based reasoning
+- Changes are motivated by trace analysis, not guesswork
+</success_criteria>
+```
+
+Wait for the agent to complete. Look for `## PROPOSAL COMPLETE` in the response.
 
 ### 3. Validate
 
@@ -117,10 +143,35 @@ python3 $TOOLS/analyze_architecture.py \
 
 Then spawn the `harness-evolver-architect` agent:
 
-> The evolution loop has stagnated/regressed after {iterations} iterations (best: {best_score}).
-> Analyze the harness architecture and recommend a topology change.
-> Raw signals at `.harness-evolver/architecture_signals.json`.
-> Write `.harness-evolver/architecture.json` and `.harness-evolver/architecture.md`.
+```xml
+<objective>
+The evolution loop has {stagnated/regressed} after {iterations} iterations (best: {best_score}).
+Analyze the harness architecture and recommend a topology change.
+</objective>
+
+<files_to_read>
+- .harness-evolver/architecture_signals.json
+- .harness-evolver/summary.json
+- .harness-evolver/PROPOSER_HISTORY.md
+- .harness-evolver/config.json
+- .harness-evolver/harnesses/{best_version}/harness.py
+- .harness-evolver/harnesses/{best_version}/scores.json
+</files_to_read>
+
+<output>
+Write:
+- .harness-evolver/architecture.json (structured recommendation)
+- .harness-evolver/architecture.md (human-readable analysis)
+</output>
+
+<success_criteria>
+- Recommendation includes concrete migration steps
+- Each step is implementable in one proposer iteration
+- Considers detected stack and available API keys
+</success_criteria>
+```
+
+Wait for `## ARCHITECTURE ANALYSIS COMPLETE`.
 
 After the architect completes, report:
 
