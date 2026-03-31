@@ -52,21 +52,85 @@ LS_PROJECT=$(langsmith-cli --json projects list --name-pattern "harness-evolver*
 
 If `LS_PROJECT` is empty, langsmith-cli is not available or no projects exist — skip to step 2.
 
-**Step 2: Gather traces from the discovered project**
+**Step 2: Gather raw traces from the discovered project**
 
 ```bash
 if [ -n "$LS_PROJECT" ]; then
-  langsmith-cli --json runs list --project "$LS_PROJECT" --failed --fields id,name,error,inputs --limit 10 > .harness-evolver/langsmith_diagnosis.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_diagnosis.json
-  langsmith-cli --json runs list --project "$LS_PROJECT" --fields id,name,inputs,outputs,latency_ms,total_tokens --limit 20 > .harness-evolver/langsmith_runs.json 2>/dev/null || echo "[]" > .harness-evolver/langsmith_runs.json
+  langsmith-cli --json runs list --project "$LS_PROJECT" --recent --fields id,name,inputs,outputs,error,total_tokens --limit 30 > /tmp/langsmith_raw.json 2>/dev/null || echo "[]" > /tmp/langsmith_raw.json
   langsmith-cli --json runs stats --project "$LS_PROJECT" > .harness-evolver/langsmith_stats.json 2>/dev/null || echo "{}" > .harness-evolver/langsmith_stats.json
   echo "$LS_PROJECT" > .harness-evolver/langsmith_project.txt
 else
-  echo "[]" > .harness-evolver/langsmith_diagnosis.json
+  echo "[]" > /tmp/langsmith_raw.json
   echo "{}" > .harness-evolver/langsmith_stats.json
 fi
 ```
 
-These files are included in the proposer's `<files_to_read>` so it has real trace data for diagnosis.
+**Step 3: Process raw LangSmith data into a readable format for proposers**
+
+The raw langsmith data has LangChain-serialized messages that are hard to read. Process it into a clean summary:
+
+```bash
+python3 -c "
+import json, sys
+
+raw = json.load(open('/tmp/langsmith_raw.json'))
+if not raw:
+    json.dump([], open('.harness-evolver/langsmith_runs.json', 'w'))
+    sys.exit(0)
+
+clean = []
+for r in raw:
+    entry = {'name': r.get('name', '?'), 'tokens': r.get('total_tokens', 0), 'error': r.get('error')}
+
+    # Extract readable prompt from LangChain serialized inputs
+    inputs = r.get('inputs', {})
+    if isinstance(inputs, dict) and 'messages' in inputs:
+        msgs = inputs['messages']
+        for msg_group in (msgs if isinstance(msgs, list) else [msgs]):
+            for msg in (msg_group if isinstance(msg_group, list) else [msg_group]):
+                if isinstance(msg, dict):
+                    kwargs = msg.get('kwargs', msg)
+                    content = kwargs.get('content', '')
+                    msg_type = msg.get('id', ['','','',''])[3] if isinstance(msg.get('id'), list) else 'unknown'
+                    if 'Human' in str(msg_type) or 'user' in str(msg_type).lower():
+                        entry['user_message'] = str(content)[:300]
+                    elif 'System' in str(msg_type):
+                        entry['system_prompt_preview'] = str(content)[:200]
+
+    # Extract readable output
+    outputs = r.get('outputs', {})
+    if isinstance(outputs, dict) and 'generations' in outputs:
+        gens = outputs['generations']
+        if gens and isinstance(gens, list) and gens[0]:
+            gen = gens[0][0] if isinstance(gens[0], list) else gens[0]
+            if isinstance(gen, dict):
+                msg = gen.get('message', gen)
+                if isinstance(msg, dict):
+                    kwargs = msg.get('kwargs', msg)
+                    entry['llm_response'] = str(kwargs.get('content', ''))[:300]
+
+    clean.append(entry)
+
+json.dump(clean, open('.harness-evolver/langsmith_runs.json', 'w'), indent=2, ensure_ascii=False)
+print(f'Processed {len(clean)} LangSmith runs into readable format')
+" 2>/dev/null || echo "[]" > .harness-evolver/langsmith_runs.json
+```
+
+The resulting `langsmith_runs.json` has clean, readable entries:
+```json
+[
+  {
+    "name": "ChatGoogleGenerativeAI",
+    "tokens": 1332,
+    "error": null,
+    "user_message": "Analise este texto: Bom dia pessoal...",
+    "system_prompt_preview": "Você é um moderador de conteúdo...",
+    "llm_response": "{\"categories\": [\"safe\"], \"severity\": \"safe\"...}"
+  }
+]
+```
+
+These files are included in the proposer's `<files_to_read>` so it has readable trace data for diagnosis.
 
 ### 2. Propose (3 parallel candidates)
 
