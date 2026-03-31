@@ -134,6 +134,19 @@ def _check_langsmith_cli():
         return False
 
 
+def _resolve_python():
+    """Resolve the Python interpreter for subprocesses.
+
+    Uses the current interpreter (sys.executable) instead of hardcoded 'python3'.
+    This prevents version mismatches in monorepo setups where the harness may
+    need a specific venv Python different from the system python3.
+    """
+    exe = sys.executable
+    if exe and os.path.isfile(exe):
+        return exe
+    return "python3"
+
+
 def _detect_stack(harness_path):
     """Detect technology stack from harness imports."""
     detect_stack_py = os.path.join(os.path.dirname(__file__), "detect_stack.py")
@@ -141,7 +154,7 @@ def _detect_stack(harness_path):
         return {}
     try:
         r = subprocess.run(
-            ["python3", detect_stack_py, harness_path],
+            [_resolve_python(), detect_stack_py, harness_path],
             capture_output=True, text=True, timeout=30,
         )
         if r.returncode == 0 and r.stdout.strip():
@@ -183,6 +196,12 @@ def main():
     parser.add_argument("--base-dir", default=None, help="Path for .harness-evolver/")
     parser.add_argument("--harness-config", default=None, help="Path to harness config.json")
     parser.add_argument("--tools-dir", default=None, help="Path to tools directory")
+    parser.add_argument("--validation-timeout", type=int, default=30,
+                        help="Timeout for harness validation in seconds (default: 30). "
+                             "Increase for LLM-powered agents that make real API calls.")
+    parser.add_argument("--skip-validation", action="store_true",
+                        help="Skip harness validation step. Use when you know the harness "
+                             "works but validation times out (e.g. real LLM agent calls).")
     args = parser.parse_args()
 
     # Auto-detect missing args
@@ -251,13 +270,13 @@ def main():
     config = {
         "version": "0.1.0",
         "harness": {
-            "command": f"python3 {harness_name}",
+            "command": f"{_resolve_python()} {harness_name}",
             "args": ["--input", "{input}", "--output", "{output}",
                      "--traces-dir", "{traces_dir}", "--config", "{config}"],
             "timeout_per_task_sec": 60,
         },
         "eval": {
-            "command": f"python3 {eval_name}",
+            "command": f"{_resolve_python()} {eval_name}",
             "args": ["--results-dir", "{results_dir}", "--tasks-dir", "{tasks_dir}",
                      "--scores", "{scores}"],
             "langsmith": _detect_langsmith(),
@@ -309,7 +328,7 @@ def main():
         if os.path.exists(detect_stack_py):
             try:
                 r = subprocess.run(
-                    ["python3", detect_stack_py, harness_dir],
+                    [_resolve_python(), detect_stack_py, harness_dir],
                     capture_output=True, text=True, timeout=30,
                 )
                 if r.returncode == 0 and r.stdout.strip():
@@ -338,7 +357,7 @@ def main():
     if os.path.exists(analyze_py):
         try:
             r = subprocess.run(
-                ["python3", analyze_py, "--harness", args.harness],
+                [_resolve_python(), analyze_py, "--harness", args.harness],
                 capture_output=True, text=True, timeout=30,
             )
             if r.returncode == 0 and r.stdout.strip():
@@ -357,30 +376,39 @@ def main():
             pass
 
     # 5. Validate baseline harness
-    print("Validating baseline harness...")
-    val_args = ["python3", evaluate_py, "validate",
-                "--harness", os.path.join(base, "baseline", "harness.py")]
     config_path = os.path.join(base, "baseline", "config.json")
-    if os.path.exists(config_path):
-        val_args.extend(["--config", config_path])
-    r = subprocess.run(val_args, capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"FAIL: baseline harness validation failed.\n{r.stderr}", file=sys.stderr)
-        sys.exit(1)
-    print(r.stdout.strip())
+    if args.skip_validation:
+        print("Skipping baseline validation (--skip-validation).")
+    else:
+        print(f"Validating baseline harness (timeout: {args.validation_timeout}s)...")
+        val_args = [_resolve_python(), evaluate_py, "validate",
+                    "--harness", os.path.join(base, "baseline", "harness.py"),
+                    "--timeout", str(args.validation_timeout)]
+        if os.path.exists(config_path):
+            val_args.extend(["--config", config_path])
+        r = subprocess.run(val_args, capture_output=True, text=True)
+        if r.returncode != 0:
+            hint = ""
+            if "TIMEOUT" in r.stderr:
+                hint = (f"\n\nHint: The harness timed out after {args.validation_timeout}s. "
+                        "This is common for LLM-powered agents that make real API calls.\n"
+                        "Try: --validation-timeout 120  (or --skip-validation to bypass)")
+            print(f"FAIL: baseline harness validation failed.\n{r.stderr}{hint}", file=sys.stderr)
+            sys.exit(1)
+        print(r.stdout.strip())
 
     # 6. Evaluate baseline
     print("Evaluating baseline harness...")
     baseline_traces = tempfile.mkdtemp()
     baseline_scores = os.path.join(base, "baseline_scores.json")
     eval_args = [
-        "python3", evaluate_py, "run",
+        _resolve_python(), evaluate_py, "run",
         "--harness", os.path.join(base, "baseline", "harness.py"),
         "--tasks-dir", os.path.join(base, "eval", "tasks"),
         "--eval", os.path.join(base, "eval", "eval.py"),
         "--traces-dir", baseline_traces,
         "--scores", baseline_scores,
-        "--timeout", "60",
+        "--timeout", str(max(args.validation_timeout, 60)),
     ]
     if os.path.exists(config_path):
         eval_args.extend(["--config", config_path])
@@ -399,7 +427,7 @@ def main():
     # 7. Initialize state with baseline score
     print(f"Baseline score: {baseline_score:.2f}")
     r = subprocess.run(
-        ["python3", state_py, "init",
+        [_resolve_python(), state_py, "init",
          "--base-dir", base,
          "--baseline-score", str(baseline_score)],
         capture_output=True, text=True,
