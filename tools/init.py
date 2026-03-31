@@ -270,13 +270,13 @@ def main():
     config = {
         "version": "0.1.0",
         "harness": {
-            "command": f"{_resolve_python()} {harness_name}",
+            "command": f"python3 {harness_name}",
             "args": ["--input", "{input}", "--output", "{output}",
                      "--traces-dir", "{traces_dir}", "--config", "{config}"],
             "timeout_per_task_sec": 60,
         },
         "eval": {
-            "command": f"{_resolve_python()} {eval_name}",
+            "command": f"python3 {eval_name}",
             "args": ["--results-dir", "{results_dir}", "--tasks-dir", "{tasks_dir}",
                      "--scores", "{scores}"],
             "langsmith": _detect_langsmith(),
