@@ -56,15 +56,35 @@ If user chose "Let me adjust paths", ask which paths to change and update accord
 
 ## Phase 1.8: Eval Mode (Interactive — only if NO eval found)
 
-If no eval.py was detected, ask the user which evaluation mode to use:
+If no eval.py was detected, ask the user which evaluation mode to use.
 
-```
-Question: "No eval script found. How should outputs be scored?"
-Header: "Eval mode"
-Options:
-  - "LLM-as-judge (zero-config)" — Claude Code scores outputs on accuracy, completeness, relevance, hallucination. No expected answers needed.
-  - "Keyword matching" — Simple string matching against expected answers. Requires 'expected' field in tasks.
-  - "I'll provide my own eval.py" — Pause and let user create their eval script.
+Use AskUserQuestion with **preview** (single-select with side-by-side preview):
+
+```json
+{
+  "questions": [{
+    "question": "No eval script found. How should outputs be scored?",
+    "header": "Eval mode",
+    "multiSelect": false,
+    "options": [
+      {
+        "label": "LLM-as-judge (zero-config)",
+        "description": "Claude Code scores outputs automatically. No expected answers needed.",
+        "preview": "## LLM-as-Judge\n\nScoring dimensions:\n- **Accuracy** (40%) — correctness of output\n- **Completeness** (20%) — covers all aspects\n- **Relevance** (20%) — focused on the question\n- **No-Hallucination** (20%) — supported by facts\n\nEach scored 1-5, normalized to 0.0-1.0.\n\n**Requirements:** None. Works with any task format.\n\n```json\n{\"id\": \"task_001\", \"input\": \"your question\"}\n```"
+      },
+      {
+        "label": "Keyword matching",
+        "description": "Check if expected substrings appear in the output. Requires 'expected' field.",
+        "preview": "## Keyword Matching\n\nSimple deterministic scoring:\n- Score 1.0 if ALL expected keywords found in output\n- Score 0.0 otherwise\n\n**Requirements:** Tasks must include `expected` field:\n\n```json\n{\n  \"id\": \"task_001\",\n  \"input\": \"What is the capital of France?\",\n  \"expected\": \"Paris\"\n}\n```\n\nFast, deterministic, no LLM calls during eval."
+      },
+      {
+        "label": "I'll provide my own eval.py",
+        "description": "Pause setup. You write the eval script following the contract.",
+        "preview": "## Custom Eval Contract\n\nYour eval.py must accept:\n```\npython3 eval.py \\\n  --results-dir DIR \\\n  --tasks-dir DIR \\\n  --scores OUTPUT.json\n```\n\nMust write scores.json:\n```json\n{\n  \"combined_score\": 0.85,\n  \"per_task\": {\n    \"task_001\": {\"score\": 0.9},\n    \"task_002\": {\"score\": 0.8}\n  }\n}\n```\n\nScores must be 0.0 to 1.0."
+      }
+    ]
+  }]
+}
 ```
 
 If "LLM-as-judge": copy eval_passthrough.py as eval.py.
@@ -79,16 +99,36 @@ If a LangSmith API key is available, discover projects and ask which one has pro
 langsmith-cli --json projects list --limit 10 2>/dev/null
 ```
 
-Use AskUserQuestion:
+Use AskUserQuestion with **preview** (single-select with side-by-side). Build options dynamically from the discovered projects:
+
+```json
+{
+  "questions": [{
+    "question": "LangSmith detected. Which project has your production traces?",
+    "header": "LangSmith",
+    "multiSelect": false,
+    "options": [
+      {
+        "label": "{project_name_1}",
+        "description": "{run_count} runs, last active {date}",
+        "preview": "## {project_name_1}\n\n- **Runs:** {run_count}\n- **Last active:** {date}\n- **Created:** {created_date}\n\nSelecting this project will:\n1. Fetch up to 100 recent traces\n2. Analyze traffic distribution and error patterns\n3. Generate production_seed.md for testgen\n4. Proposers will see real usage data"
+      },
+      {
+        "label": "{project_name_2}",
+        "description": "{run_count} runs, last active {date}",
+        "preview": "## {project_name_2}\n\n- **Runs:** {run_count}\n- **Last active:** {date}\n- **Created:** {created_date}\n\n(same explanation)"
+      },
+      {
+        "label": "Skip",
+        "description": "Don't use production traces",
+        "preview": "## Skip Production Traces\n\nThe evolver will work without production data:\n- Testgen generates synthetic tasks from code analysis\n- No real-world traffic distribution\n- No production error patterns\n\nYou can import traces later with:\n`/harness-evolver:import-traces`"
+      }
+    ]
+  }]
+}
 ```
-Question: "LangSmith detected. Which project has your production traces?"
-Header: "LangSmith"
-Options: (build from discovered projects — pick top 3-4 by recent activity)
-  - "{project_name_1}" — {run_count} runs, last active {date}
-  - "{project_name_2}" — {run_count} runs, last active {date}
-  - "{project_name_3}" — {run_count} runs, last active {date}
-  - "Skip — don't use production traces" — Proceed without production data
-```
+
+Build the options from the `langsmith-cli` output. Use up to 3 projects (sorted by most recent activity) + the "Skip" option. Fill in actual values for run_count, date, etc.
 
 If a project is selected, pass it as `--langsmith-project` to init.py.
 

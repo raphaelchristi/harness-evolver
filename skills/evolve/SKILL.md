@@ -28,23 +28,34 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 If no `--iterations` argument was provided, ask the user interactively:
 
-Use AskUserQuestion with TWO questions:
+Use AskUserQuestion with TWO questions in a single call (simple single-select, no preview needed):
 
-```
-Question 1: "How many evolution iterations?"
-Header: "Iterations"
-Options:
-  - "3 (quick)" — Fast exploration, good for testing setup
-  - "5 (balanced)" — Good trade-off between speed and quality
-  - "10 (thorough)" — Deep optimization, takes longer
-
-Question 2: "Stop early if score reaches?"
-Header: "Target"
-Options:
-  - "0.8 (good enough)" — Stop when the harness is reasonably good
-  - "0.9 (high quality)" — Stop when quality is high
-  - "0.95 (near perfect)" — Push for near-perfect scores
-  - "No limit" — Run all iterations regardless of score
+```json
+{
+  "questions": [
+    {
+      "question": "How many evolution iterations?",
+      "header": "Iterations",
+      "multiSelect": false,
+      "options": [
+        {"label": "3 (quick)", "description": "Fast exploration, good for testing setup. ~15 min."},
+        {"label": "5 (balanced)", "description": "Good trade-off between speed and quality. ~30 min."},
+        {"label": "10 (thorough)", "description": "Deep optimization with adaptive strategies. ~1 hour."}
+      ]
+    },
+    {
+      "question": "Stop early if score reaches?",
+      "header": "Target",
+      "multiSelect": false,
+      "options": [
+        {"label": "0.8 (good enough)", "description": "Stop when the harness is reasonably good"},
+        {"label": "0.9 (high quality)", "description": "Stop when quality is high"},
+        {"label": "0.95 (near perfect)", "description": "Push for near-perfect scores"},
+        {"label": "No limit", "description": "Run all iterations regardless of score"}
+      ]
+    }
+  ]
+}
 ```
 
 Apply the answers:
