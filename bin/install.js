@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Harness Evolver installer.
- * Copies skills/agents/tools directly to runtime directories (GSD pattern).
+ * Harness Evolver v3 installer.
+ * Copies skills/agents/tools to runtime directories (GSD pattern).
+ * Installs Python dependencies (langsmith + openevals).
  *
  * Usage: npx harness-evolver@latest
  */
@@ -27,7 +28,7 @@ const LOGO = `${BOLD}${GREEN}
   ╠═╣╠═╣╠╦╝║║║║╣ ╚═╗╚═╗  ║╣ ╚╗╔╝║ ║║  ╚╗╔╝║╣ ╠╦╝
   ╩ ╩╩ ╩╩╚═╝╚╝╚═╝╚═╝╚═╝  ╚═╝ ╚╝ ╚═╝╩═╝ ╚╝ ╚═╝╩╚═
 ${RESET}
-${DIM}${GREEN}  End-to-end harness optimization for AI agents${RESET}
+${DIM}${GREEN}  LangSmith-native agent optimization  v${VERSION}${RESET}
 `;
 
 function ask(rl, question) {
@@ -39,6 +40,7 @@ function copyDir(src, dest) {
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
+    if (entry.name === "__pycache__") continue;
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath);
     } else {
@@ -70,7 +72,7 @@ function checkCommand(cmd) {
   }
 }
 
-function installForRuntime(runtimeDir, scope) {
+function installSkillsAndAgents(runtimeDir, scope) {
   const baseDir = scope === "local"
     ? path.join(process.cwd(), runtimeDir)
     : path.join(HOME, runtimeDir);
@@ -78,93 +80,200 @@ function installForRuntime(runtimeDir, scope) {
   const skillsDir = path.join(baseDir, "skills");
   const agentsDir = path.join(baseDir, "agents");
 
-  // Skills → ~/.claude/skills/<skill-name>/SKILL.md (proper skills format)
+  // Skills — read SKILL.md name field, use directory name for filesystem
   const skillsSource = path.join(PLUGIN_ROOT, "skills");
   if (fs.existsSync(skillsSource)) {
     for (const skill of fs.readdirSync(skillsSource, { withFileTypes: true })) {
-      if (skill.isDirectory()) {
-        const src = path.join(skillsSource, skill.name);
-        const dest = path.join(skillsDir, "harness-evolver:" + skill.name);
-        copyDir(src, dest);
-        console.log(`  ${GREEN}✓${RESET} Installed skill: harness-evolver:${skill.name}`);
-      }
+      if (!skill.isDirectory()) continue;
+      const src = path.join(skillsSource, skill.name);
+      const skillMd = path.join(src, "SKILL.md");
+      if (!fs.existsSync(skillMd)) continue;
+
+      // Read the skill name from frontmatter
+      const content = fs.readFileSync(skillMd, "utf8");
+      const nameMatch = content.match(/^name:\s*(.+)$/m);
+      const skillName = nameMatch ? nameMatch[1].trim() : skill.name;
+
+      const dest = path.join(skillsDir, skill.name);
+      copyDir(src, dest);
+      console.log(`  ${GREEN}✓${RESET} ${skillName}`);
     }
   }
 
-  // Cleanup old commands/ install (from previous versions)
+  // Cleanup old v2 commands/ directory
   const oldCommandsDir = path.join(baseDir, "commands", "harness-evolver");
   if (fs.existsSync(oldCommandsDir)) {
     fs.rmSync(oldCommandsDir, { recursive: true, force: true });
-    console.log(`  ${GREEN}✓${RESET} Cleaned up old commands/ directory`);
+    console.log(`  ${DIM}Cleaned up old commands/ directory${RESET}`);
   }
 
-  // Agents → agents/
+  // Agents
   const agentsSource = path.join(PLUGIN_ROOT, "agents");
   if (fs.existsSync(agentsSource)) {
     fs.mkdirSync(agentsDir, { recursive: true });
     for (const agent of fs.readdirSync(agentsSource)) {
+      if (!agent.endsWith(".md")) continue;
       copyFile(path.join(agentsSource, agent), path.join(agentsDir, agent));
-      console.log(`  ${GREEN}✓${RESET} Installed agent: ${agent}`);
+      const agentName = agent.replace(".md", "");
+      console.log(`  ${GREEN}✓${RESET} agent: ${agentName}`);
     }
   }
 }
 
 function installTools() {
-  const toolsDir = path.join(HOME, ".harness-evolver", "tools");
+  const toolsDir = path.join(HOME, ".evolver", "tools");
   const toolsSource = path.join(PLUGIN_ROOT, "tools");
   if (fs.existsSync(toolsSource)) {
     fs.mkdirSync(toolsDir, { recursive: true });
+    let count = 0;
     for (const tool of fs.readdirSync(toolsSource)) {
-      if (tool.endsWith(".py")) {
-        copyFile(path.join(toolsSource, tool), path.join(toolsDir, tool));
+      if (!tool.endsWith(".py")) continue;
+      copyFile(path.join(toolsSource, tool), path.join(toolsDir, tool));
+      count++;
+    }
+    console.log(`  ${GREEN}✓${RESET} ${count} tools installed to ~/.evolver/tools/`);
+  }
+}
+
+function installPythonDeps() {
+  console.log(`\n  ${YELLOW}Installing Python dependencies...${RESET}`);
+
+  // Try multiple pip variants
+  const commands = [
+    "pip install langsmith openevals",
+    "uv pip install langsmith openevals",
+    "pip3 install langsmith openevals",
+    "python3 -m pip install langsmith openevals",
+  ];
+
+  for (const cmd of commands) {
+    try {
+      execSync(cmd, { stdio: "pipe", timeout: 120000 });
+      console.log(`  ${GREEN}✓${RESET} langsmith + openevals installed`);
+      return true;
+    } catch {
+      continue;
+    }
+  }
+
+  console.log(`  ${YELLOW}!${RESET} Could not auto-install Python packages.`);
+  console.log(`    Run manually: ${BOLD}pip install langsmith openevals${RESET}`);
+  return false;
+}
+
+async function configureLangSmith(rl) {
+  console.log(`\n  ${YELLOW}LangSmith Configuration${RESET} ${DIM}(required for v3)${RESET}\n`);
+
+  // Check if already configured
+  const langsmithCredsDir = process.platform === "darwin"
+    ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
+    : path.join(HOME, ".config", "langsmith-cli");
+  const langsmithCredsFile = path.join(langsmithCredsDir, "credentials");
+
+  // Check env var
+  if (process.env.LANGSMITH_API_KEY) {
+    console.log(`  ${GREEN}✓${RESET} LANGSMITH_API_KEY found in environment`);
+    return;
+  }
+
+  // Check credentials file
+  if (fs.existsSync(langsmithCredsFile)) {
+    console.log(`  ${GREEN}✓${RESET} LangSmith credentials found at ${DIM}${langsmithCredsFile}${RESET}`);
+    return;
+  }
+
+  // Ask for API key
+  console.log(`  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
+  console.log(`  ${DIM}LangSmith is required for v3 (datasets, experiments, evaluators).${RESET}\n`);
+  const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key:${RESET} `);
+  const key = apiKey.trim();
+
+  if (key && key.startsWith("lsv2_")) {
+    try {
+      fs.mkdirSync(langsmithCredsDir, { recursive: true });
+      fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
+      console.log(`  ${GREEN}✓${RESET} API key saved to ${DIM}${langsmithCredsFile}${RESET}`);
+    } catch {
+      console.log(`  ${RED}Failed to save.${RESET} Add to your shell: export LANGSMITH_API_KEY=${key}`);
+    }
+  } else if (key) {
+    console.log(`  ${YELLOW}Doesn't look like a LangSmith key (should start with lsv2_).${RESET}`);
+    console.log(`  Add to your shell: ${BOLD}export LANGSMITH_API_KEY=your_key${RESET}`);
+  } else {
+    console.log(`  ${YELLOW}Skipped.${RESET} You must set LANGSMITH_API_KEY before using /evolver:setup`);
+  }
+}
+
+async function configureOptionalIntegrations(rl) {
+  console.log(`\n  ${YELLOW}Optional Integrations${RESET}\n`);
+
+  // Context7 MCP
+  const hasContext7 = (() => {
+    try {
+      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
+        if (fs.existsSync(p)) {
+          const s = JSON.parse(fs.readFileSync(p, "utf8"));
+          if (s.mcpServers && (s.mcpServers.context7 || s.mcpServers.Context7)) return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+
+  if (hasContext7) {
+    console.log(`  ${GREEN}✓${RESET} Context7 MCP already configured`);
+  } else {
+    console.log(`  ${BOLD}Context7 MCP${RESET} — up-to-date library documentation (LangChain, OpenAI, etc.)`);
+    const c7Answer = await ask(rl, `\n  ${YELLOW}Install Context7 MCP? [y/N]:${RESET} `);
+    if (c7Answer.trim().toLowerCase() === "y") {
+      try {
+        execSync("claude mcp add context7 -- npx -y @upstash/context7-mcp@latest", { stdio: "inherit" });
+        console.log(`\n  ${GREEN}✓${RESET} Context7 MCP configured`);
+      } catch {
+        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add context7 -- npx -y @upstash/context7-mcp@latest`);
       }
     }
-    console.log(`  ${GREEN}✓${RESET} Installed tools to ~/.harness-evolver/tools/`);
   }
-}
 
-function installExamples() {
-  const examplesDir = path.join(HOME, ".harness-evolver", "examples");
-  const examplesSource = path.join(PLUGIN_ROOT, "examples");
-  if (fs.existsSync(examplesSource)) {
-    copyDir(examplesSource, examplesDir);
-    console.log(`  ${GREEN}✓${RESET} Installed examples to ~/.harness-evolver/examples/`);
+  // LangChain Docs MCP
+  const hasLcDocs = (() => {
+    try {
+      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
+        if (fs.existsSync(p)) {
+          const s = JSON.parse(fs.readFileSync(p, "utf8"));
+          if (s.mcpServers && (s.mcpServers["docs-langchain"] || s.mcpServers["LangChain Docs"])) return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+
+  if (hasLcDocs) {
+    console.log(`  ${GREEN}✓${RESET} LangChain Docs MCP already configured`);
+  } else {
+    console.log(`\n  ${BOLD}LangChain Docs MCP${RESET} — LangChain/LangGraph/LangSmith documentation`);
+    const lcAnswer = await ask(rl, `\n  ${YELLOW}Install LangChain Docs MCP? [y/N]:${RESET} `);
+    if (lcAnswer.trim().toLowerCase() === "y") {
+      try {
+        execSync("claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp", { stdio: "inherit" });
+        console.log(`\n  ${GREEN}✓${RESET} LangChain Docs MCP configured`);
+      } catch {
+        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp`);
+      }
+    }
   }
-}
-
-function cleanupBrokenPluginEntry(runtimeDir) {
-  // Remove the harness-evolver@local entry that doesn't work
-  const installedPath = path.join(HOME, runtimeDir, "plugins", "installed_plugins.json");
-  try {
-    const data = JSON.parse(fs.readFileSync(installedPath, "utf8"));
-    if (data.plugins && data.plugins["harness-evolver@local"]) {
-      delete data.plugins["harness-evolver@local"];
-      fs.writeFileSync(installedPath, JSON.stringify(data, null, 2) + "\n");
-    }
-  } catch {}
-
-  const settingsPath = path.join(HOME, runtimeDir, "settings.json");
-  try {
-    const data = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    if (data.enabledPlugins && data.enabledPlugins["harness-evolver@local"] !== undefined) {
-      delete data.enabledPlugins["harness-evolver@local"];
-      fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2) + "\n");
-    }
-  } catch {}
 }
 
 async function main() {
   console.log(LOGO);
-  console.log(`  ${DIM}Harness Evolver v${VERSION}${RESET}`);
-  console.log(`  ${DIM}Meta-Harness-style autonomous harness optimization${RESET}`);
-  console.log();
 
   if (!checkPython()) {
-    console.error(`  ${RED}ERROR:${RESET} python3 not found in PATH. Install Python 3.8+ first.`);
+    console.error(`  ${RED}ERROR:${RESET} python3 not found. Install Python 3.10+ first.`);
     process.exit(1);
   }
   console.log(`  ${GREEN}✓${RESET} python3 found`);
 
+  // Detect runtimes
   const RUNTIMES = [
     { name: "Claude Code", dir: ".claude" },
     { name: "Cursor", dir: ".cursor" },
@@ -180,7 +289,8 @@ async function main() {
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-  console.log(`\n  ${YELLOW}Which runtime(s) would you like to install for?${RESET}\n`);
+  // Runtime selection
+  console.log(`\n  ${YELLOW}Which runtime(s) to install for?${RESET}\n`);
   RUNTIMES.forEach((r, i) => console.log(`  ${i + 1}) ${r.name.padEnd(14)} (~/${r.dir})`));
   if (RUNTIMES.length > 1) {
     console.log(`  ${RUNTIMES.length + 1}) All`);
@@ -199,147 +309,47 @@ async function main() {
   }
   if (selected.length === 0) selected = [RUNTIMES[0]];
 
-  console.log(`\n  ${YELLOW}Where would you like to install?${RESET}\n`);
-  console.log(`  1) Global  (~/${selected[0].dir}) - available in all projects`);
-  console.log(`  2) Local   (./${selected[0].dir}) - this project only`);
+  // Scope selection
+  console.log(`\n  ${YELLOW}Where to install?${RESET}\n`);
+  console.log(`  1) Global  (~/${selected[0].dir}) — available in all projects`);
+  console.log(`  2) Local   (./${selected[0].dir}) — this project only`);
 
   const scopeAnswer = await ask(rl, `\n  ${YELLOW}Choice [1]:${RESET} `);
   const scope = (scopeAnswer.trim() === "2") ? "local" : "global";
 
-  console.log();
-
+  // Install skills + agents
+  console.log(`\n  ${BOLD}Installing skills & agents${RESET}\n`);
   for (const runtime of selected) {
-    console.log(`  Installing for ${GREEN}${runtime.name}${RESET}\n`);
-    cleanupBrokenPluginEntry(runtime.dir);
-    installForRuntime(runtime.dir, scope);
+    console.log(`  ${GREEN}${runtime.name}${RESET}:`);
+    installSkillsAndAgents(runtime.dir, scope);
     console.log();
   }
 
+  // Install tools
+  console.log(`  ${BOLD}Installing tools${RESET}`);
   installTools();
-  installExamples();
 
-  const versionPath = path.join(HOME, ".harness-evolver", "VERSION");
+  // Version marker
+  const versionPath = path.join(HOME, ".evolver", "VERSION");
   fs.mkdirSync(path.dirname(versionPath), { recursive: true });
   fs.writeFileSync(versionPath, VERSION);
-  console.log(`  ${GREEN}✓${RESET} VERSION ${VERSION}`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${GREEN}/harness-evolver:init${RESET}\n`);
+  // Install Python deps
+  installPythonDeps();
+
+  // Configure LangSmith (required)
+  await configureLangSmith(rl);
 
   // Optional integrations
-  console.log(`  ${YELLOW}Install optional integrations?${RESET}\n`);
-  console.log(`  These enhance the proposer with rich traces and up-to-date documentation.\n`);
+  await configureOptionalIntegrations(rl);
 
-  // LangSmith CLI
-  const hasLangsmithCli = checkCommand("langsmith-cli --version");
-  const langsmithCredsDir = process.platform === "darwin"
-    ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
-    : path.join(HOME, ".config", "langsmith-cli");
-  const langsmithCredsFile = path.join(langsmithCredsDir, "credentials");
-  const hasLangsmithCreds = fs.existsSync(langsmithCredsFile);
-
-  if (hasLangsmithCli && hasLangsmithCreds) {
-    console.log(`  ${GREEN}✓${RESET} langsmith-cli installed and authenticated`);
-  } else {
-    if (!hasLangsmithCli) {
-      console.log(`  ${BOLD}LangSmith CLI${RESET} — rich trace analysis (error rates, latency, token usage)`);
-      const lsAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [y/N]:${RESET} `);
-      if (lsAnswer.trim().toLowerCase() === "y") {
-        console.log(`\n  Installing langsmith-cli...`);
-        try {
-          execSync("uv tool install langsmith-cli", { stdio: "inherit" });
-          console.log(`\n  ${GREEN}✓${RESET} langsmith-cli installed`);
-        } catch {
-          console.log(`\n  ${RED}Failed.${RESET} Install manually: uv tool install langsmith-cli\n`);
-        }
-      }
-    } else {
-      console.log(`  ${GREEN}✓${RESET} langsmith-cli already installed`);
-    }
-
-    // Auth — ask for API key inline if not already configured
-    if (!hasLangsmithCreds) {
-      console.log(`\n  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
-      const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key (or Enter to skip):${RESET} `);
-      const key = apiKey.trim();
-      if (key && key.startsWith("lsv2_")) {
-        try {
-          fs.mkdirSync(langsmithCredsDir, { recursive: true });
-          fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
-          console.log(`  ${GREEN}✓${RESET} LangSmith API key saved`);
-        } catch {
-          console.log(`  ${RED}Failed to save credentials.${RESET} Set LANGSMITH_API_KEY in your shell instead.`);
-        }
-      } else if (key) {
-        console.log(`  ${YELLOW}Doesn't look like a LangSmith key (should start with lsv2_). Skipped.${RESET}`);
-      } else {
-        console.log(`  ${DIM}Skipped. Set LANGSMITH_API_KEY later or run: langsmith-cli auth login${RESET}`);
-      }
-    }
-  }
-
-  // Context7 MCP
-  const hasContext7 = (() => {
-    try {
-      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
-        if (fs.existsSync(p)) {
-          const s = JSON.parse(fs.readFileSync(p, "utf8"));
-          if (s.mcpServers && (s.mcpServers.context7 || s.mcpServers.Context7)) return true;
-        }
-      }
-    } catch {}
-    return false;
-  })();
-  if (hasContext7) {
-    console.log(`  ${GREEN}✓${RESET} Context7 MCP already configured`);
-  } else {
-    console.log(`\n  ${BOLD}Context7 MCP${RESET} — up-to-date library documentation (LangChain, OpenAI, etc.)`);
-    console.log(`    ${DIM}claude mcp add context7 -- npx -y @upstash/context7-mcp@latest${RESET}`);
-    const c7Answer = await ask(rl, `\n  ${YELLOW}Install Context7 MCP? [y/N]:${RESET} `);
-    if (c7Answer.trim().toLowerCase() === "y") {
-      console.log(`\n  Installing Context7 MCP...`);
-      try {
-        execSync("claude mcp add context7 -- npx -y @upstash/context7-mcp@latest", { stdio: "inherit" });
-        console.log(`\n  ${GREEN}✓${RESET} Context7 MCP configured`);
-      } catch {
-        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add context7 -- npx -y @upstash/context7-mcp@latest\n`);
-      }
-    }
-  }
-
-  // LangChain Docs MCP
-  const hasLcDocs = (() => {
-    try {
-      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
-        if (fs.existsSync(p)) {
-          const s = JSON.parse(fs.readFileSync(p, "utf8"));
-          if (s.mcpServers && (s.mcpServers["docs-langchain"] || s.mcpServers["LangChain Docs"])) return true;
-        }
-      }
-    } catch {}
-    return false;
-  })();
-  if (hasLcDocs) {
-    console.log(`  ${GREEN}✓${RESET} LangChain Docs MCP already configured`);
-  } else {
-    console.log(`\n  ${BOLD}LangChain Docs MCP${RESET} — LangChain/LangGraph/LangSmith documentation search`);
-    console.log(`    ${DIM}claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp${RESET}`);
-    const lcAnswer = await ask(rl, `\n  ${YELLOW}Install LangChain Docs MCP? [y/N]:${RESET} `);
-    if (lcAnswer.trim().toLowerCase() === "y") {
-      console.log(`\n  Installing LangChain Docs MCP...`);
-      try {
-        execSync("claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp", { stdio: "inherit" });
-        console.log(`\n  ${GREEN}✓${RESET} LangChain Docs MCP configured`);
-      } catch {
-        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp\n`);
-      }
-    }
-  }
-
-  console.log(`\n  ${DIM}Quick start with example:${RESET}`);
-  console.log(`    cp -r ~/.harness-evolver/examples/classifier ./my-project`);
-  console.log(`    cd my-project && claude`);
-  console.log(`    /harness-evolver:init`);
-  console.log(`    /harness-evolver:evolve`);
+  // Done
+  console.log(`\n  ${GREEN}${BOLD}Setup complete!${RESET}\n`);
+  console.log(`  ${DIM}Restart Claude Code, then:${RESET}`);
+  console.log(`    ${GREEN}/evolver:setup${RESET}     — configure LangSmith for your project`);
+  console.log(`    ${GREEN}/evolver:evolve${RESET}    — run the optimization loop`);
+  console.log(`    ${GREEN}/evolver:status${RESET}    — check progress`);
+  console.log(`    ${GREEN}/evolver:deploy${RESET}    — finalize and push`);
   console.log(`\n  ${DIM}GitHub: https://github.com/raphaelchristi/harness-evolver${RESET}\n`);
 
   rl.close();

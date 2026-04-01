@@ -1,34 +1,36 @@
 ---
-name: harness-evolver:status
-description: "Use when the user asks about evolution progress, current scores, best harness version, how many iterations ran, or whether the loop is stagnating. Also use when the user says 'status', 'progress', or 'how is it going'."
+name: evolver:status
+description: "Use when the user asks about evolution progress, current scores, best version, how many iterations ran, or whether the loop is stagnating."
 allowed-tools: [Read, Bash]
 ---
 
-# /harness-evolve-status
+# /evolver:status
 
-Show evolution progress.
-
-## Resolve Tool Path
-
-```bash
-TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo "$HOME/.harness-evolver/tools")
-```
+Show current evolution progress.
 
 ## What To Do
 
-If `.harness-evolver/` does not exist, tell user to run `harness-evolver:init` first.
-
-Otherwise:
+Read `.evolver.json` and report:
 
 ```bash
-python3 $TOOLS/state.py show --base-dir .harness-evolver
+python3 -c "
+import json
+c = json.load(open('.evolver.json'))
+print(f'Project: {c[\"project\"]}')
+print(f'Dataset: {c[\"dataset\"]}')
+print(f'Framework: {c[\"framework\"]}')
+print(f'Evaluators: {c[\"evaluators\"]}')
+print(f'Iterations: {c[\"iterations\"]}')
+print(f'Best: {c[\"best_experiment\"]} (score: {c[\"best_score\"]:.3f})')
+print(f'Baseline: {c[\"history\"][0][\"score\"]:.3f}' if c['history'] else 'No baseline')
+print()
+print('History:')
+for h in c.get('history', []):
+    print(f'  {h[\"version\"]}: {h[\"score\"]:.3f}')
+"
 ```
 
-Then read and display `.harness-evolver/STATE.md` for the full history table.
+Detect stagnation: if last 3 scores are within 1% of each other, warn.
+Detect regression: if current best is lower than a previous best, warn.
 
-## If User Wants More Detail
-
-- Scores per task: `cat .harness-evolver/harnesses/{version}/scores.json`
-- What changed: `cat .harness-evolver/harnesses/{version}/proposal.md`
-- Compare two versions: `diff .harness-evolver/harnesses/{vA}/harness.py .harness-evolver/harnesses/{vB}/harness.py`
-- Full history: `cat .harness-evolver/PROPOSER_HISTORY.md`
+Print LangSmith URL for the best experiment if available.

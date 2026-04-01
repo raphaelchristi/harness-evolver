@@ -1,82 +1,75 @@
 ---
-name: harness-evolver:deploy
-description: "Use when the user wants to use the best evolved harness in their project, promote a version to production, copy the winning harness back, or is done evolving and wants to apply the result."
-argument-hint: "[version]"
+name: evolver:deploy
+description: "Use when the user is done evolving and wants to finalize, clean up, tag the result, or push the optimized agent."
 allowed-tools: [Read, Write, Bash, Glob, AskUserQuestion]
 ---
 
-# /harness-evolver:deploy
+# /evolver:deploy
 
-Promote the best (or specified) harness version back to the user's project.
-
-## Arguments
-
-- `version` — optional. If not given, deploys the best version from `summary.json`.
+Finalize the evolution results. In v3, the best code is already in the main branch (auto-merged during evolve). Deploy is about cleanup, tagging, and pushing.
 
 ## What To Do
 
-### 1. Identify Best Version
+### 1. Show Results
 
 ```bash
-python3 -c "import json; s=json.load(open('.harness-evolver/summary.json')); print(s['best']['version'], s['best']['combined_score'])"
+python3 -c "
+import json
+c = json.load(open('.evolver.json'))
+baseline = c['history'][0]['score'] if c['history'] else 0
+best = c['best_score']
+improvement = best - baseline
+print(f'Baseline: {baseline:.3f}')
+print(f'Best: {best:.3f} (+{improvement:.3f}, {improvement/max(baseline,0.001)*100:.0f}% improvement)')
+print(f'Iterations: {c[\"iterations\"]}')
+print(f'Experiment: {c[\"best_experiment\"]}')
+"
 ```
 
-Or use the user-specified version.
-
-### 2. Show What Will Be Deployed
-
+Show git diff from before evolution started:
 ```bash
-cat .harness-evolver/harnesses/{version}/proposal.md
-cat .harness-evolver/harnesses/{version}/scores.json
+git log --oneline --since="$(python3 -c "import json; print(json.load(open('.evolver.json'))['created_at'][:10])")" | head -20
 ```
 
-Report: version, score, improvement over baseline, what changed.
+### 2. Ask What To Do (interactive)
 
-### 3. Ask Deploy Options (Interactive)
-
-Use AskUserQuestion with TWO questions:
-
-```
-Question 1: "Where should the evolved harness go?"
-Header: "Deploy to"
-Options:
-  - "Overwrite original" — Replace {original_harness_path} with the evolved version
-  - "Copy to new file" — Save as harness_evolved.py alongside the original
-  - "Just show the diff" — Don't copy anything, just show what changed
-```
-
-```
-Question 2 (ONLY if user chose "Overwrite original"):
-"Back up the current harness before overwriting?"
-Header: "Backup"
-Options:
-  - "Yes, backup first" — Save current as {harness}.bak before overwriting
-  - "No, just overwrite" — Replace directly (git history has the original)
+```json
+{
+  "questions": [{
+    "question": "Evolution complete. What would you like to do?",
+    "header": "Deploy",
+    "multiSelect": false,
+    "options": [
+      {"label": "Tag and push", "description": "Create a git tag with the score and push to remote"},
+      {"label": "Just review", "description": "Show the full diff of all changes made during evolution"},
+      {"label": "Clean up only", "description": "Remove temporary files (trace_insights.json, etc.) but don't push"}
+    ]
+  }]
+}
 ```
 
-### 4. Copy Files
+### 3. Execute
 
-Based on the user's choices:
-
-**If "Overwrite original"**:
-- If backup: `cp {original_harness} {original_harness}.bak`
-- Then: `cp .harness-evolver/harnesses/{version}/harness.py {original_harness}`
-- Copy config.json if exists
-
-**If "Copy to new file"**:
+**If "Tag and push"**:
 ```bash
-cp .harness-evolver/harnesses/{version}/harness.py ./harness_evolved.py
-cp .harness-evolver/harnesses/{version}/config.json ./config_evolved.json  # if exists
+VERSION=$(python3 -c "import json; c=json.load(open('.evolver.json')); print(f'evolver-v{c[\"iterations\"]}')")
+SCORE=$(python3 -c "import json; print(f'{json.load(open(\".evolver.json\"))[\"best_score\"]:.3f}')")
+git tag -a "$VERSION" -m "Evolver: score $SCORE"
+git push origin main --tags
 ```
 
-**If "Just show the diff"**:
+**If "Just review"**:
 ```bash
-diff {original_harness} .harness-evolver/harnesses/{version}/harness.py
+git diff HEAD~{iterations} HEAD
 ```
-Do not copy anything.
 
-### 5. Report
+**If "Clean up only"**:
+```bash
+rm -f trace_insights.json best_results.json comparison.json production_seed.md production_seed.json
+```
 
-- What was copied and where
-- Score improvement: baseline → deployed version
-- Suggest: review the diff before committing
+### 4. Report
+
+- What was done
+- LangSmith experiment URL for the best result
+- Suggest reviewing the changes before deploying to production

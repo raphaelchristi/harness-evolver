@@ -1,59 +1,65 @@
-# Harness Evolver — Development Guide
+# Harness Evolver v3 — Development Guide
 
 ## What this is
 
-Claude Code plugin for Meta-Harness-style autonomous harness optimization. Proposes, evaluates, and iterates on LLM harness designs using full execution traces as feedback.
+Claude Code plugin for LangSmith-native autonomous agent optimization. Uses LangSmith Datasets, Experiments, and Evaluators as the backend. Proposers modify the user's real code in isolated git worktrees.
 
 ## Project structure
 
 ```
-tools/           Python stdlib-only CLI tools (evaluate.py, state.py, init.py, detect_stack.py, trace_logger.py)
-skills/          Markdown slash commands for Claude Code (/harness-evolve-init, /harness-evolve, /harness-evolve-status)
-agents/          Proposer agent definition (the core of the optimization loop)
+tools/           Python tools (requires langsmith + openevals)
+skills/          Claude Code slash commands (/evolver:setup, /evolver:evolve, etc.)
+agents/          Agent definitions (proposer, critic, architect, testgen)
 bin/             Node.js installer (npx harness-evolver@latest)
-examples/        Classifier example with mock mode for testing
-tests/           Python unittest tests (run with: python3 -m unittest discover -s tests -v)
-docs/specs/      Design specs (harness-evolver, langsmith integration, context7 integration)
-docs/plans/      Implementation plans
+docs/            Design specs and plans
 ```
 
-## Running tests
+## Dependencies
 
 ```bash
-python3 -m unittest discover -s tests -v
+pip install langsmith openevals
 ```
 
-All tools are stdlib-only Python. No pip install needed. Tests use the examples/classifier/ as a fixture.
+All tools require the `langsmith` Python SDK. No stdlib-only constraint in v3.
 
 ## Key conventions
 
-- Tools are standalone CLI scripts callable via subprocess (argparse-based)
-- All Python code is stdlib-only (no external dependencies)
-- The proposer agent navigates a .harness-evolver/ filesystem with grep/cat/diff
-- LangSmith integration uses langsmith-cli (not a custom API client)
-- Context7 integration uses MCP tools (resolve-library-id, get-library-docs)
-- Both integrations are optional — the core loop works without them
+- Tools use the LangSmith Python SDK for datasets, experiments, evaluators
+- Proposer agents work in git worktrees (isolated copies of the repo)
+- Winning worktrees are merged automatically into the main branch
+- State is hybrid: `.evolver.json` (local config) + LangSmith (data)
+- LangSmith API key is mandatory (`LANGSMITH_API_KEY`)
 
 ## Architecture (3 layers)
 
-1. **Skills/Agents (markdown)** — orchestrate the AI (proposer, evolve loop, init, status)
-2. **Tools (Python)** — deterministic operations (evaluate, state, init, detect_stack)
-3. **Installer (Node.js)** — distribution via npx, copies files to ~/.claude/ and ~/.harness-evolver/
+1. **Skills/Agents (markdown)** — orchestrate the AI (proposer, evolve loop, setup)
+2. **Tools (Python + langsmith SDK)** — evaluation, trace analysis, setup
+3. **Installer (Node.js)** — distribution via npx, copies files to ~/.claude/ and ~/.evolver/
 
 ## The evolution loop
 
 ```
-/harness-evolve → for each iteration:
-  1. Spawn proposer agent → reads filesystem, proposes new harness
-  2. Validate → evaluate.py validate
-  3. Evaluate → evaluate.py run (captures traces per task)
-  4. Update state → state.py update (summary.json, STATE.md, PROPOSER_HISTORY.md)
-  5. Report → score delta, regression detection, stagnation check
+/evolver:evolve → for each iteration:
+  1. Gather trace insights from LangSmith
+  2. Spawn 5 proposers in parallel (each in a git worktree)
+  3. Each proposer modifies real code, commits changes
+  4. Evaluate each candidate via client.evaluate() against LangSmith dataset
+  5. Compare LangSmith experiments → select winner
+  6. Merge winning worktree into main branch
+  7. Auto-trigger critic/architect if needed
 ```
 
-## Config files (in .harness-evolver/)
+## Local config (.evolver.json)
 
-- `config.json` — project config (harness command, eval command, evolution params, stack, langsmith)
-- `summary.json` — source of truth (all versions, scores, parents)
-- `STATE.md` — human-readable view (generated from summary.json)
-- `PROPOSER_HISTORY.md` — consolidated log of all proposals and outcomes
+```json
+{
+  "version": "3.0.0",
+  "project": "evolver-my-agent",
+  "dataset": "my-agent-eval-v1",
+  "entry_point": "python main.py",
+  "evaluators": ["correctness", "conciseness"],
+  "best_experiment": "v003-...",
+  "best_score": 0.85,
+  "iterations": 3
+}
+```

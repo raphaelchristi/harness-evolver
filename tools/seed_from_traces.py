@@ -9,8 +9,8 @@ production traces and produce:
 Usage:
     python3 seed_from_traces.py \
         --project ceppem-langgraph \
-        --output-md .harness-evolver/production_seed.md \
-        --output-json .harness-evolver/production_seed.json \
+        --output-md production_seed.md \
+        --output-json production_seed.json \
         [--api-key-env LANGSMITH_API_KEY] \
         [--limit 100]
 
@@ -401,15 +401,43 @@ def main():
     parser.add_argument("--limit", type=int, default=100, help="Max traces to fetch (default: 100)")
     parser.add_argument("--output-md", required=True, help="Output path for markdown seed")
     parser.add_argument("--output-json", required=True, help="Output path for JSON summary")
+    parser.add_argument("--use-sdk", action="store_true",
+                        help="Use langsmith Python SDK instead of REST API (v3 mode)")
     args = parser.parse_args()
 
-    api_key = os.environ.get(args.api_key_env, "")
-    if not api_key:
-        print(f"No API key found in ${args.api_key_env} — cannot fetch production traces", file=sys.stderr)
-        sys.exit(1)
-
     print(f"Fetching up to {args.limit} traces from LangSmith project '{args.project}'...")
-    runs = fetch_runs(args.project, api_key, args.limit)
+
+    if args.use_sdk:
+        try:
+            from langsmith import Client
+            client = Client()
+            raw_runs = list(client.list_runs(
+                project_name=args.project, is_root=True, limit=args.limit,
+            ))
+            # Convert SDK run objects to dicts matching our format
+            runs = []
+            for r in raw_runs:
+                run_dict = {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "inputs": r.inputs,
+                    "outputs": r.outputs,
+                    "error": r.error,
+                    "total_tokens": r.total_tokens,
+                    "feedback_stats": None,
+                    "start_time": r.start_time.isoformat() if r.start_time else None,
+                    "end_time": r.end_time.isoformat() if r.end_time else None,
+                }
+                runs.append(run_dict)
+        except ImportError:
+            print("langsmith package not installed. Use --use-sdk with pip install langsmith", file=sys.stderr)
+            sys.exit(1)
+    else:
+        api_key = os.environ.get(args.api_key_env, "")
+        if not api_key:
+            print(f"No API key found in ${args.api_key_env} — cannot fetch production traces", file=sys.stderr)
+            sys.exit(1)
+        runs = fetch_runs(args.project, api_key, args.limit)
 
     if not runs:
         print("No traces found. The project may be empty or the name may be wrong.")
