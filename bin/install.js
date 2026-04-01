@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Harness Evolver v3 installer.
- * Copies skills/agents/tools to runtime directories (GSD pattern).
+ * Harness Evolver installer.
+ * Copies skills/agents/tools to runtime directories.
  * Installs Python dependencies (langsmith) and langsmith-cli.
  *
  * Usage: npx harness-evolver@latest
@@ -16,20 +16,123 @@ const VERSION = require("../package.json").version;
 const PLUGIN_ROOT = path.resolve(__dirname, "..");
 const HOME = process.env.HOME || process.env.USERPROFILE;
 
-const GREEN = "\x1b[38;2;0;255;136m";
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
-const DIM = "\x1b[2m";
-const BOLD = "\x1b[1m";
-const RESET = "\x1b[0m";
+// ─── Colors (zero dependencies, inline ANSI) ───────────────────────────────
 
-const LOGO = `${BOLD}${GREEN}
-  ╦ ╦╔═╗╦═╗╔╗╔╔═╗╔═╗╔═╗  ╔═╗╦  ╦╔═╗╦  ╦  ╦╔═╗╦═╗
-  ╠═╣╠═╣╠╦╝║║║║╣ ╚═╗╚═╗  ║╣ ╚╗╔╝║ ║║  ╚╗╔╝║╣ ╠╦╝
-  ╩ ╩╩ ╩╩╚═╝╚╝╚═╝╚═╝╚═╝  ╚═╝ ╚╝ ╚═╝╩═╝ ╚╝ ╚═╝╩╚═
-${RESET}
-${DIM}${GREEN}  LangSmith-native agent optimization  v${VERSION}${RESET}
-`;
+const isColorSupported =
+  process.env.FORCE_COLOR !== "0" &&
+  !process.env.NO_COLOR &&
+  (process.env.FORCE_COLOR !== undefined || process.stdout.isTTY);
+
+function ansi(code) {
+  return isColorSupported ? `\x1b[${code}m` : "";
+}
+
+const reset = ansi("0");
+const bold = ansi("1");
+const dim = ansi("2");
+const red = ansi("31");
+const green = ansi("32");
+const yellow = ansi("33");
+const cyan = ansi("36");
+const gray = ansi("90");
+const bgCyan = ansi("46");
+const black = ansi("30");
+
+const c = {
+  bold: (s) => `${bold}${s}${reset}`,
+  dim: (s) => `${dim}${s}${reset}`,
+  red: (s) => `${red}${s}${reset}`,
+  green: (s) => `${green}${s}${reset}`,
+  yellow: (s) => `${yellow}${s}${reset}`,
+  cyan: (s) => `${cyan}${s}${reset}`,
+  gray: (s) => `${gray}${s}${reset}`,
+  bgCyan: (s) => `${bgCyan}${black}${s}${reset}`,
+};
+
+// ─── Symbols ────────────────────────────────────────────────────────────────
+
+const S = {
+  bar: "\u2502",       // │
+  barEnd: "\u2514",    // └
+  barStart: "\u250C",  // ┌
+  step: "\u25C7",      // ◇
+  stepActive: "\u25C6",// ◆
+  stepDone: "\u25CF",  // ●
+  stepError: "\u25A0", // ■
+};
+
+// ─── UI helpers (clack-style) ───────────────────────────────────────────────
+
+function barLine(content = "") {
+  console.log(`${c.gray(S.bar)}  ${content}`);
+}
+
+function barEmpty() {
+  console.log(`${c.gray(S.bar)}`);
+}
+
+function header(label) {
+  console.log();
+  console.log(`${c.gray(S.barStart)}  ${c.bgCyan(` ${label} `)}`);
+}
+
+function footer(message) {
+  if (message) {
+    console.log(`${c.gray(S.barEnd)}  ${message}`);
+  } else {
+    console.log(`${c.gray(S.barEnd)}`);
+  }
+}
+
+function step(content) {
+  console.log(`${c.gray(S.step)}  ${content}`);
+}
+
+function stepDone(content) {
+  console.log(`${c.green(S.stepDone)}  ${content}`);
+}
+
+function stepError(content) {
+  console.log(`${c.red(S.stepError)}  ${content}`);
+}
+
+function stepPrompt(content) {
+  console.log(`${c.cyan(S.stepActive)}  ${content}`);
+}
+
+// ─── Banner (gradient dark → light) ─────────────────────────────────────────
+
+const BANNER_LINES = [
+  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557   \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557     \u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 ",
+  "\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551     \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557",
+  "\u2588\u2588\u2588\u2588\u2588\u2557  \u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551     \u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D",
+  "\u2588\u2588\u2554\u2550\u2550\u255D   \u255A\u2588\u2588\u2588\u2588\u2554\u255D \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551      \u255A\u2588\u2588\u2588\u2588\u2554\u255D \u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557",
+  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u255A\u2588\u2588\u2554\u255D  \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u255A\u2588\u2588\u2554\u255D  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551",
+  "\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D    \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D   \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D",
+];
+
+const GRADIENT = [
+  [60, 60, 60],
+  [90, 90, 90],
+  [125, 125, 125],
+  [160, 160, 160],
+  [200, 200, 200],
+  [240, 240, 240],
+];
+
+function rgb(r, g, b) {
+  return isColorSupported ? `\x1b[38;2;${r};${g};${b}m` : "";
+}
+
+function banner() {
+  console.log();
+  for (let i = 0; i < BANNER_LINES.length; i++) {
+    const [r, g, b] = GRADIENT[i];
+    console.log(`${rgb(r, g, b)}${BANNER_LINES[i]}${reset}`);
+  }
+}
+
+// ─── Utilities ──────────────────────────────────────────────────────────────
 
 function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
@@ -72,6 +175,8 @@ function checkCommand(cmd) {
   }
 }
 
+// ─── Install logic ──────────────────────────────────────────────────────────
+
 function cleanPreviousInstall(runtimeDir, scope) {
   const baseDir = scope === "local"
     ? path.join(process.cwd(), runtimeDir)
@@ -81,7 +186,6 @@ function cleanPreviousInstall(runtimeDir, scope) {
   const agentsDir = path.join(baseDir, "agents");
   let cleaned = 0;
 
-  // Remove ALL evolver/harness-evolver skills (any version)
   if (fs.existsSync(skillsDir)) {
     const ours = ["setup", "evolve", "deploy", "status",
       "init", "architect", "compare", "critic", "diagnose",
@@ -100,7 +204,6 @@ function cleanPreviousInstall(runtimeDir, scope) {
     }
   }
 
-  // Remove ALL evolver/harness-evolver agents
   if (fs.existsSync(agentsDir)) {
     for (const f of fs.readdirSync(agentsDir)) {
       if (f.startsWith("evolver-") || f.startsWith("harness-evolver-")) {
@@ -110,14 +213,12 @@ function cleanPreviousInstall(runtimeDir, scope) {
     }
   }
 
-  // Remove old commands/ directory (v1)
   const oldCommandsDir = path.join(baseDir, "commands", "harness-evolver");
   if (fs.existsSync(oldCommandsDir)) {
     fs.rmSync(oldCommandsDir, { recursive: true, force: true });
     cleaned++;
   }
 
-  // Remove old tools directories
   for (const toolsPath of [
     path.join(HOME, ".evolver", "tools"),
     path.join(HOME, ".harness-evolver"),
@@ -129,8 +230,37 @@ function cleanPreviousInstall(runtimeDir, scope) {
   }
 
   if (cleaned > 0) {
-    console.log(`  ${DIM}Cleaned ${cleaned} items from previous install${RESET}`);
+    barLine(c.dim(`Cleaned ${cleaned} items from previous install`));
   }
+}
+
+function countInstallables() {
+  let skills = 0;
+  let agents = 0;
+  let tools = 0;
+
+  const skillsSource = path.join(PLUGIN_ROOT, "skills");
+  if (fs.existsSync(skillsSource)) {
+    for (const s of fs.readdirSync(skillsSource, { withFileTypes: true })) {
+      if (s.isDirectory() && fs.existsSync(path.join(skillsSource, s.name, "SKILL.md"))) skills++;
+    }
+  }
+
+  const agentsSource = path.join(PLUGIN_ROOT, "agents");
+  if (fs.existsSync(agentsSource)) {
+    for (const a of fs.readdirSync(agentsSource)) {
+      if (a.endsWith(".md")) agents++;
+    }
+  }
+
+  const toolsSource = path.join(PLUGIN_ROOT, "tools");
+  if (fs.existsSync(toolsSource)) {
+    for (const t of fs.readdirSync(toolsSource)) {
+      if (t.endsWith(".py")) tools++;
+    }
+  }
+
+  return { skills, agents, tools };
 }
 
 function installSkillsAndAgents(runtimeDir, scope) {
@@ -140,8 +270,8 @@ function installSkillsAndAgents(runtimeDir, scope) {
 
   const skillsDir = path.join(baseDir, "skills");
   const agentsDir = path.join(baseDir, "agents");
+  let installed = 0;
 
-  // Skills — read SKILL.md name field, use directory name for filesystem
   const skillsSource = path.join(PLUGIN_ROOT, "skills");
   if (fs.existsSync(skillsSource)) {
     for (const skill of fs.readdirSync(skillsSource, { withFileTypes: true })) {
@@ -150,18 +280,17 @@ function installSkillsAndAgents(runtimeDir, scope) {
       const skillMd = path.join(src, "SKILL.md");
       if (!fs.existsSync(skillMd)) continue;
 
-      // Read the skill name from frontmatter
       const content = fs.readFileSync(skillMd, "utf8");
       const nameMatch = content.match(/^name:\s*(.+)$/m);
       const skillName = nameMatch ? nameMatch[1].trim() : skill.name;
 
       const dest = path.join(skillsDir, skill.name);
       copyDir(src, dest);
-      console.log(`  ${GREEN}✓${RESET} ${skillName}`);
+      barLine(`${c.green("\u2714")} ${skillName}`);
+      installed++;
     }
   }
 
-  // Agents
   const agentsSource = path.join(PLUGIN_ROOT, "agents");
   if (fs.existsSync(agentsSource)) {
     fs.mkdirSync(agentsDir, { recursive: true });
@@ -169,9 +298,12 @@ function installSkillsAndAgents(runtimeDir, scope) {
       if (!agent.endsWith(".md")) continue;
       copyFile(path.join(agentsSource, agent), path.join(agentsDir, agent));
       const agentName = agent.replace(".md", "");
-      console.log(`  ${GREEN}✓${RESET} agent: ${agentName}`);
+      barLine(`${c.green("\u2714")} agent: ${agentName}`);
+      installed++;
     }
   }
+
+  return installed;
 }
 
 function installTools() {
@@ -185,8 +317,9 @@ function installTools() {
       copyFile(path.join(toolsSource, tool), path.join(toolsDir, tool));
       count++;
     }
-    console.log(`  ${GREEN}✓${RESET} ${count} tools installed to ~/.evolver/tools/`);
+    return count;
   }
+  return 0;
 }
 
 function installPythonDeps() {
@@ -194,11 +327,10 @@ function installPythonDeps() {
   const venvPython = path.join(venvDir, "bin", "python");
   const venvPip = path.join(venvDir, "bin", "pip");
 
-  console.log(`\n  ${YELLOW}Setting up Python environment...${RESET}`);
+  step("Setting up Python environment...");
 
-  // Create venv if it doesn't exist
   if (!fs.existsSync(venvPython)) {
-    console.log(`  Creating isolated venv at ~/.evolver/venv/`);
+    barLine("Creating isolated venv at ~/.evolver/venv/");
     const venvCommands = [
       `uv venv "${venvDir}"`,
       `python3 -m venv "${venvDir}"`,
@@ -214,119 +346,123 @@ function installPythonDeps() {
       }
     }
     if (!created) {
-      console.log(`  ${RED}Failed to create venv.${RESET}`);
-      console.log(`    Run manually: ${BOLD}python3 -m venv ~/.evolver/venv${RESET}`);
+      stepError("Failed to create venv");
+      barLine(c.dim(`Run manually: python3 -m venv ~/.evolver/venv`));
       return false;
     }
-    console.log(`  ${GREEN}✓${RESET} venv created`);
+    stepDone("venv created");
   } else {
-    console.log(`  ${GREEN}✓${RESET} venv exists at ~/.evolver/venv/`);
+    stepDone("venv exists at ~/.evolver/venv/");
   }
 
-  // Install/upgrade deps in the venv
+  barEmpty();
+
   const installCommands = [
     `uv pip install --python "${venvPython}" langsmith`,
     `"${venvPip}" install --upgrade langsmith`,
     `"${venvPython}" -m pip install --upgrade langsmith`,
   ];
 
+  step("Installing langsmith...");
   for (const cmd of installCommands) {
     try {
       execSync(cmd, { stdio: "pipe", timeout: 120000 });
-      console.log(`  ${GREEN}✓${RESET} langsmith installed in venv`);
+      stepDone("langsmith installed in venv");
       return true;
     } catch {
       continue;
     }
   }
 
-  console.log(`  ${YELLOW}!${RESET} Could not install packages in venv.`);
-  console.log(`    Run manually: ${BOLD}~/.evolver/venv/bin/pip install langsmith${RESET}`);
+  stepError("Could not install langsmith");
+  barLine(c.dim("Run manually: ~/.evolver/venv/bin/pip install langsmith"));
   return false;
 }
 
 async function configureLangSmith(rl) {
-  console.log(`\n  ${BOLD}${GREEN}LangSmith Configuration${RESET} ${DIM}(required)${RESET}\n`);
-
   const langsmithCredsDir = process.platform === "darwin"
     ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
     : path.join(HOME, ".config", "langsmith-cli");
   const langsmithCredsFile = path.join(langsmithCredsDir, "credentials");
   const hasLangsmithCli = checkCommand("langsmith-cli --version");
 
-  // --- Step 1: API Key ---
   let hasKey = false;
 
+  barEmpty();
+  step(c.bold("LangSmith API Key") + " " + c.dim("(required)"));
+
   if (process.env.LANGSMITH_API_KEY) {
-    console.log(`  ${GREEN}✓${RESET} LANGSMITH_API_KEY found in environment`);
+    stepDone("LANGSMITH_API_KEY found in environment");
     hasKey = true;
   } else if (fs.existsSync(langsmithCredsFile)) {
     try {
       const content = fs.readFileSync(langsmithCredsFile, "utf8");
       if (content.includes("LANGSMITH_API_KEY=lsv2_")) {
-        console.log(`  ${GREEN}✓${RESET} API key found in credentials file`);
+        stepDone("API key found in credentials file");
         hasKey = true;
       }
     } catch {}
   }
 
   if (!hasKey) {
-    console.log(`  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
-    console.log(`  ${DIM}LangSmith is required. The evolver won't work without it.${RESET}\n`);
+    barLine(c.dim("Get yours at https://smith.langchain.com/settings"));
+    barLine(c.dim("LangSmith is required. The evolver won't work without it."));
+    barEmpty();
 
-    // Keep asking until they provide a key or explicitly skip
     let attempts = 0;
     while (!hasKey && attempts < 3) {
-      const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key (lsv2_pt_...):${RESET} `);
+      const apiKey = await ask(rl, `${c.cyan(S.stepActive)}  Paste your LangSmith API key (lsv2_pt_...): `);
       const key = apiKey.trim();
 
       if (key && key.startsWith("lsv2_")) {
         try {
           fs.mkdirSync(langsmithCredsDir, { recursive: true });
           fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
-          console.log(`  ${GREEN}✓${RESET} API key saved`);
+          stepDone("API key saved");
           hasKey = true;
         } catch {
-          console.log(`  ${RED}Failed to save.${RESET} Add to your shell: export LANGSMITH_API_KEY=${key}`);
-          hasKey = true; // they have the key, just couldn't save
+          stepError("Failed to save");
+          barLine(c.dim(`Add to your shell: export LANGSMITH_API_KEY=${key}`));
+          hasKey = true;
         }
       } else if (key) {
-        console.log(`  ${YELLOW}Invalid — LangSmith keys start with lsv2_${RESET}`);
+        barLine(c.yellow("Invalid \u2014 LangSmith keys start with lsv2_"));
         attempts++;
       } else {
-        // Empty input — skip
-        console.log(`\n  ${RED}WARNING:${RESET} No API key configured.`);
-        console.log(`  ${BOLD}/evolver:setup will not work${RESET} until you set LANGSMITH_API_KEY.`);
-        console.log(`  Run: ${DIM}export LANGSMITH_API_KEY=lsv2_pt_your_key${RESET}\n`);
+        stepError("No API key configured");
+        barLine(c.dim("/evolver:setup will not work until you set LANGSMITH_API_KEY"));
+        barLine(c.dim("Run: export LANGSMITH_API_KEY=lsv2_pt_your_key"));
         break;
       }
     }
   }
 
-  // --- Step 2: langsmith-cli (required for evaluator agent) ---
+  barEmpty();
+  step(c.bold("langsmith-cli") + " " + c.dim("(required for LLM-as-judge)"));
+
   if (hasLangsmithCli) {
-    console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
+    stepDone("langsmith-cli installed");
   } else {
-    console.log(`\n  ${BOLD}langsmith-cli${RESET} — ${YELLOW}required${RESET} for LLM-as-judge evaluation`);
-    console.log(`  ${DIM}The evaluator agent uses it to read experiment outputs and write scores.${RESET}`);
-    console.log(`\n  Installing langsmith-cli...`);
+    barLine(c.dim("The evaluator agent uses it to read experiment outputs and write scores"));
+    step("Installing langsmith-cli...");
     try {
       execSync("uv tool install langsmith-cli 2>/dev/null || pip install langsmith-cli 2>/dev/null || pip3 install langsmith-cli", { stdio: "pipe", timeout: 60000 });
-      console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
+      stepDone("langsmith-cli installed");
 
-      // If we have a key, auto-authenticate
       if (hasKey && fs.existsSync(langsmithCredsFile)) {
-        console.log(`  ${GREEN}✓${RESET} langsmith-cli auto-authenticated (credentials file exists)`);
+        stepDone("langsmith-cli auto-authenticated");
       }
     } catch {
-      console.log(`  ${RED}!${RESET} Could not install langsmith-cli.`);
-      console.log(`    ${BOLD}This is required.${RESET} Install manually: ${DIM}uv tool install langsmith-cli${RESET}`);
+      stepError("Could not install langsmith-cli");
+      barLine(c.dim("Install manually: uv tool install langsmith-cli"));
     }
   }
 }
 
 async function configureOptionalIntegrations(rl) {
-  console.log(`\n  ${YELLOW}Optional Integrations${RESET}\n`);
+  barEmpty();
+  step(c.bold("Optional Integrations"));
+  barEmpty();
 
   // Context7 MCP
   const hasContext7 = (() => {
@@ -342,19 +478,23 @@ async function configureOptionalIntegrations(rl) {
   })();
 
   if (hasContext7) {
-    console.log(`  ${GREEN}✓${RESET} Context7 MCP already configured`);
+    stepDone("Context7 MCP already configured");
   } else {
-    console.log(`  ${BOLD}Context7 MCP${RESET} — up-to-date library documentation (LangChain, OpenAI, etc.)`);
-    const c7Answer = await ask(rl, `\n  ${YELLOW}Install Context7 MCP? [y/N]:${RESET} `);
+    barLine(c.bold("Context7 MCP") + " \u2014 " + c.dim("up-to-date library documentation"));
+    const c7Answer = await ask(rl, `${c.cyan(S.stepActive)}  Install Context7 MCP? [y/N]: `);
     if (c7Answer.trim().toLowerCase() === "y") {
+      step("Installing Context7 MCP...");
       try {
         execSync("claude mcp add context7 -- npx -y @upstash/context7-mcp@latest", { stdio: "inherit" });
-        console.log(`\n  ${GREEN}✓${RESET} Context7 MCP configured`);
+        stepDone("Context7 MCP configured");
       } catch {
-        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add context7 -- npx -y @upstash/context7-mcp@latest`);
+        stepError("Failed to install Context7 MCP");
+        barLine(c.dim("Run manually: claude mcp add context7 -- npx -y @upstash/context7-mcp@latest"));
       }
     }
   }
+
+  barEmpty();
 
   // LangChain Docs MCP
   const hasLcDocs = (() => {
@@ -370,38 +510,50 @@ async function configureOptionalIntegrations(rl) {
   })();
 
   if (hasLcDocs) {
-    console.log(`  ${GREEN}✓${RESET} LangChain Docs MCP already configured`);
+    stepDone("LangChain Docs MCP already configured");
   } else {
-    console.log(`\n  ${BOLD}LangChain Docs MCP${RESET} — LangChain/LangGraph/LangSmith documentation`);
-    const lcAnswer = await ask(rl, `\n  ${YELLOW}Install LangChain Docs MCP? [y/N]:${RESET} `);
+    barLine(c.bold("LangChain Docs MCP") + " \u2014 " + c.dim("LangChain/LangGraph/LangSmith docs"));
+    const lcAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Install LangChain Docs MCP? [y/N]: `);
     if (lcAnswer.trim().toLowerCase() === "y") {
+      step("Installing LangChain Docs MCP...");
       try {
         execSync("claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp", { stdio: "inherit" });
-        console.log(`\n  ${GREEN}✓${RESET} LangChain Docs MCP configured`);
+        stepDone("LangChain Docs MCP configured");
       } catch {
-        console.log(`\n  ${RED}Failed.${RESET} Install manually: claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp`);
+        stepError("Failed to install LangChain Docs MCP");
+        barLine(c.dim("Run manually: claude mcp add docs-langchain --transport http https://docs.langchain.com/mcp"));
       }
     }
   }
 }
 
-async function main() {
-  console.log(LOGO);
+// ─── Main ───────────────────────────────────────────────────────────────────
 
-  // Check if running latest version (npx may cache an old one)
+async function main() {
+  banner();
+
+  header("harness-evolver");
+  step(`Source: ${c.dim(`v${VERSION} \u2014 LangSmith-native agent optimization`)}`);
+
+  // Version check
   try {
     const latest = execSync("npm view harness-evolver version", { stdio: "pipe", timeout: 5000 }).toString().trim();
     if (latest && latest !== VERSION) {
-      console.log(`  ${YELLOW}!${RESET} You're running v${VERSION} but v${latest} is available.`);
-      console.log(`    Run: ${BOLD}npx harness-evolver@${latest}${RESET} or ${BOLD}npx --yes harness-evolver@latest${RESET}\n`);
+      barEmpty();
+      stepError(`You're running v${VERSION} but v${c.cyan(latest)} is available`);
+      barLine(c.dim(`Run: npx harness-evolver@${latest}`));
     }
   } catch {}
 
+  barEmpty();
+
+  // Python check
   if (!checkPython()) {
-    console.error(`  ${RED}ERROR:${RESET} python3 not found. Install Python 3.10+ first.`);
+    stepError("python3 not found. Install Python 3.10+ first.");
+    footer();
     process.exit(1);
   }
-  console.log(`  ${GREEN}✓${RESET} python3 found`);
+  stepDone("python3 found");
 
   // Detect runtimes
   const RUNTIMES = [
@@ -412,22 +564,25 @@ async function main() {
   ].filter(r => fs.existsSync(path.join(HOME, r.dir)));
 
   if (RUNTIMES.length === 0) {
-    console.error(`\n  ${RED}ERROR:${RESET} No supported runtime detected.`);
-    console.error(`  Install Claude Code, Cursor, Codex, or Windsurf first.`);
+    stepError("No supported runtime detected");
+    barLine(c.dim("Install Claude Code, Cursor, Codex, or Windsurf first"));
+    footer();
     process.exit(1);
   }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
   // Runtime selection
-  console.log(`\n  ${YELLOW}Which runtime(s) to install for?${RESET}\n`);
-  RUNTIMES.forEach((r, i) => console.log(`  ${i + 1}) ${r.name.padEnd(14)} (~/${r.dir})`));
+  barEmpty();
+  stepPrompt("Which runtime(s) to install for?");
+  barEmpty();
+  RUNTIMES.forEach((r, i) => barLine(`  ${c.bold(String(i + 1))}  ${r.name.padEnd(14)} ${c.dim(`~/${r.dir}`)}`));
   if (RUNTIMES.length > 1) {
-    console.log(`  ${RUNTIMES.length + 1}) All`);
-    console.log(`\n  ${DIM}Select multiple: 1,2 or 1 2${RESET}`);
+    barLine(`  ${c.bold(String(RUNTIMES.length + 1))}  All`);
+    barLine(c.dim("Select multiple: 1,2 or 1 2"));
   }
 
-  const runtimeAnswer = await ask(rl, `\n  ${YELLOW}Choice [1]:${RESET} `);
+  const runtimeAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Choice [1]: `);
   const runtimeInput = (runtimeAnswer.trim() || "1");
 
   let selected;
@@ -439,31 +594,48 @@ async function main() {
   }
   if (selected.length === 0) selected = [RUNTIMES[0]];
 
-  // Scope selection
-  console.log(`\n  ${YELLOW}Where to install?${RESET}\n`);
-  console.log(`  1) Global  (~/${selected[0].dir}) — available in all projects`);
-  console.log(`  2) Local   (./${selected[0].dir}) — this project only`);
+  stepDone(`Target: ${c.cyan(selected.map(r => r.name).join(", "))}`);
 
-  const scopeAnswer = await ask(rl, `\n  ${YELLOW}Choice [1]:${RESET} `);
+  // Scope selection
+  barEmpty();
+  stepPrompt("Where to install?");
+  barEmpty();
+  barLine(`  ${c.bold("1")}  Global ${c.dim(`(~/${selected[0].dir})`)}`);
+  barLine(`  ${c.bold("2")}  Local  ${c.dim(`(./${selected[0].dir})`)}`);
+
+  const scopeAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Choice [1]: `);
   const scope = (scopeAnswer.trim() === "2") ? "local" : "global";
 
-  // Clean previous install (remove ALL old files before installing new ones)
-  console.log(`\n  ${BOLD}Cleaning previous install${RESET}`);
+  stepDone(`Scope: ${c.cyan(scope)}`);
+
+  // Discover what we're installing
+  const counts = countInstallables();
+  barEmpty();
+  step(`Found ${c.bold(`${counts.skills} skills, ${counts.agents} agents, ${counts.tools} tools`)}`);
+
+  // Clean previous install
+  barEmpty();
+  step("Cleaning previous install...");
   for (const runtime of selected) {
     cleanPreviousInstall(runtime.dir, scope);
   }
+  stepDone("Clean");
 
   // Install skills + agents
-  console.log(`\n  ${BOLD}Installing skills & agents${RESET}\n`);
+  barEmpty();
   for (const runtime of selected) {
-    console.log(`  ${GREEN}${runtime.name}${RESET}:`);
+    step(`Installing to ${c.bold(runtime.name)}...`);
+    barEmpty();
     installSkillsAndAgents(runtime.dir, scope);
-    console.log();
+    barEmpty();
+    stepDone(`${c.cyan(runtime.name)} ready`);
   }
 
-  // Install tools (fresh — old dir was cleaned above)
-  console.log(`  ${BOLD}Installing tools${RESET}`);
-  installTools();
+  // Install tools
+  barEmpty();
+  step("Installing tools...");
+  const toolCount = installTools();
+  stepDone(`${toolCount} tools installed to ~/.evolver/tools/`);
 
   // Version marker
   const versionPath = path.join(HOME, ".evolver", "VERSION");
@@ -471,27 +643,33 @@ async function main() {
   fs.writeFileSync(versionPath, VERSION);
 
   // Install Python deps
+  barEmpty();
   installPythonDeps();
 
-  // Configure LangSmith (required)
+  // Configure LangSmith
   await configureLangSmith(rl);
 
   // Optional integrations
   await configureOptionalIntegrations(rl);
 
   // Done
-  console.log(`\n  ${GREEN}${BOLD}Setup complete!${RESET}\n`);
-  console.log(`  ${DIM}Restart Claude Code, then:${RESET}`);
-  console.log(`    ${GREEN}/evolver:setup${RESET}     — configure LangSmith for your project`);
-  console.log(`    ${GREEN}/evolver:evolve${RESET}    — run the optimization loop`);
-  console.log(`    ${GREEN}/evolver:status${RESET}    — check progress`);
-  console.log(`    ${GREEN}/evolver:deploy${RESET}    — finalize and push`);
-  console.log(`\n  ${DIM}GitHub: https://github.com/raphaelchristi/harness-evolver${RESET}\n`);
+  barEmpty();
+  stepDone(c.green("Done.") + "  Restart your agent tools to load the plugin.");
+  barEmpty();
+  barLine(c.dim("Commands:"));
+  barLine(`  ${c.cyan("/evolver:setup")}   \u2014 configure LangSmith for your project`);
+  barLine(`  ${c.cyan("/evolver:evolve")}  \u2014 run the optimization loop`);
+  barLine(`  ${c.cyan("/evolver:status")} \u2014 check progress`);
+  barLine(`  ${c.cyan("/evolver:deploy")}  \u2014 finalize and push`);
+  barEmpty();
+  barLine(c.dim("GitHub: https://github.com/raphaelchristi/harness-evolver"));
+  footer();
 
   rl.close();
 }
 
 main().catch(err => {
-  console.error(`  ${RED}ERROR:${RESET} ${err.message}`);
+  stepError(err.message);
+  footer();
   process.exit(1);
 });
