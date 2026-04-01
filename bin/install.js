@@ -121,7 +121,6 @@ function installSkillsAndAgents(runtimeDir, scope) {
 }
 
 function installTools() {
-  // v3: tools go to ~/.evolver/tools/
   const toolsDir = path.join(HOME, ".evolver", "tools");
   const toolsSource = path.join(PLUGIN_ROOT, "tools");
   if (fs.existsSync(toolsSource)) {
@@ -133,18 +132,6 @@ function installTools() {
       count++;
     }
     console.log(`  ${GREEN}✓${RESET} ${count} tools installed to ~/.evolver/tools/`);
-  }
-
-  // Also maintain legacy path for v2 backward compat
-  const legacyDir = path.join(HOME, ".harness-evolver", "tools");
-  if (fs.existsSync(legacyDir)) {
-    // Update tools in legacy dir too
-    for (const tool of fs.readdirSync(toolsSource)) {
-      if (tool.endsWith(".py")) {
-        copyFile(path.join(toolsSource, tool), path.join(legacyDir, tool));
-      }
-    }
-    console.log(`  ${DIM}Also updated legacy ~/.harness-evolver/tools/${RESET}`);
   }
 }
 
