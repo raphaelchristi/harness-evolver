@@ -64,7 +64,34 @@ Based on your strategy and diagnosis, modify the code:
 - **Error handling**: retry logic, fallback strategies, timeout handling
 - **Model selection**: which model for which task
 
-Use Context7 MCP tools (`resolve-library-id`, `get-library-docs`) to check current API documentation before writing code that uses library APIs.
+### Phase 3.5: Consult Documentation (MANDATORY)
+
+**Before writing ANY code**, you MUST consult Context7 for every library you'll be modifying or using. This is NOT optional.
+
+**Step 1 — Identify libraries from the code you read:**
+Read the imports in the files you're about to modify. For each framework/library (LangGraph, OpenAI, Anthropic, CrewAI, etc.):
+
+**Step 2 — Resolve library ID:**
+```
+resolve-library-id(libraryName: "langgraph", query: "what you're trying to do")
+```
+This returns up to 10 matches. Pick the one with the highest relevance.
+
+**Step 3 — Query docs for your specific task:**
+```
+get-library-docs(libraryId: "/langchain-ai/langgraph", query: "conditional edges StateGraph", topic: "routing")
+```
+Ask about the SPECIFIC API you're going to use or change.
+
+**Examples of what to query:**
+- About to modify a StateGraph? → `query: "StateGraph add_conditional_edges"` 
+- Changing prompt template? → `query: "ChatPromptTemplate from_messages"` for langchain
+- Adding a tool? → `query: "StructuredTool create tool definition"` for langchain
+- Changing model? → `query: "ChatOpenAI model parameters temperature"` for openai
+
+**Why this matters:** Your training data may be outdated. Libraries change APIs between versions. A quick Context7 lookup takes seconds and prevents proposing code that uses deprecated or incorrect patterns. The documentation is the source of truth, not your model knowledge.
+
+**If Context7 MCP is not available:** Note in proposal.md "API patterns not verified against current docs — verify before deploying."
 
 ### Phase 4: Commit and Document
 
@@ -98,15 +125,6 @@ If `production_seed.json` exists:
 - `slow_queries` — high-latency queries
 
 Prioritize changes that fix real production failures over synthetic test failures.
-
-## Context7 — Documentation Lookup
-
-Use Context7 MCP tools proactively when:
-- Writing code that uses a library API
-- Unsure about method signatures or patterns
-- Checking if a better approach exists in the latest version
-
-If Context7 is not available, proceed with model knowledge but note in proposal.md.
 
 ## Rules
 

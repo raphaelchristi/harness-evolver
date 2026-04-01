@@ -47,20 +47,22 @@ Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations. This ensures th
 ## Phase 1: Explore Project (automatic)
 
 ```bash
-find . -maxdepth 3 -type f -name "*.py" | head -30
-$EVOLVER_PY $TOOLS/detect_stack.py .
+find . -maxdepth 3 -type f -name "*.py" -not -path "*/.venv/*" -not -path "*/node_modules/*" -not -path "*/__pycache__/*" | head -30
 ```
+
+**Monorepo detection**: if the project root has multiple subdirectories with their own `main.py` or `pyproject.toml`, it's a monorepo. Use AskUserQuestion to ask WHICH app to optimize before proceeding — do NOT scan everything.
 
 Look for:
 - Entry points: files with `if __name__`, or named `main.py`, `app.py`, `agent.py`, `graph.py`, `pipeline.py`
-- Framework: LangGraph, CrewAI, OpenAI SDK, Anthropic SDK, etc.
 - Existing LangSmith config: `LANGCHAIN_PROJECT` / `LANGSMITH_PROJECT` in env or `.env`
 - Existing test data: JSON files with inputs, CSV files, etc.
 - Dependencies: `requirements.txt`, `pyproject.toml`
 
-Identify the **run command** — how to execute the agent. Examples:
+To identify the **framework**, read the entry point file and its immediate imports. The proposer agents will use Context7 MCP for detailed documentation lookup — you don't need to detect every library, just identify the main framework (LangGraph, CrewAI, OpenAI Agents SDK, etc.) from the imports you see.
+
+Identify the **run command** — how to execute the agent:
 - `python main.py` (if it accepts `--input` flag)
-- `python -c "from agent import run; import json,sys; print(json.dumps(run(json.load(open(sys.argv[1])))))"`
+- The command in the project's README, Makefile, or scripts/
 
 ## Phase 2: Confirm Detection (interactive)
 
