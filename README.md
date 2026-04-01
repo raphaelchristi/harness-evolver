@@ -19,11 +19,24 @@ Inspired by [Meta-Harness](https://yoonholee.com/meta-harness/) (Lee et al., 202
 
 ## Install
 
+### Claude Code Plugin (recommended)
+
+```
+/plugin marketplace add raphaelchristi/harness-evolver-marketplace
+/plugin install harness-evolver
+```
+
+Updates are automatic. Python dependencies (langsmith, langsmith-cli) are installed on first session start via hook.
+
+### npx (first-time setup or non-Claude Code runtimes)
+
 ```bash
 npx harness-evolver@latest
 ```
 
-> Works with Claude Code, Cursor, Codex, and Windsurf. Requires LangSmith account + API key.
+Interactive installer that configures LangSmith API key, creates Python venv, and installs all dependencies. Works with Claude Code, Cursor, Codex, and Windsurf.
+
+> **Both install paths work together.** Use npx for initial setup (API key, venv), then the plugin marketplace handles updates automatically.
 
 ---
 
@@ -58,6 +71,10 @@ claude
 <td>Each iteration spawns 5 parallel agents: exploit, explore, crossover, and 2 failure-targeted. Strategies adapt based on per-task analysis. Quality-diversity selection preserves per-task champions.</td>
 </tr>
 <tr>
+<td><b>Agent-Based Evaluation</b></td>
+<td>The evaluator agent reads experiment outputs via langsmith-cli, judges correctness using the same Claude model powering the other agents, and writes scores back. No OpenAI API key or openevals dependency needed.</td>
+</tr>
+<tr>
 <td><b>Production Traces</b></td>
 <td>Auto-discovers existing LangSmith production projects. Uses real user inputs for test generation and real error patterns for targeted optimization.</td>
 </tr>
@@ -89,10 +106,10 @@ claude
 | Agent | Role | Color |
 |---|---|---|
 | **Proposer** | Modifies agent code in isolated worktrees based on trace analysis | Green |
+| **Evaluator** | LLM-as-judge — reads outputs via langsmith-cli, scores correctness | Yellow |
 | **Architect** | Recommends multi-agent topology changes | Blue |
 | **Critic** | Validates evaluator quality, detects gaming | Red |
 | **TestGen** | Generates test inputs for LangSmith datasets | Cyan |
-| **Evaluator** | LLM-as-judge — reads outputs via langsmith-cli, scores correctness | Yellow |
 
 ---
 
@@ -118,19 +135,43 @@ claude
 
 ---
 
+## Architecture
+
+```
+Plugin hook (SessionStart)
+  └→ Creates venv, installs langsmith + langsmith-cli, exports env vars
+
+Skills (markdown)
+  ├── /evolver:setup    → explores project, runs setup.py
+  ├── /evolver:evolve   → orchestrates the evolution loop
+  ├── /evolver:status   → reads .evolver.json + LangSmith
+  └── /evolver:deploy   → tags and pushes
+
+Agents (markdown)
+  ├── Proposer (x5)     → modifies code in git worktrees
+  ├── Evaluator          → LLM-as-judge via langsmith-cli
+  ├── Critic             → detects evaluator gaming
+  ├── Architect          → recommends topology changes
+  └── TestGen            → generates test inputs
+
+Tools (Python + langsmith SDK)
+  ├── setup.py           → creates datasets, configures evaluators
+  ├── run_eval.py        → runs target against dataset
+  ├── read_results.py    → compares experiments
+  ├── trace_insights.py  → clusters errors from traces
+  └── seed_from_traces.py → imports production traces
+```
+
+---
+
 ## Requirements
 
 - **LangSmith account** + `LANGSMITH_API_KEY`
-- **Python 3.10+** with `langsmith` package
-- **langsmith-cli** (`uv tool install langsmith-cli`) — required for evaluator agent
+- **Python 3.10+**
 - **Git** (for worktree-based isolation)
 - **Claude Code** (or Cursor/Codex/Windsurf)
 
-```bash
-export LANGSMITH_API_KEY="lsv2_pt_..."
-pip install langsmith
-uv tool install langsmith-cli
-```
+Dependencies (`langsmith`, `langsmith-cli`) are installed automatically by the plugin hook or the npx installer.
 
 ---
 
