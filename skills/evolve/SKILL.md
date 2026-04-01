@@ -172,7 +172,7 @@ If ALL_PASSING: D gets `creative`, E gets `efficiency`.
 
 Wait for all 5 to complete.
 
-### 3. Evaluate Each Candidate
+### 3. Run Target for Each Candidate
 
 For each worktree that has changes (proposer committed something):
 
@@ -184,7 +184,59 @@ $EVOLVER_PY $TOOLS/run_eval.py \
     --timeout 120
 ```
 
-Each candidate becomes a separate LangSmith experiment.
+Each candidate becomes a separate LangSmith experiment. This step runs the agent and applies code-based evaluators (has_output, token_efficiency) only.
+
+Collect all experiment names from the output (the `"experiment"` field in each JSON output).
+
+### 3.5. LLM-as-Judge Evaluation (Evaluator Agent)
+
+Check if the config has LLM-based evaluators (correctness, conciseness):
+
+```bash
+python3 -c "import json; c=json.load(open('.evolver.json')); llm=[k for k in c['evaluators'] if k in ('correctness','conciseness')]; print(','.join(llm) if llm else '')"
+```
+
+If LLM evaluators are configured, first verify langsmith-cli is available:
+
+```bash
+command -v langsmith-cli >/dev/null 2>&1 || { echo "ERROR: langsmith-cli not found. Install with: uv tool install langsmith-cli"; exit 1; }
+```
+
+Then spawn ONE evaluator agent that scores ALL candidates in a single pass. This is more efficient than spawning one agent per candidate:
+
+```
+Agent(
+  subagent_type: "evolver-evaluator",
+  description: "Evaluate all candidates for iteration v{NNN}",
+  prompt: |
+    <experiment>
+    Evaluate the following experiments (one per candidate):
+    - {experiment_name_a}
+    - {experiment_name_b}
+    - {experiment_name_c}
+    - {experiment_name_d}
+    - {experiment_name_e}
+    </experiment>
+
+    <evaluators>
+    Apply these evaluators to each run in each experiment:
+    - {llm_evaluator_list, e.g. "correctness", "conciseness"}
+    </evaluators>
+
+    <context>
+    Agent type: {framework} agent
+    Domain: {description from .evolver.json or entry point context}
+    Entry point: {entry_point}
+
+    For each experiment:
+    1. Read all runs via: langsmith-cli --json runs list --project "{experiment_name}" --fields id,inputs,outputs,error --is-root --limit 200
+    2. Judge each run's output against the input
+    3. Write scores via: langsmith-cli --json feedback create {run_id} --key {evaluator} --score {0.0|1.0} --comment "{reason}" --source model
+    </context>
+)
+```
+
+Wait for the evaluator agent to complete before proceeding.
 
 ### 4. Compare All Candidates
 

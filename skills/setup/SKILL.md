@@ -42,7 +42,7 @@ TOOLS=$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver
 EVOLVER_PY=$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")
 ```
 
-Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations. This ensures the venv with langsmith+openevals is used.
+Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations. This ensures the venv with langsmith is used.
 
 ## Phase 1: Explore Project (automatic)
 
@@ -201,4 +201,4 @@ Next: run /evolver:evolve to start optimizing.
 - If `.evolver.json` already exists, ask before overwriting.
 - If the agent needs a venv, the run command should activate it: `cd {dir} && .venv/bin/python main.py`
 - If LangSmith connection fails, check API key and network.
-- The setup installs `langsmith` and `openevals` if missing.
+- The setup requires `langsmith` (Python SDK) and `langsmith-cli` (for evaluator agent).
