@@ -2,7 +2,7 @@
 name: harness-evolver:init
 description: "Use when the user wants to set up harness optimization in their project, optimize an LLM agent, improve a harness, or mentions harness-evolver for the first time in a project without .harness-evolver/ directory."
 argument-hint: "[directory]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent]
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 ---
 
 # /harness-evolve-init
@@ -30,15 +30,77 @@ Look for:
 - Existing tasks: directories with JSON files containing `id` + `input` fields
 - Config: `config.json`, `config.yaml`, `.env`
 
+## Phase 1.5: Confirm Detection (Interactive)
+
+After scanning, present what was found and ask the user to confirm before proceeding.
+
+Use AskUserQuestion:
+
+```
+Question: "Here's what I detected. Does this look right?"
+Header: "Confirm"
+Options:
+  - "Looks good, proceed" — Continue with detected paths
+  - "Let me adjust paths" — User will provide correct paths
+  - "Start over in different directory" — Abort and let user cd elsewhere
+
+Show in the question description:
+  - Harness: {path or "not found"}
+  - Eval: {path or "not found — will use LLM-as-judge"}
+  - Tasks: {path with N files, or "not found — will generate"}
+  - Stack: {detected frameworks or "none detected"}
+  - Architecture: {topology or "unknown"}
+```
+
+If user chose "Let me adjust paths", ask which paths to change and update accordingly.
+
+## Phase 1.8: Eval Mode (Interactive — only if NO eval found)
+
+If no eval.py was detected, ask the user which evaluation mode to use:
+
+```
+Question: "No eval script found. How should outputs be scored?"
+Header: "Eval mode"
+Options:
+  - "LLM-as-judge (zero-config)" — Claude Code scores outputs on accuracy, completeness, relevance, hallucination. No expected answers needed.
+  - "Keyword matching" — Simple string matching against expected answers. Requires 'expected' field in tasks.
+  - "I'll provide my own eval.py" — Pause and let user create their eval script.
+```
+
+If "LLM-as-judge": copy eval_passthrough.py as eval.py.
+If "Keyword matching": create a simple keyword eval (check if expected substrings appear in output).
+If "I'll provide my own": print instructions for the eval contract and wait.
+
+## Phase 1.9: LangSmith Project (Interactive — only if LANGSMITH_API_KEY detected)
+
+If a LangSmith API key is available, discover projects and ask which one has production traces:
+
+```bash
+langsmith-cli --json projects list --limit 10 2>/dev/null
+```
+
+Use AskUserQuestion:
+```
+Question: "LangSmith detected. Which project has your production traces?"
+Header: "LangSmith"
+Options: (build from discovered projects — pick top 3-4 by recent activity)
+  - "{project_name_1}" — {run_count} runs, last active {date}
+  - "{project_name_2}" — {run_count} runs, last active {date}
+  - "{project_name_3}" — {run_count} runs, last active {date}
+  - "Skip — don't use production traces" — Proceed without production data
+```
+
+If a project is selected, pass it as `--langsmith-project` to init.py.
+
 ## Phase 2: Create What's Missing
 
 Three artifacts needed. For each — use existing if found, create if not.
 
 **Harness** (`harness.py`): If user's entry point doesn't match our CLI interface (`--input`, `--output`, `--traces-dir`, `--config`), create a thin wrapper that imports their code. Read their entry point first to understand the I/O format. Ask if unsure.
 
-**Eval** (`eval.py`): If an eval script exists, use it.
+**Eval** (`eval.py`): If an eval script exists, use it. If the user already chose an eval mode in Phase 1.8, follow that choice.
 
-If NO eval exists:
+If NO eval exists and no mode was chosen yet:
 - Copy `eval_passthrough.py` from `$TOOLS/eval_passthrough.py` as the project's eval.py:
   ```bash
   cp $TOOLS/eval_passthrough.py eval.py

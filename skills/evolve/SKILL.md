@@ -2,7 +2,7 @@
 name: harness-evolver:evolve
 description: "Use when the user wants to run the optimization loop, improve harness performance, evolve the harness, or iterate on harness quality. Requires .harness-evolver/ to exist (run harness-evolver:init first)."
 argument-hint: "[--iterations N]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent]
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 ---
 
 # /harness-evolver:evolve
@@ -23,6 +23,35 @@ TOOLS=$([ -d ".harness-evolver/tools" ] && echo ".harness-evolver/tools" || echo
 
 - `--iterations N` (default: 10)
 - Read `config.json` for `evolution.stagnation_limit` (default: 3) and `evolution.target_score`
+
+## Pre-Loop: Interactive Configuration
+
+If no `--iterations` argument was provided, ask the user interactively:
+
+Use AskUserQuestion with TWO questions:
+
+```
+Question 1: "How many evolution iterations?"
+Header: "Iterations"
+Options:
+  - "3 (quick)" — Fast exploration, good for testing setup
+  - "5 (balanced)" — Good trade-off between speed and quality
+  - "10 (thorough)" — Deep optimization, takes longer
+
+Question 2: "Stop early if score reaches?"
+Header: "Target"
+Options:
+  - "0.8 (good enough)" — Stop when the harness is reasonably good
+  - "0.9 (high quality)" — Stop when quality is high
+  - "0.95 (near perfect)" — Push for near-perfect scores
+  - "No limit" — Run all iterations regardless of score
+```
+
+Apply the answers:
+- Set iterations from question 1 (3, 5, or 10)
+- Set target_score from question 2 (0.8, 0.9, 0.95, or None)
+
+If `--iterations` WAS provided as argument, skip these questions and use the argument value.
 
 ## The Loop
 
