@@ -72,6 +72,67 @@ function checkCommand(cmd) {
   }
 }
 
+function cleanPreviousInstall(runtimeDir, scope) {
+  const baseDir = scope === "local"
+    ? path.join(process.cwd(), runtimeDir)
+    : path.join(HOME, runtimeDir);
+
+  const skillsDir = path.join(baseDir, "skills");
+  const agentsDir = path.join(baseDir, "agents");
+  let cleaned = 0;
+
+  // Remove ALL evolver/harness-evolver skills (any version)
+  if (fs.existsSync(skillsDir)) {
+    const ours = ["setup", "evolve", "deploy", "status",
+      "init", "architect", "compare", "critic", "diagnose",
+      "import-traces", "evolve-v3", "deploy-v3", "status-v3",
+      "harness-evolver:init", "harness-evolver:evolve",
+      "harness-evolver:status", "harness-evolver:deploy",
+      "harness-evolver:compare", "harness-evolver:diagnose",
+      "harness-evolver:architect", "harness-evolver:critic",
+      "harness-evolver:import-traces"];
+    for (const name of ours) {
+      const p = path.join(skillsDir, name);
+      if (fs.existsSync(p)) {
+        fs.rmSync(p, { recursive: true, force: true });
+        cleaned++;
+      }
+    }
+  }
+
+  // Remove ALL evolver/harness-evolver agents
+  if (fs.existsSync(agentsDir)) {
+    for (const f of fs.readdirSync(agentsDir)) {
+      if (f.startsWith("evolver-") || f.startsWith("harness-evolver-")) {
+        fs.rmSync(path.join(agentsDir, f), { force: true });
+        cleaned++;
+      }
+    }
+  }
+
+  // Remove old commands/ directory (v1)
+  const oldCommandsDir = path.join(baseDir, "commands", "harness-evolver");
+  if (fs.existsSync(oldCommandsDir)) {
+    fs.rmSync(oldCommandsDir, { recursive: true, force: true });
+    cleaned++;
+  }
+
+  // Remove old tools directories
+  for (const toolsPath of [
+    path.join(HOME, ".evolver", "tools"),
+    path.join(HOME, ".harness-evolver"),
+  ]) {
+    if (fs.existsSync(toolsPath)) {
+      fs.rmSync(toolsPath, { recursive: true, force: true });
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`  ${DIM}Cleaned ${cleaned} items from previous install${RESET}`);
+  }
+}
+
 function installSkillsAndAgents(runtimeDir, scope) {
   const baseDir = scope === "local"
     ? path.join(process.cwd(), runtimeDir)
@@ -98,13 +159,6 @@ function installSkillsAndAgents(runtimeDir, scope) {
       copyDir(src, dest);
       console.log(`  ${GREEN}✓${RESET} ${skillName}`);
     }
-  }
-
-  // Cleanup old v2 commands/ directory
-  const oldCommandsDir = path.join(baseDir, "commands", "harness-evolver");
-  if (fs.existsSync(oldCommandsDir)) {
-    fs.rmSync(oldCommandsDir, { recursive: true, force: true });
-    console.log(`  ${DIM}Cleaned up old commands/ directory${RESET}`);
   }
 
   // Agents
@@ -267,6 +321,15 @@ async function configureOptionalIntegrations(rl) {
 async function main() {
   console.log(LOGO);
 
+  // Check if running latest version (npx may cache an old one)
+  try {
+    const latest = execSync("npm view harness-evolver version", { stdio: "pipe", timeout: 5000 }).toString().trim();
+    if (latest && latest !== VERSION) {
+      console.log(`  ${YELLOW}!${RESET} You're running v${VERSION} but v${latest} is available.`);
+      console.log(`    Run: ${BOLD}npx harness-evolver@${latest}${RESET} or ${BOLD}npx --yes harness-evolver@latest${RESET}\n`);
+    }
+  } catch {}
+
   if (!checkPython()) {
     console.error(`  ${RED}ERROR:${RESET} python3 not found. Install Python 3.10+ first.`);
     process.exit(1);
@@ -317,6 +380,12 @@ async function main() {
   const scopeAnswer = await ask(rl, `\n  ${YELLOW}Choice [1]:${RESET} `);
   const scope = (scopeAnswer.trim() === "2") ? "local" : "global";
 
+  // Clean previous install (remove ALL old files before installing new ones)
+  console.log(`\n  ${BOLD}Cleaning previous install${RESET}`);
+  for (const runtime of selected) {
+    cleanPreviousInstall(runtime.dir, scope);
+  }
+
   // Install skills + agents
   console.log(`\n  ${BOLD}Installing skills & agents${RESET}\n`);
   for (const runtime of selected) {
@@ -325,7 +394,7 @@ async function main() {
     console.log();
   }
 
-  // Install tools
+  // Install tools (fresh — old dir was cleaned above)
   console.log(`  ${BOLD}Installing tools${RESET}`);
   installTools();
 
