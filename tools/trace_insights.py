@@ -5,15 +5,19 @@ Analyzes LangSmith traces + per-task scores to produce structured insights.
 Clusters errors, analyzes token usage, cross-references with scores,
 and generates data-driven hypotheses.
 
-Usage:
+Usage (v3 — SDK mode):
     python3 trace_insights.py \
-        --langsmith-runs .harness-evolver/langsmith_runs.json \
-        --scores .harness-evolver/harnesses/v002/scores.json \
-        --tasks-dir .harness-evolver/eval/tasks/ \
-        --output .harness-evolver/trace_insights.json \
-        [--langsmith-stats .harness-evolver/langsmith_stats.json]
+        --from-experiment "v003-2026-04-01" \
+        --output trace_insights.json
 
-Stdlib-only. No external dependencies.
+Usage (legacy — file mode):
+    python3 trace_insights.py \
+        --langsmith-runs langsmith_runs.json \
+        --scores scores.json \
+        --tasks-dir tasks/ \
+        --output trace_insights.json
+
+Requires: pip install langsmith (for SDK mode)
 """
 
 import argparse

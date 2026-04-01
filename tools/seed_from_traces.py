@@ -9,8 +9,8 @@ production traces and produce:
 Usage:
     python3 seed_from_traces.py \
         --project ceppem-langgraph \
-        --output-md .harness-evolver/production_seed.md \
-        --output-json .harness-evolver/production_seed.json \
+        --output-md production_seed.md \
+        --output-json production_seed.json \
         [--api-key-env LANGSMITH_API_KEY] \
         [--limit 100]
 
