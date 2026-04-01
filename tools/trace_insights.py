@@ -23,8 +23,44 @@ Requires: pip install langsmith (for SDK mode)
 import argparse
 import json
 import os
+import platform
 import sys
 from datetime import datetime, timezone
+
+
+def ensure_langsmith_api_key():
+    """Load LANGSMITH_API_KEY from credentials file or .env if not in env."""
+    if os.environ.get("LANGSMITH_API_KEY"):
+        return True
+    if platform.system() == "Darwin":
+        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
+    else:
+        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
+    if os.path.exists(creds_path):
+        try:
+            with open(creds_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+    if os.path.exists(".env"):
+        try:
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
+                        key = line.split("=", 1)[1].strip().strip("'\"")
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+    return False
 
 
 def load_json(path):
@@ -260,6 +296,7 @@ def identify_top_issues(error_clusters, response_analysis, score_cross_ref):
 def fetch_runs_from_langsmith(project_name, experiment_name=None, limit=50):
     """Fetch runs directly from LangSmith SDK (v3 mode)."""
     try:
+        ensure_langsmith_api_key()
         from langsmith import Client
         client = Client()
 

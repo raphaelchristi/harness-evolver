@@ -73,10 +73,16 @@ def make_target(entry_point, cwd):
         try:
             cmd = entry_point
             if "{input}" in cmd:
+                # Placeholder: replace with path to JSON file
                 cmd = cmd.replace("{input}", input_path)
             elif "{input_json}" in cmd:
+                # Placeholder: replace with inline JSON string
                 cmd = cmd.replace("{input_json}", input_json)
+            elif "--input" in cmd or "-i " in cmd:
+                # Entry point already has --input flag — pass the file path as next arg
+                cmd = f"{cmd} {input_path}"
             else:
+                # Default: append --input and --output flags
                 cmd = f"{cmd} --input {input_path} --output {output_path}"
 
             env = os.environ.copy()
@@ -197,17 +203,38 @@ def main():
         experiment_name = results.experiment_name
 
         # Calculate mean score from code-based evaluators only
+        # langsmith>=0.7.x returns dicts, older versions return dataclasses
         scores = []
         per_example = {}
         for result in results:
             example_scores = []
-            if result.evaluation_results and result.evaluation_results.get("results"):
-                for er in result.evaluation_results["results"]:
-                    if er.get("score") is not None:
-                        example_scores.append(er["score"])
-                        scores.append(er["score"])
 
-            example_id = str(result.example.id) if result.example else "unknown"
+            # Handle both dict and object results (SDK version compat)
+            if isinstance(result, dict):
+                eval_results = result.get("evaluation_results", {})
+                if isinstance(eval_results, dict):
+                    eval_list = eval_results.get("results", [])
+                else:
+                    eval_list = getattr(eval_results, "results", []) or []
+                example_obj = result.get("example")
+                example_id = str(example_obj.get("id", "unknown") if isinstance(example_obj, dict) else getattr(example_obj, "id", "unknown"))
+            else:
+                eval_results = getattr(result, "evaluation_results", None)
+                if isinstance(eval_results, dict):
+                    eval_list = eval_results.get("results", [])
+                elif eval_results:
+                    eval_list = getattr(eval_results, "results", []) or []
+                else:
+                    eval_list = []
+                example_obj = getattr(result, "example", None)
+                example_id = str(getattr(example_obj, "id", "unknown") if example_obj else "unknown")
+
+            for er in eval_list:
+                score_val = er.get("score") if isinstance(er, dict) else getattr(er, "score", None)
+                if score_val is not None:
+                    example_scores.append(score_val)
+                    scores.append(score_val)
+
             per_example[example_id] = {
                 "score": sum(example_scores) / len(example_scores) if example_scores else 0.0,
                 "num_evaluators": len(example_scores),

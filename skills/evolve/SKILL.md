@@ -235,7 +235,7 @@ Agent(
     Entry point: {entry_point}
 
     For each experiment:
-    1. Read all runs via: langsmith-cli --json runs list --project "{experiment_name}" --fields id,inputs,outputs,error --is-root --limit 200
+    1. Read all runs via: langsmith-cli --json runs list --project "{experiment_name}" --fields id,inputs,outputs,error --is-root true --limit 200
     2. Judge each run's output against the input
     3. Write scores via: langsmith-cli --json feedback create {run_id} --key {evaluator} --score {0.0|1.0} --comment "{reason}" --source model
     </context>

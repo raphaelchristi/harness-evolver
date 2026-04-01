@@ -267,6 +267,8 @@ def make_target(entry_point, cwd=None):
                 cmd = cmd.replace("{input}", input_path)
             elif "{input_json}" in cmd:
                 cmd = cmd.replace("{input_json}", input_json)
+            elif "--input" in cmd or "-i " in cmd:
+                cmd = f"{cmd} {input_path}"
             else:
                 cmd = f"{cmd} --input {input_path} --output {output_path}"
 

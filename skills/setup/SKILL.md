@@ -61,9 +61,14 @@ Look for:
 
 To identify the **framework**, read the entry point file and its immediate imports. The proposer agents will use Context7 MCP for detailed documentation lookup — you don't need to detect every library, just identify the main framework (LangGraph, CrewAI, OpenAI Agents SDK, etc.) from the imports you see.
 
-Identify the **run command** — how to execute the agent:
-- `python main.py` (if it accepts `--input` flag)
-- The command in the project's README, Makefile, or scripts/
+Identify the **run command** — how to execute the agent. Use `{input}` as a placeholder for the JSON file path:
+- `python main.py {input}` — agent reads JSON file from positional arg
+- `python main.py --input {input}` — agent reads JSON file from `--input` flag
+- `python main.py --query {input_json}` — agent receives inline JSON string
+
+The runner writes `{"input": "user question..."}` to a temp `.json` file and replaces `{input}` with the file path. If the entry point already contains `--input` (without placeholder), the runner appends the file path as the next argument.
+
+If no placeholder and no `--input` flag detected, the runner appends `--input <path> --output <path>`.
 
 ## Phase 2: Confirm Detection (interactive)
 
