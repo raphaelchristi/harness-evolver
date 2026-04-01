@@ -11,8 +11,31 @@ Set up the Harness Evolver v3 in a project. Explores the codebase, configures La
 
 ## Prerequisites
 
-- `LANGSMITH_API_KEY` must be set. If not: "Set your LangSmith API key: `export LANGSMITH_API_KEY=lsv2_pt_...`"
-- Python 3.10+ with `langsmith` and `openevals` packages. If missing:
+Check for LangSmith API key — it can be in the environment, the credentials file, or .env:
+
+```bash
+python3 -c "
+import os, platform
+key = os.environ.get('LANGSMITH_API_KEY', '')
+if not key:
+    creds = os.path.expanduser('~/Library/Application Support/langsmith-cli/credentials') if platform.system() == 'Darwin' else os.path.expanduser('~/.config/langsmith-cli/credentials')
+    if os.path.exists(creds):
+        for line in open(creds):
+            if line.strip().startswith('LANGSMITH_API_KEY='):
+                key = line.strip().split('=',1)[1].strip()
+    if not key and os.path.exists('.env'):
+        for line in open('.env'):
+            if line.strip().startswith('LANGSMITH_API_KEY=') and not line.strip().startswith('#'):
+                key = line.strip().split('=',1)[1].strip().strip('\"').strip(\"'\")
+print('OK' if key else 'MISSING')
+"
+```
+
+If `MISSING`: "Set your LangSmith API key: `export LANGSMITH_API_KEY=lsv2_pt_...` or run `npx harness-evolver@latest` to configure."
+
+The tools auto-load the key from the credentials file, but the env var takes precedence.
+
+Python 3.10+ with `langsmith` and `openevals` packages must be installed:
 
 ```bash
 pip install langsmith openevals 2>/dev/null || uv pip install langsmith openevals

@@ -25,10 +25,56 @@ Requires: pip install langsmith openevals
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
+
+
+def ensure_langsmith_api_key():
+    """Load LANGSMITH_API_KEY from credentials file if not in env.
+
+    The installer saves the key to the langsmith-cli credentials file,
+    but the SDK only reads the env var. This bridges the gap.
+    """
+    if os.environ.get("LANGSMITH_API_KEY"):
+        return True
+
+    # Platform-specific credentials path (matches langsmith-cli)
+    if platform.system() == "Darwin":
+        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
+    else:
+        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
+
+    if os.path.exists(creds_path):
+        try:
+            with open(creds_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+
+    # Also check .env in current directory
+    if os.path.exists(".env"):
+        try:
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
+                        key = line.split("=", 1)[1].strip().strip("'\"")
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+
+    return False
 
 
 def check_dependencies():
@@ -292,6 +338,12 @@ def main():
     if missing:
         print(f"Missing packages: {', '.join(missing)}", file=sys.stderr)
         print(f"Install with: pip install {' '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+
+    # Load API key from credentials file if not in env
+    if not ensure_langsmith_api_key():
+        print("LANGSMITH_API_KEY not found in environment, credentials file, or .env", file=sys.stderr)
+        print("Set it with: export LANGSMITH_API_KEY=lsv2_pt_...", file=sys.stderr)
         sys.exit(1)
 
     from langsmith import Client

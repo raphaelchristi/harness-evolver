@@ -17,9 +17,45 @@ Requires: pip install langsmith openevals
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import tempfile
+
+
+def ensure_langsmith_api_key():
+    """Load LANGSMITH_API_KEY from credentials file if not in env."""
+    if os.environ.get("LANGSMITH_API_KEY"):
+        return True
+    if platform.system() == "Darwin":
+        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
+    else:
+        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
+    if os.path.exists(creds_path):
+        try:
+            with open(creds_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+    if os.path.exists(".env"):
+        try:
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
+                        key = line.split("=", 1)[1].strip().strip("'\"")
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+    return False
 
 
 def make_target(entry_point, cwd):
@@ -132,6 +168,7 @@ def main():
         config = json.load(f)
 
     os.environ["EVAL_TASK_TIMEOUT"] = str(args.timeout)
+    ensure_langsmith_api_key()
 
     from langsmith import Client
     client = Client()
