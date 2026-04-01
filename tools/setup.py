@@ -87,6 +87,29 @@ def check_dependencies():
     return missing
 
 
+def resolve_dataset_name(client, base_name):
+    """Find an available dataset name by auto-incrementing the version suffix.
+
+    Tries base_name-eval-v1, v2, v3... until an unused name is found.
+    Returns (resolved_name, version_number).
+    """
+    existing = set()
+    try:
+        for ds in client.list_datasets():
+            existing.add(ds.name)
+    except Exception:
+        pass
+
+    for v in range(1, 100):
+        candidate = f"{base_name}-eval-v{v}"
+        if candidate not in existing:
+            return candidate, v
+
+    # Fallback: timestamp-based
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return f"{base_name}-eval-{ts}", 0
+
+
 def create_dataset_from_file(client, dataset_name, file_path):
     """Create a LangSmith dataset from a JSON file of inputs."""
     with open(file_path) as f:
@@ -320,6 +343,7 @@ def main():
     parser.add_argument("--dataset-from-file", default=None, help="Create dataset from JSON file")
     parser.add_argument("--dataset-from-langsmith", default=None, help="Create dataset from LangSmith project")
     parser.add_argument("--production-project", default=None, help="Production LangSmith project")
+    parser.add_argument("--dataset-name", default=None, help="Explicit dataset name (skip auto-versioning)")
     parser.add_argument("--evaluators", default=None, help="Comma-separated evaluator names")
     parser.add_argument("--skip-baseline", action="store_true", help="Skip baseline evaluation")
     parser.add_argument("--output", default=".evolver.json", help="Output config path")
@@ -351,8 +375,18 @@ def main():
         sys.exit(1)
 
     project_name = f"evolver-{args.project_name}"
-    dataset_name = f"{args.project_name}-eval-v1"
     goals = [g.strip() for g in args.goals.split(",")]
+
+    # Resolve dataset name (explicit or auto-versioned)
+    if args.dataset_name:
+        dataset_name = args.dataset_name
+        print(f"Using explicit dataset name: '{dataset_name}'")
+    else:
+        dataset_name, version = resolve_dataset_name(client, args.project_name)
+        if version > 1:
+            print(f"Dataset name auto-versioned to '{dataset_name}' (v1-v{version-1} already exist)")
+        else:
+            print(f"Dataset: '{dataset_name}'")
 
     # Create dataset
     print(f"Creating dataset '{dataset_name}'...")

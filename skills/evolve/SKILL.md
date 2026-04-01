@@ -75,13 +75,15 @@ python3 -c "import json; c=json.load(open('.evolver.json')); print(f'v{c[\"itera
 
 ### 1.5. Gather Trace Insights
 
-Run trace insights from the best experiment:
+Read the best experiment from config. If null (no baseline was run), skip trace insights for this iteration — proposers will work blind on the first pass:
 
 ```bash
-BEST=$(python3 -c "import json; print(json.load(open('.evolver.json'))['best_experiment'])")
-$EVOLVER_PY $TOOLS/trace_insights.py \
-    --from-experiment "$BEST" \
-    --output trace_insights.json 2>/dev/null
+BEST=$(python3 -c "import json; b=json.load(open('.evolver.json')).get('best_experiment'); print(b if b else '')")
+if [ -n "$BEST" ]; then
+    $EVOLVER_PY $TOOLS/trace_insights.py \
+        --from-experiment "$BEST" \
+        --output trace_insights.json 2>/dev/null
+fi
 ```
 
 If a production project is configured, also gather production insights:
@@ -99,17 +101,20 @@ fi
 
 ### 1.8. Analyze Per-Task Failures
 
-Read the best experiment results and cluster failures:
+If `$BEST` is set (not the first iteration without baseline), read results and cluster failures:
 
 ```bash
-$EVOLVER_PY $TOOLS/read_results.py \
-    --experiment "$BEST" \
-    --config .evolver.json \
-    --output best_results.json 2>/dev/null
+if [ -n "$BEST" ]; then
+    $EVOLVER_PY $TOOLS/read_results.py \
+        --experiment "$BEST" \
+        --config .evolver.json \
+        --output best_results.json 2>/dev/null
+fi
 ```
 
-Parse `best_results.json` to find failing examples (score < 0.7). Group by metadata or error pattern.
+If `best_results.json` exists, parse it to find failing examples (score < 0.7). Group by metadata or error pattern.
 Generate adaptive briefings for Candidates D and E (same logic as v2).
+If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
 ### 2. Spawn 5 Proposers in Parallel
 
