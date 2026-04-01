@@ -97,9 +97,10 @@ Ask about the SPECIFIC API you're going to use or change.
 
 1. **Commit all changes** with a descriptive message:
    ```bash
-   git add -A
+   git add -A -- ':!.venv' ':!venv' ':!node_modules'
    git commit -m "evolver: {brief description of changes}"
    ```
+   **CRITICAL**: Never commit `.venv`, `venv`, or `node_modules`. Symlinks to these in worktrees will break the main branch if merged.
 
 2. **Write proposal.md** explaining:
    - What you changed and why

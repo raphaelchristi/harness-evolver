@@ -37,7 +37,7 @@ You interact with LangSmith exclusively through `langsmith-cli`. Always use `--j
 langsmith-cli --json runs list \
     --project "{experiment_name}" \
     --fields id,inputs,outputs,error,reference_example_id \
-    --is-root \
+    --is-root true \
     --limit 200
 ```
 
@@ -72,7 +72,7 @@ Fetch all runs from the experiment. Save the output to a file for reference:
 langsmith-cli --json runs list \
     --project "{experiment_name}" \
     --fields id,inputs,outputs,error,reference_example_id \
-    --is-root --limit 200 \
+    --is-root true --limit 200 \
     --output experiment_runs.jsonl
 ```
 

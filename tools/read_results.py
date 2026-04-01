@@ -26,7 +26,7 @@ import sys
 
 
 def ensure_langsmith_api_key():
-    """Load LANGSMITH_API_KEY from credentials file if not in env."""
+    """Load LANGSMITH_API_KEY from credentials file or .env if not in env."""
     if os.environ.get("LANGSMITH_API_KEY"):
         return True
     if platform.system() == "Darwin":
@@ -40,6 +40,19 @@ def ensure_langsmith_api_key():
                     line = line.strip()
                     if line.startswith("LANGSMITH_API_KEY="):
                         key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
+    # Also check .env in current directory
+    if os.path.exists(".env"):
+        try:
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
+                        key = line.split("=", 1)[1].strip().strip("'\"")
                         if key:
                             os.environ["LANGSMITH_API_KEY"] = key
                             return True
