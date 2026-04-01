@@ -216,45 +216,84 @@ function installPythonDeps() {
 }
 
 async function configureLangSmith(rl) {
-  console.log(`\n  ${YELLOW}LangSmith Configuration${RESET} ${DIM}(required for v3)${RESET}\n`);
+  console.log(`\n  ${BOLD}${GREEN}LangSmith Configuration${RESET} ${DIM}(required)${RESET}\n`);
 
-  // Check if already configured
   const langsmithCredsDir = process.platform === "darwin"
     ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
     : path.join(HOME, ".config", "langsmith-cli");
   const langsmithCredsFile = path.join(langsmithCredsDir, "credentials");
+  const hasLangsmithCli = checkCommand("langsmith-cli --version");
 
-  // Check env var
+  // --- Step 1: API Key ---
+  let hasKey = false;
+
   if (process.env.LANGSMITH_API_KEY) {
     console.log(`  ${GREEN}✓${RESET} LANGSMITH_API_KEY found in environment`);
-    return;
-  }
-
-  // Check credentials file
-  if (fs.existsSync(langsmithCredsFile)) {
-    console.log(`  ${GREEN}✓${RESET} LangSmith credentials found at ${DIM}${langsmithCredsFile}${RESET}`);
-    return;
-  }
-
-  // Ask for API key
-  console.log(`  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
-  console.log(`  ${DIM}LangSmith is required for v3 (datasets, experiments, evaluators).${RESET}\n`);
-  const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key:${RESET} `);
-  const key = apiKey.trim();
-
-  if (key && key.startsWith("lsv2_")) {
+    hasKey = true;
+  } else if (fs.existsSync(langsmithCredsFile)) {
     try {
-      fs.mkdirSync(langsmithCredsDir, { recursive: true });
-      fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
-      console.log(`  ${GREEN}✓${RESET} API key saved to ${DIM}${langsmithCredsFile}${RESET}`);
-    } catch {
-      console.log(`  ${RED}Failed to save.${RESET} Add to your shell: export LANGSMITH_API_KEY=${key}`);
+      const content = fs.readFileSync(langsmithCredsFile, "utf8");
+      if (content.includes("LANGSMITH_API_KEY=lsv2_")) {
+        console.log(`  ${GREEN}✓${RESET} API key found in credentials file`);
+        hasKey = true;
+      }
+    } catch {}
+  }
+
+  if (!hasKey) {
+    console.log(`  ${BOLD}LangSmith API Key${RESET} — get yours at ${DIM}https://smith.langchain.com/settings${RESET}`);
+    console.log(`  ${DIM}LangSmith is required. The evolver won't work without it.${RESET}\n`);
+
+    // Keep asking until they provide a key or explicitly skip
+    let attempts = 0;
+    while (!hasKey && attempts < 3) {
+      const apiKey = await ask(rl, `  ${YELLOW}Paste your LangSmith API key (lsv2_pt_...):${RESET} `);
+      const key = apiKey.trim();
+
+      if (key && key.startsWith("lsv2_")) {
+        try {
+          fs.mkdirSync(langsmithCredsDir, { recursive: true });
+          fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
+          console.log(`  ${GREEN}✓${RESET} API key saved`);
+          hasKey = true;
+        } catch {
+          console.log(`  ${RED}Failed to save.${RESET} Add to your shell: export LANGSMITH_API_KEY=${key}`);
+          hasKey = true; // they have the key, just couldn't save
+        }
+      } else if (key) {
+        console.log(`  ${YELLOW}Invalid — LangSmith keys start with lsv2_${RESET}`);
+        attempts++;
+      } else {
+        // Empty input — skip
+        console.log(`\n  ${RED}WARNING:${RESET} No API key configured.`);
+        console.log(`  ${BOLD}/evolver:setup will not work${RESET} until you set LANGSMITH_API_KEY.`);
+        console.log(`  Run: ${DIM}export LANGSMITH_API_KEY=lsv2_pt_your_key${RESET}\n`);
+        break;
+      }
     }
-  } else if (key) {
-    console.log(`  ${YELLOW}Doesn't look like a LangSmith key (should start with lsv2_).${RESET}`);
-    console.log(`  Add to your shell: ${BOLD}export LANGSMITH_API_KEY=your_key${RESET}`);
+  }
+
+  // --- Step 2: langsmith-cli ---
+  if (hasLangsmithCli) {
+    console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
   } else {
-    console.log(`  ${YELLOW}Skipped.${RESET} You must set LANGSMITH_API_KEY before using /evolver:setup`);
+    console.log(`\n  ${BOLD}langsmith-cli${RESET} — optional but useful for debugging traces`);
+    console.log(`  ${DIM}Quick project listing, trace inspection, run stats from terminal.${RESET}`);
+    const lsCliAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [Y/n]:${RESET} `);
+    if (lsCliAnswer.trim().toLowerCase() !== "n") {
+      console.log(`\n  Installing langsmith-cli...`);
+      try {
+        execSync("uv tool install langsmith-cli 2>/dev/null || pip install langsmith-cli 2>/dev/null || pip3 install langsmith-cli", { stdio: "pipe", timeout: 60000 });
+        console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
+
+        // If we have a key, auto-authenticate
+        if (hasKey && fs.existsSync(langsmithCredsFile)) {
+          console.log(`  ${GREEN}✓${RESET} langsmith-cli auto-authenticated (credentials file exists)`);
+        }
+      } catch {
+        console.log(`  ${YELLOW}!${RESET} Could not install. Try manually: ${DIM}uv tool install langsmith-cli${RESET}`);
+      }
+    }
   }
 }
 
