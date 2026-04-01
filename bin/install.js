@@ -2,7 +2,7 @@
 /**
  * Harness Evolver v3 installer.
  * Copies skills/agents/tools to runtime directories (GSD pattern).
- * Installs Python dependencies (langsmith + openevals).
+ * Installs Python dependencies (langsmith) and langsmith-cli.
  *
  * Usage: npx harness-evolver@latest
  */
@@ -225,15 +225,15 @@ function installPythonDeps() {
 
   // Install/upgrade deps in the venv
   const installCommands = [
-    `uv pip install --python "${venvPython}" langsmith openevals`,
-    `"${venvPip}" install --upgrade langsmith openevals`,
-    `"${venvPython}" -m pip install --upgrade langsmith openevals`,
+    `uv pip install --python "${venvPython}" langsmith`,
+    `"${venvPip}" install --upgrade langsmith`,
+    `"${venvPython}" -m pip install --upgrade langsmith`,
   ];
 
   for (const cmd of installCommands) {
     try {
       execSync(cmd, { stdio: "pipe", timeout: 120000 });
-      console.log(`  ${GREEN}✓${RESET} langsmith + openevals installed in venv`);
+      console.log(`  ${GREEN}✓${RESET} langsmith installed in venv`);
       return true;
     } catch {
       continue;
@@ -241,7 +241,7 @@ function installPythonDeps() {
   }
 
   console.log(`  ${YELLOW}!${RESET} Could not install packages in venv.`);
-  console.log(`    Run manually: ${BOLD}~/.evolver/venv/bin/pip install langsmith openevals${RESET}`);
+  console.log(`    Run manually: ${BOLD}~/.evolver/venv/bin/pip install langsmith${RESET}`);
   return false;
 }
 
@@ -303,26 +303,24 @@ async function configureLangSmith(rl) {
     }
   }
 
-  // --- Step 2: langsmith-cli ---
+  // --- Step 2: langsmith-cli (required for evaluator agent) ---
   if (hasLangsmithCli) {
     console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
   } else {
-    console.log(`\n  ${BOLD}langsmith-cli${RESET} — optional but useful for debugging traces`);
-    console.log(`  ${DIM}Quick project listing, trace inspection, run stats from terminal.${RESET}`);
-    const lsCliAnswer = await ask(rl, `\n  ${YELLOW}Install langsmith-cli? [Y/n]:${RESET} `);
-    if (lsCliAnswer.trim().toLowerCase() !== "n") {
-      console.log(`\n  Installing langsmith-cli...`);
-      try {
-        execSync("uv tool install langsmith-cli 2>/dev/null || pip install langsmith-cli 2>/dev/null || pip3 install langsmith-cli", { stdio: "pipe", timeout: 60000 });
-        console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
+    console.log(`\n  ${BOLD}langsmith-cli${RESET} — ${YELLOW}required${RESET} for LLM-as-judge evaluation`);
+    console.log(`  ${DIM}The evaluator agent uses it to read experiment outputs and write scores.${RESET}`);
+    console.log(`\n  Installing langsmith-cli...`);
+    try {
+      execSync("uv tool install langsmith-cli 2>/dev/null || pip install langsmith-cli 2>/dev/null || pip3 install langsmith-cli", { stdio: "pipe", timeout: 60000 });
+      console.log(`  ${GREEN}✓${RESET} langsmith-cli installed`);
 
-        // If we have a key, auto-authenticate
-        if (hasKey && fs.existsSync(langsmithCredsFile)) {
-          console.log(`  ${GREEN}✓${RESET} langsmith-cli auto-authenticated (credentials file exists)`);
-        }
-      } catch {
-        console.log(`  ${YELLOW}!${RESET} Could not install. Try manually: ${DIM}uv tool install langsmith-cli${RESET}`);
+      // If we have a key, auto-authenticate
+      if (hasKey && fs.existsSync(langsmithCredsFile)) {
+        console.log(`  ${GREEN}✓${RESET} langsmith-cli auto-authenticated (credentials file exists)`);
       }
+    } catch {
+      console.log(`  ${RED}!${RESET} Could not install langsmith-cli.`);
+      console.log(`    ${BOLD}This is required.${RESET} Install manually: ${DIM}uv tool install langsmith-cli${RESET}`);
     }
   }
 }

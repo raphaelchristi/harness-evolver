@@ -7,9 +7,9 @@ Claude Code plugin for LangSmith-native autonomous agent optimization. Uses Lang
 ## Project structure
 
 ```
-tools/           Python tools (requires langsmith + openevals)
+tools/           Python tools (requires langsmith)
 skills/          Claude Code slash commands (/evolver:setup, /evolver:evolve, etc.)
-agents/          Agent definitions (proposer, critic, architect, testgen)
+agents/          Agent definitions (proposer, critic, architect, testgen, evaluator)
 bin/             Node.js installer (npx harness-evolver@latest)
 docs/            Design specs and plans
 ```
@@ -17,18 +17,20 @@ docs/            Design specs and plans
 ## Dependencies
 
 ```bash
-pip install langsmith openevals
+pip install langsmith
 ```
 
-All tools require the `langsmith` Python SDK. No stdlib-only constraint in v3.
+All tools require the `langsmith` Python SDK. The evaluator agent uses `langsmith-cli` (installed separately via `uv tool install langsmith-cli`). No openevals or external LLM API keys needed.
 
 ## Key conventions
 
-- Tools use the LangSmith Python SDK for datasets, experiments, evaluators
+- Tools use the LangSmith Python SDK for datasets, experiments, running targets
+- The evaluator agent uses `langsmith-cli` to read outputs and write scores (LLM-as-judge)
 - Proposer agents work in git worktrees (isolated copies of the repo)
 - Winning worktrees are merged automatically into the main branch
 - State is hybrid: `.evolver.json` (local config) + LangSmith (data)
 - LangSmith API key is mandatory (`LANGSMITH_API_KEY`)
+- No external LLM API keys needed (the evaluator agent IS the LLM judge)
 
 ## Architecture (3 layers)
 
@@ -43,10 +45,12 @@ All tools require the `langsmith` Python SDK. No stdlib-only constraint in v3.
   1. Gather trace insights from LangSmith
   2. Spawn 5 proposers in parallel (each in a git worktree)
   3. Each proposer modifies real code, commits changes
-  4. Evaluate each candidate via client.evaluate() against LangSmith dataset
-  5. Compare LangSmith experiments → select winner
-  6. Merge winning worktree into main branch
-  7. Auto-trigger critic/architect if needed
+  4. Run each candidate via client.evaluate() (code-based evaluators only)
+  5. Spawn evaluator agent → reads outputs via langsmith-cli, judges correctness,
+     writes scores back via langsmith-cli feedback create
+  6. Compare LangSmith experiments → select winner
+  7. Merge winning worktree into main branch
+  8. Auto-trigger critic/architect if needed
 ```
 
 ## Local config (.evolver.json)

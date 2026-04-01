@@ -19,7 +19,7 @@ Usage:
         [--production-project my-prod-project] \
         [--evaluators correctness,conciseness]
 
-Requires: pip install langsmith openevals
+Requires: pip install langsmith
 """
 
 import argparse
@@ -78,16 +78,12 @@ def ensure_langsmith_api_key():
 
 
 def check_dependencies():
-    """Verify langsmith and openevals are installed."""
+    """Verify langsmith is installed."""
     missing = []
     try:
         import langsmith  # noqa: F401
     except ImportError:
         missing.append("langsmith")
-    try:
-        import openevals  # noqa: F401
-    except ImportError:
-        missing.append("openevals")
     return missing
 
 
@@ -177,17 +173,19 @@ def create_empty_dataset(client, dataset_name):
 
 
 def get_evaluators(goals, evaluator_names=None):
-    """Build evaluator list based on optimization goals."""
-    from openevals.llm import create_llm_as_judge
-    from openevals.prompts import CORRECTNESS_PROMPT, CONCISENESS_PROMPT
+    """Build evaluator list based on optimization goals.
 
+    Returns only code-based evaluators. LLM-as-judge evaluators
+    (correctness, conciseness) are handled post-hoc by the
+    evolver-evaluator agent via langsmith-cli.
+    """
     evaluators = []
     evaluator_keys = []
 
-    # Map goals to evaluators
-    goal_map = {
-        "accuracy": ("correctness", CORRECTNESS_PROMPT),
-        "conciseness": ("conciseness", CONCISENESS_PROMPT),
+    # Map goals to evaluator keys (LLM-based are recorded but not instantiated)
+    goal_to_key = {
+        "accuracy": "correctness",
+        "conciseness": "conciseness",
     }
 
     if evaluator_names:
@@ -195,39 +193,33 @@ def get_evaluators(goals, evaluator_names=None):
     else:
         names = []
         for goal in goals:
-            if goal in goal_map:
-                names.append(goal_map[goal][0])
+            if goal in goal_to_key:
+                names.append(goal_to_key[goal])
         if not names:
             names = ["correctness"]  # default
 
+    # Record all evaluator keys (for config) but only instantiate code-based ones
     for name in names:
         if name in ("correctness", "accuracy"):
-            evaluators.append(create_llm_as_judge(
-                prompt=CORRECTNESS_PROMPT,
-                feedback_key="correctness",
-                model="openai:gpt-4.1-mini",
-            ))
             evaluator_keys.append("correctness")
+            # LLM-as-judge — handled by evaluator agent, not here
         elif name in ("conciseness", "brevity"):
-            evaluators.append(create_llm_as_judge(
-                prompt=CONCISENESS_PROMPT,
-                feedback_key="conciseness",
-                model="openai:gpt-4.1-mini",
-            ))
             evaluator_keys.append("conciseness")
+            # LLM-as-judge — handled by evaluator agent, not here
+
+    # Always include has_output
+    def has_output_eval(inputs, outputs, **kwargs):
+        has = bool(outputs and outputs.get("output", outputs.get("answer", "")))
+        return {"key": "has_output", "score": 1.0 if has else 0.0}
+    evaluators.append(has_output_eval)
 
     # Code-based evaluators for latency/tokens
     if "latency" in goals:
-        def latency_eval(inputs, outputs, **kwargs):
-            # Latency is captured in traces, not scored here
-            return {"key": "has_output", "score": 1.0 if outputs else 0.0}
-        evaluators.append(latency_eval)
         evaluator_keys.append("latency")
 
     if "token_efficiency" in goals:
         def token_eval(inputs, outputs, **kwargs):
             output_text = str(outputs.get("output", outputs.get("answer", "")))
-            # Penalize very long outputs (>2000 chars)
             score = min(1.0, 2000 / max(len(output_text), 1))
             return {"key": "token_efficiency", "score": score}
         evaluators.append(token_eval)
@@ -386,18 +378,23 @@ def main():
     print(f"Configuring evaluators for goals: {goals}")
     evaluators, evaluator_keys = get_evaluators(goals, args.evaluators)
     print(f"  Active evaluators: {evaluator_keys}")
+    llm_evaluators = [k for k in evaluator_keys if k in ("correctness", "conciseness")]
+    if llm_evaluators:
+        print(f"  LLM evaluators (agent-based): {llm_evaluators}")
 
-    # Run baseline
+    # Run baseline (code-based evaluators only; LLM scoring done by evaluator agent)
     baseline_experiment = None
     baseline_score = 0.0
     if not args.skip_baseline and count > 0:
-        print(f"Running baseline evaluation ({count} examples)...")
+        print(f"Running baseline target ({count} examples)...")
         try:
             baseline_experiment, baseline_score = run_baseline(
                 client, dataset_name, args.entry_point, evaluators,
             )
-            print(f"  Baseline score: {baseline_score:.3f}")
+            print(f"  Baseline has_output score: {baseline_score:.3f}")
             print(f"  Experiment: {baseline_experiment}")
+            if llm_evaluators:
+                print(f"  Note: LLM scoring pending — evaluator agent will run during /evolver:evolve")
         except Exception as e:
             print(f"  Baseline evaluation failed: {e}", file=sys.stderr)
             print("  Continuing with score 0.0")

@@ -47,7 +47,7 @@ claude
 <table>
 <tr>
 <td><b>LangSmith-Native</b></td>
-<td>No custom eval scripts or task files. Uses LangSmith Datasets for test inputs, Experiments for results, and Evaluators (openevals LLM-as-judge) for scoring. Everything is visible in the LangSmith UI.</td>
+<td>No custom eval scripts or task files. Uses LangSmith Datasets for test inputs, Experiments for results, and an agent-based LLM-as-judge for scoring via langsmith-cli. No external API keys needed. Everything is visible in the LangSmith UI.</td>
 </tr>
 <tr>
 <td><b>Real Code Evolution</b></td>
@@ -92,6 +92,7 @@ claude
 | **Architect** | Recommends multi-agent topology changes | Blue |
 | **Critic** | Validates evaluator quality, detects gaming | Red |
 | **TestGen** | Generates test inputs for LangSmith datasets | Cyan |
+| **Evaluator** | LLM-as-judge — reads outputs via langsmith-cli, scores correctness | Yellow |
 
 ---
 
@@ -104,7 +105,8 @@ claude
   +- 1.5 Gather trace insights (cluster errors, tokens, latency)
   +- 1.8 Analyze per-task failures (adaptive briefings)
   +- 2.  Spawn 5 proposers in parallel (each in a git worktree)
-  +- 3.  Evaluate each candidate (client.evaluate() -> LangSmith experiments)
+  +- 3.  Run target for each candidate (client.evaluate() -> code-based evaluators)
+  +- 3.5 Spawn evaluator agent (reads outputs via langsmith-cli, judges, writes scores)
   +- 4.  Compare experiments -> select winner + per-task champion
   +- 5.  Merge winning worktree into main branch
   +- 5.5 Test suite growth (add regression examples to dataset)
@@ -119,13 +121,15 @@ claude
 ## Requirements
 
 - **LangSmith account** + `LANGSMITH_API_KEY`
-- **Python 3.10+** with `langsmith` and `openevals` packages
+- **Python 3.10+** with `langsmith` package
+- **langsmith-cli** (`uv tool install langsmith-cli`) — required for evaluator agent
 - **Git** (for worktree-based isolation)
 - **Claude Code** (or Cursor/Codex/Windsurf)
 
 ```bash
 export LANGSMITH_API_KEY="lsv2_pt_..."
-pip install langsmith openevals
+pip install langsmith
+uv tool install langsmith-cli
 ```
 
 ---

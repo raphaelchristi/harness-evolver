@@ -2,7 +2,9 @@
 """Run LangSmith evaluation for a candidate in a worktree.
 
 Wraps client.evaluate() — runs the user's agent against the dataset
-with configured evaluators, from within a specific directory (worktree).
+with code-based evaluators only (has_output, token_efficiency).
+LLM-as-judge scoring (correctness, conciseness) is handled post-hoc
+by the evolver-evaluator agent via langsmith-cli.
 
 Usage:
     python3 run_eval.py \
@@ -11,7 +13,7 @@ Usage:
         --experiment-prefix v001a \
         [--timeout 120]
 
-Requires: pip install langsmith openevals
+Requires: pip install langsmith
 """
 
 import argparse
@@ -124,34 +126,30 @@ def make_target(entry_point, cwd):
 
 
 def load_evaluators(evaluator_keys):
-    """Load evaluators by key name."""
-    from openevals.llm import create_llm_as_judge
-    from openevals.prompts import CORRECTNESS_PROMPT, CONCISENESS_PROMPT
+    """Load code-based evaluators only.
 
+    LLM-as-judge evaluators (correctness, conciseness) are handled
+    post-hoc by the evolver-evaluator agent via langsmith-cli.
+    """
     evaluators = []
+
+    # Always include has_output — verifies the agent produced something
+    def has_output_eval(inputs, outputs, **kwargs):
+        has = bool(outputs and outputs.get("output", outputs.get("answer", "")))
+        return {"key": "has_output", "score": 1.0 if has else 0.0}
+    evaluators.append(has_output_eval)
+
     for key in evaluator_keys:
-        if key == "correctness":
-            evaluators.append(create_llm_as_judge(
-                prompt=CORRECTNESS_PROMPT,
-                feedback_key="correctness",
-                model="openai:gpt-4.1-mini",
-            ))
-        elif key == "conciseness":
-            evaluators.append(create_llm_as_judge(
-                prompt=CONCISENESS_PROMPT,
-                feedback_key="conciseness",
-                model="openai:gpt-4.1-mini",
-            ))
-        elif key == "latency":
-            def latency_eval(inputs, outputs, **kwargs):
-                return {"key": "has_output", "score": 1.0 if outputs else 0.0}
-            evaluators.append(latency_eval)
+        if key == "latency":
+            # Latency is captured in traces, just check output exists
+            pass  # has_output already covers this
         elif key == "token_efficiency":
             def token_eval(inputs, outputs, **kwargs):
                 output_text = str(outputs.get("output", outputs.get("answer", "")))
                 score = min(1.0, 2000 / max(len(output_text), 1))
                 return {"key": "token_efficiency", "score": score}
             evaluators.append(token_eval)
+        # correctness, conciseness — skipped, handled by evaluator agent
 
     return evaluators
 
@@ -176,10 +174,16 @@ def main():
     target = make_target(config["entry_point"], args.worktree_path)
     evaluators = load_evaluators(config["evaluators"])
 
+    # Identify which evaluators need the agent (LLM-as-judge)
+    llm_evaluators = [k for k in config["evaluators"] if k in ("correctness", "conciseness")]
+    code_evaluators = [k for k in config["evaluators"] if k not in ("correctness", "conciseness")]
+
     print(f"Running evaluation: {args.experiment_prefix}")
     print(f"  Dataset: {config['dataset']}")
     print(f"  Worktree: {args.worktree_path}")
-    print(f"  Evaluators: {config['evaluators']}")
+    print(f"  Code evaluators: {['has_output'] + code_evaluators}")
+    if llm_evaluators:
+        print(f"  Pending LLM evaluators (agent): {llm_evaluators}")
 
     try:
         results = client.evaluate(
@@ -192,7 +196,7 @@ def main():
 
         experiment_name = results.experiment_name
 
-        # Calculate mean score
+        # Calculate mean score from code-based evaluators only
         scores = []
         per_example = {}
         for result in results:
@@ -218,10 +222,13 @@ def main():
             "num_examples": len(per_example),
             "num_scores": len(scores),
             "per_example": per_example,
+            "pending_llm_evaluators": llm_evaluators,
         }
 
         print(json.dumps(output))
-        print(f"\nEvaluation complete: {mean_score:.3f} ({len(per_example)} examples)")
+        print(f"\nTarget runs complete: {len(per_example)} examples")
+        if llm_evaluators:
+            print(f"Awaiting evaluator agent for: {llm_evaluators}")
 
     except Exception as e:
         print(f"Evaluation failed: {e}", file=sys.stderr)
