@@ -35,23 +35,20 @@ If `MISSING`: "Set your LangSmith API key: `export LANGSMITH_API_KEY=lsv2_pt_...
 
 The tools auto-load the key from the credentials file, but the env var takes precedence.
 
-Python 3.10+ with `langsmith` and `openevals` packages must be installed:
-
-```bash
-pip install langsmith openevals 2>/dev/null || uv pip install langsmith openevals
-```
-
-## Resolve Tool Path
+## Resolve Tool Path and Python
 
 ```bash
 TOOLS=$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")
+EVOLVER_PY=$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")
 ```
+
+Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations. This ensures the venv with langsmith+openevals is used.
 
 ## Phase 1: Explore Project (automatic)
 
 ```bash
 find . -maxdepth 3 -type f -name "*.py" | head -30
-python3 $TOOLS/detect_stack.py .
+$EVOLVER_PY $TOOLS/detect_stack.py .
 ```
 
 Look for:
@@ -145,7 +142,7 @@ If "I have test data": ask for file path.
 Build the setup.py command based on all gathered information:
 
 ```bash
-python3 $TOOLS/setup.py \
+$EVOLVER_PY $TOOLS/setup.py \
     --project-name "{project_name}" \
     --entry-point "{run_command}" \
     --framework "{framework}" \

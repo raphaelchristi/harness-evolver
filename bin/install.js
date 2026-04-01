@@ -190,28 +190,58 @@ function installTools() {
 }
 
 function installPythonDeps() {
-  console.log(`\n  ${YELLOW}Installing Python dependencies...${RESET}`);
+  const venvDir = path.join(HOME, ".evolver", "venv");
+  const venvPython = path.join(venvDir, "bin", "python");
+  const venvPip = path.join(venvDir, "bin", "pip");
 
-  // Try multiple pip variants
-  const commands = [
-    "pip install langsmith openevals",
-    "uv pip install langsmith openevals",
-    "pip3 install langsmith openevals",
-    "python3 -m pip install langsmith openevals",
+  console.log(`\n  ${YELLOW}Setting up Python environment...${RESET}`);
+
+  // Create venv if it doesn't exist
+  if (!fs.existsSync(venvPython)) {
+    console.log(`  Creating isolated venv at ~/.evolver/venv/`);
+    const venvCommands = [
+      `uv venv "${venvDir}"`,
+      `python3 -m venv "${venvDir}"`,
+    ];
+    let created = false;
+    for (const cmd of venvCommands) {
+      try {
+        execSync(cmd, { stdio: "pipe", timeout: 30000 });
+        created = true;
+        break;
+      } catch {
+        continue;
+      }
+    }
+    if (!created) {
+      console.log(`  ${RED}Failed to create venv.${RESET}`);
+      console.log(`    Run manually: ${BOLD}python3 -m venv ~/.evolver/venv${RESET}`);
+      return false;
+    }
+    console.log(`  ${GREEN}✓${RESET} venv created`);
+  } else {
+    console.log(`  ${GREEN}✓${RESET} venv exists at ~/.evolver/venv/`);
+  }
+
+  // Install/upgrade deps in the venv
+  const installCommands = [
+    `uv pip install --python "${venvPython}" langsmith openevals`,
+    `"${venvPip}" install --upgrade langsmith openevals`,
+    `"${venvPython}" -m pip install --upgrade langsmith openevals`,
   ];
 
-  for (const cmd of commands) {
+  for (const cmd of installCommands) {
     try {
       execSync(cmd, { stdio: "pipe", timeout: 120000 });
-      console.log(`  ${GREEN}✓${RESET} langsmith + openevals installed`);
+      console.log(`  ${GREEN}✓${RESET} langsmith + openevals installed in venv`);
       return true;
     } catch {
       continue;
     }
   }
 
-  console.log(`  ${YELLOW}!${RESET} Could not auto-install Python packages.`);
-  console.log(`    Run manually: ${BOLD}pip install langsmith openevals${RESET}`);
+  console.log(`  ${YELLOW}!${RESET} Could not install packages in venv.`);
+  console.log(`    Run manually: ${BOLD}~/.evolver/venv/bin/pip install langsmith openevals${RESET}`);
   return false;
 }
 

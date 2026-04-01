@@ -13,11 +13,14 @@ Run the autonomous propose-evaluate-iterate loop using LangSmith as the evaluati
 
 `.evolver.json` must exist. If not, tell user to run `evolver:setup`.
 
-## Resolve Tool Path
+## Resolve Tool Path and Python
 
 ```bash
 TOOLS=$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")
+EVOLVER_PY=$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")
 ```
+
+Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations.
 
 ## Parse Arguments
 
@@ -76,7 +79,7 @@ Run trace insights from the best experiment:
 
 ```bash
 BEST=$(python3 -c "import json; print(json.load(open('.evolver.json'))['best_experiment'])")
-python3 $TOOLS/trace_insights.py \
+$EVOLVER_PY $TOOLS/trace_insights.py \
     --from-experiment "$BEST" \
     --output trace_insights.json 2>/dev/null
 ```
@@ -86,7 +89,7 @@ If a production project is configured, also gather production insights:
 ```bash
 PROD=$(python3 -c "import json; c=json.load(open('.evolver.json')); print(c.get('production_project',''))")
 if [ -n "$PROD" ] && [ ! -f "production_seed.json" ]; then
-    python3 $TOOLS/seed_from_traces.py \
+    $EVOLVER_PY $TOOLS/seed_from_traces.py \
         --project "$PROD" --use-sdk \
         --output-md production_seed.md \
         --output-json production_seed.json \
@@ -99,7 +102,7 @@ fi
 Read the best experiment results and cluster failures:
 
 ```bash
-python3 $TOOLS/read_results.py \
+$EVOLVER_PY $TOOLS/read_results.py \
     --experiment "$BEST" \
     --config .evolver.json \
     --output best_results.json 2>/dev/null
@@ -174,7 +177,7 @@ Wait for all 5 to complete.
 For each worktree that has changes (proposer committed something):
 
 ```bash
-python3 $TOOLS/run_eval.py \
+$EVOLVER_PY $TOOLS/run_eval.py \
     --config .evolver.json \
     --worktree-path {worktree_path} \
     --experiment-prefix v{NNN}{suffix} \
@@ -186,7 +189,7 @@ Each candidate becomes a separate LangSmith experiment.
 ### 4. Compare All Candidates
 
 ```bash
-python3 $TOOLS/read_results.py \
+$EVOLVER_PY $TOOLS/read_results.py \
     --experiments "v{NNN}a,v{NNN}b,v{NNN}c,v{NNN}d,v{NNN}e" \
     --config .evolver.json \
     --output comparison.json
