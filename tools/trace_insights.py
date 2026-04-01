@@ -253,18 +253,85 @@ def identify_top_issues(error_clusters, response_analysis, score_cross_ref):
     return issues
 
 
+def fetch_runs_from_langsmith(project_name, experiment_name=None, limit=50):
+    """Fetch runs directly from LangSmith SDK (v3 mode)."""
+    try:
+        from langsmith import Client
+        client = Client()
+
+        source = experiment_name or project_name
+        raw_runs = list(client.list_runs(
+            project_name=source,
+            is_root=True,
+            limit=limit,
+        ))
+
+        runs = []
+        for run in raw_runs:
+            entry = {
+                "name": run.name or "unknown",
+                "tokens": run.total_tokens or 0,
+                "error": run.error[:200] if run.error else None,
+                "llm_response": str(run.outputs)[:300] if run.outputs else "",
+            }
+            runs.append(entry)
+
+        return runs
+    except Exception as e:
+        print(f"Failed to fetch from LangSmith: {e}", file=sys.stderr)
+        return []
+
+
+def fetch_scores_from_experiment(experiment_name):
+    """Fetch per-example scores from a LangSmith experiment (v3 mode)."""
+    try:
+        from langsmith import Client
+        client = Client()
+
+        runs = list(client.list_runs(
+            project_name=experiment_name,
+            is_root=True,
+            limit=200,
+        ))
+
+        per_task = {}
+        for run in runs:
+            example_id = str(run.reference_example_id or run.id)
+            feedbacks = list(client.list_feedback(run_ids=[run.id]))
+            scores = [fb.score for fb in feedbacks if fb.score is not None]
+            avg_score = sum(scores) / len(scores) if scores else 0.0
+            per_task[example_id] = {"score": avg_score}
+
+        all_scores = [v["score"] for v in per_task.values()]
+        combined = sum(all_scores) / len(all_scores) if all_scores else 0.0
+
+        return {"combined_score": combined, "per_task": per_task}
+    except Exception as e:
+        print(f"Failed to fetch experiment scores: {e}", file=sys.stderr)
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate trace insights from LangSmith data + scores")
-    parser.add_argument("--langsmith-runs", required=True, help="Path to langsmith_runs.json")
+    parser.add_argument("--langsmith-runs", default=None, help="Path to langsmith_runs.json (v2 mode)")
     parser.add_argument("--langsmith-stats", help="Path to langsmith_stats.json (optional)")
-    parser.add_argument("--scores", required=True, help="Path to best version's scores.json")
-    parser.add_argument("--tasks-dir", required=True, help="Path to eval/tasks/ directory")
+    parser.add_argument("--scores", default=None, help="Path to scores.json (v2 mode)")
+    parser.add_argument("--tasks-dir", default=None, help="Path to eval/tasks/ directory (v2 mode)")
+    parser.add_argument("--from-project", default=None, help="LangSmith project name (v3 mode)")
+    parser.add_argument("--from-experiment", default=None, help="LangSmith experiment name (v3 mode)")
     parser.add_argument("--output", required=True, help="Output path for trace_insights.json")
     args = parser.parse_args()
 
-    runs = load_json(args.langsmith_runs)
-    stats = load_json(args.langsmith_stats)
-    scores_data = load_json(args.scores)
+    # v3 mode: fetch directly from LangSmith
+    if args.from_project or args.from_experiment:
+        runs = fetch_runs_from_langsmith(args.from_project, args.from_experiment)
+        scores_data = fetch_scores_from_experiment(args.from_experiment) if args.from_experiment else None
+        stats = None
+    else:
+        # v2 mode: read from local files
+        runs = load_json(args.langsmith_runs)
+        stats = load_json(args.langsmith_stats)
+        scores_data = load_json(args.scores)
 
     if not runs and not scores_data:
         # Nothing to analyze — write minimal insights
@@ -291,7 +358,8 @@ def main():
     response_analysis = analyze_responses(runs)
 
     # Phase 2: Cross-reference with scores
-    score_cross_ref = cross_reference_scores(runs, scores_data, args.tasks_dir)
+    tasks_dir = getattr(args, "tasks_dir", None)
+    score_cross_ref = cross_reference_scores(runs, scores_data, tasks_dir)
     token_score_corr = correlate_tokens_scores(runs, scores_data)
 
     # Phase 3: Generate hypotheses

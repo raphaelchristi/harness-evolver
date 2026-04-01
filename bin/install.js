@@ -84,9 +84,21 @@ function installForRuntime(runtimeDir, scope) {
     for (const skill of fs.readdirSync(skillsSource, { withFileTypes: true })) {
       if (skill.isDirectory()) {
         const src = path.join(skillsSource, skill.name);
-        const dest = path.join(skillsDir, "harness-evolver:" + skill.name);
+        // v3: skills use evolver: prefix; v2 skills with harness-evolver: prefix are also installed
+        const skillName = skill.name.startsWith("harness-evolver") ? skill.name : skill.name;
+        const prefix = skill.name.includes("v3") ? "evolver:" : (skill.name === "setup" ? "evolver:" : "harness-evolver:");
+        // Use the SKILL.md's own name field, just copy the directory
+        const dest = path.join(skillsDir, skill.name);
         copyDir(src, dest);
-        console.log(`  ${GREEN}✓${RESET} Installed skill: harness-evolver:${skill.name}`);
+        const skillMd = path.join(src, "SKILL.md");
+        if (fs.existsSync(skillMd)) {
+          const content = fs.readFileSync(skillMd, "utf8");
+          const nameMatch = content.match(/^name:\s*(.+)$/m);
+          const displayName = nameMatch ? nameMatch[1].trim() : skill.name;
+          console.log(`  ${GREEN}✓${RESET} Installed skill: ${displayName}`);
+        } else {
+          console.log(`  ${GREEN}✓${RESET} Installed skill: ${skill.name}`);
+        }
       }
     }
   }
@@ -110,7 +122,9 @@ function installForRuntime(runtimeDir, scope) {
 }
 
 function installTools() {
-  const toolsDir = path.join(HOME, ".harness-evolver", "tools");
+  const toolsDir = path.join(HOME, ".evolver", "tools");
+  // Also install to legacy path for v2 compatibility
+  const legacyToolsDir = path.join(HOME, ".harness-evolver", "tools");
   const toolsSource = path.join(PLUGIN_ROOT, "tools");
   if (fs.existsSync(toolsSource)) {
     fs.mkdirSync(toolsDir, { recursive: true });
@@ -223,11 +237,20 @@ async function main() {
   fs.writeFileSync(versionPath, VERSION);
   console.log(`  ${GREEN}✓${RESET} VERSION ${VERSION}`);
 
-  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${GREEN}/harness-evolver:init${RESET}\n`);
+  // Install Python dependencies (v3 requirement)
+  console.log(`  ${YELLOW}Installing Python dependencies...${RESET}`);
+  try {
+    execSync("pip install langsmith openevals 2>/dev/null || uv pip install langsmith openevals 2>/dev/null || pip3 install langsmith openevals", { stdio: "pipe" });
+    console.log(`  ${GREEN}✓${RESET} langsmith + openevals installed`);
+  } catch {
+    console.log(`  ${YELLOW}!${RESET} Could not auto-install. Run manually: ${BOLD}pip install langsmith openevals${RESET}`);
+  }
+
+  console.log(`\n  ${GREEN}Done!${RESET} Restart Claude Code, then run ${GREEN}/evolver:setup${RESET}\n`);
 
   // Optional integrations
-  console.log(`  ${YELLOW}Install optional integrations?${RESET}\n`);
-  console.log(`  These enhance the proposer with rich traces and up-to-date documentation.\n`);
+  console.log(`  ${YELLOW}Configure integrations?${RESET}\n`);
+  console.log(`  LangSmith is ${BOLD}required${RESET} for v3. Context7 is optional.\n`);
 
   // LangSmith CLI
   const hasLangsmithCli = checkCommand("langsmith-cli --version");

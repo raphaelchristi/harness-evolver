@@ -1,7 +1,7 @@
 {
   "name": "harness-evolver",
-  "version": "2.9.1",
-  "description": "Meta-Harness-style autonomous harness optimization for Claude Code",
+  "version": "3.0.0-beta.1",
+  "description": "LangSmith-native autonomous agent optimization for Claude Code",
   "author": "Raphael Valdetaro",
   "license": "MIT",
   "repository": {
@@ -10,11 +10,12 @@
   },
   "keywords": [
     "claude-code",
-    "harness",
-    "meta-harness",
+    "langsmith",
     "llm",
     "optimization",
-    "agent"
+    "agent",
+    "evolution",
+    "meta-harness"
   ],
   "bin": {
     "harness-evolver": "bin/install.js"
@@ -23,7 +24,6 @@
     "bin/",
     "skills/",
     "agents/",
-    "tools/",
-    "examples/"
+    "tools/"
   ]
 }
