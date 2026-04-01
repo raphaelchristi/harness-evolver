@@ -16,8 +16,9 @@ Run the autonomous propose-evaluate-iterate loop using LangSmith as the evaluati
 ## Resolve Tool Path and Python
 
 ```bash
-TOOLS=$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")
-EVOLVER_PY=$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")
+# Prefer env vars set by plugin hook; fallback to legacy npx paths
+TOOLS="${EVOLVER_TOOLS:-$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")}"
+EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")}"
 ```
 
 Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations.
