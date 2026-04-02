@@ -24,7 +24,7 @@
     "bin/",
     "skills/",
     "agents/",
-    "tools/",
+    "tools/*.py",
     "hooks/",
     ".claude-plugin/"
   ]
