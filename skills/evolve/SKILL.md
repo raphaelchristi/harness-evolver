@@ -23,6 +23,8 @@ EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HO
 
 Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations.
 
+**IMPORTANT: Never pass `LANGSMITH_API_KEY` inline in Bash commands.** The key is loaded automatically by the SessionStart hook and by each tool's `ensure_langsmith_api_key()`. Passing it inline exposes it in the output.
+
 ## Parse Arguments
 
 - `--iterations N` (default: from interactive question or 5)

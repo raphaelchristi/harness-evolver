@@ -45,6 +45,8 @@ EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HO
 
 Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations. This ensures the venv with langsmith is used.
 
+**IMPORTANT: Never pass `LANGSMITH_API_KEY` inline in Bash commands.** The key is loaded automatically by the SessionStart hook (from credentials file or environment) and by each Python tool's `ensure_langsmith_api_key()`. Passing it inline exposes it in the output. If the key is missing, tell the user to run `export LANGSMITH_API_KEY=lsv2_pt_...` instead.
+
 ## Phase 1: Explore Project (automatic)
 
 ```bash
