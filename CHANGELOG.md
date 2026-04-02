@@ -1,8 +1,14 @@
 # Changelog
 
+All notable changes to Harness Evolver are documented in this file.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned per [Semantic Versioning](https://semver.org/).
+
+---
+
 ## [4.0.0] - 2026-04-02
 
-Twelve features inspired by Claude Code's architecture, making the evolution loop smarter, cheaper, and more autonomous.
+Twelve features inspired by Claude Code's leaked architecture, making the evolution loop smarter, cheaper, and more autonomous.
 
 ### Added
 
@@ -13,7 +19,7 @@ Twelve features inspired by Claude Code's architecture, making the evolution loo
 - **KV Cache-Optimized Proposer Spawning** — restructured proposer prompts with a shared byte-identical prefix (objective + files + context) and strategy-only suffix for ~80% token savings across 5 parallel proposers.
 - **Per-Proposer Tool Restrictions** — exploit/crossover/failure-targeted proposers get Edit-only (no Write); explore gets full access. Prevents conservative strategies from creating unnecessary files.
 - **Proposer Turn Budget** — 16-turn cap with phased allocation (orient/diagnose/implement/test/commit) and stuck proposer detection. Prevents runaway agents consuming tokens in loops.
-- **Coordinator Synthesis Phase** (`tools/synthesize_strategy.py`) — generates a targeted `strategy.md` document from trace insights, results, and evolution memory. Proposers receive synthesized specs instead of raw data dumps.
+- **Coordinator Synthesis Phase** (`tools/synthesize_strategy.py`) — generates a targeted `strategy.md` from trace insights, results, and evolution memory. Proposers receive synthesized specs instead of raw data dumps.
 - **Active Critic** (`tools/add_evaluator.py`) — upgraded from passive reporter to active fixer. Detects evaluator gaming AND implements stricter code-based evaluators (`answer_not_question`, `no_hallucination_markers`, `min_length`, `no_repetition`).
 - **ULTRAPLAN Architect** — runs with `model: opus` for deep architectural analysis. Full codebase scan, AST-based topology classification, performance pattern analysis from evolution memory, and detailed migration plans.
 - **Self-Scheduling Evolution** — background and cron-based execution modes. Schedule nightly optimization runs with `CronCreate` and check progress via `/evolver:status`.
@@ -27,16 +33,203 @@ Twelve features inspired by Claude Code's architecture, making the evolution loo
 - `agents/evolver-testgen.md` — added Phase 3.5 for adversarial injection mode
 - `skills/evolve/SKILL.md` — expanded with validation, gate checks, synthesis, consolidation, scheduling, and restructured proposer spawning (+378 lines)
 
-## [3.3.1] - 2026-03-31
+---
+
+## [3.3.1] - 2026-04-01
 
 ### Fixed
 
-- 8 production bugs from first real-world evolve run
+- 8 production bugs discovered during first real-world evolve run
 
-## [3.3.0] - 2026-03-31
+---
+
+## [3.3.0] - 2026-04-01
 
 ### Added
 
+- Plugin marketplace support with SessionStart hook (`hooks/hooks.json`, `hooks/session-start.sh`)
 - Redesigned installer UI with gradient banner and clack-style output
-- Plugin marketplace install support
 - Architecture section in README
+
+### Fixed
+
+- Box-drawing font rendering with green gradient for banner
+
+---
+
+## [3.2.0] - 2026-04-01
+
+### Added
+
+- Plugin marketplace install path (`/plugin marketplace add`)
+- `SessionStart` hook auto-creates venv, installs langsmith + langsmith-cli, exports env vars
+
+### Fixed
+
+- Auto-version datasets on 409 conflict
+- Handle null baseline gracefully in setup
+
+---
+
+## [3.1.0] - 2026-04-01
+
+### Added
+
+- Agent-based LLM-as-judge evaluator (`agents/evolver-evaluator.md`) — replaces openevals dependency entirely
+- Context7 MCP is now mandatory in proposer agent (ensures up-to-date library docs)
+
+### Removed
+
+- `detect_stack.py` — replaced by Context7's library detection
+- openevals dependency — evaluator agent IS the LLM judge
+
+---
+
+## [3.0.1] - 2026-03-31
+
+### Fixed
+
+- Installer cleans previous version before installing new one
+- Auto-load LangSmith API key from langsmith-cli credentials file
+- Installer insists on API key and offers langsmith-cli installation
+- Isolated venv for Python deps instead of global pip install
+
+---
+
+## [3.0.0] - 2026-03-31
+
+Complete rewrite. LangSmith-native architecture replaces custom eval harness.
+
+### Added
+
+- `tools/setup.py` — creates LangSmith datasets, configures evaluators, runs baseline
+- `tools/run_eval.py` — executes agent against dataset via `client.evaluate()`
+- `tools/read_results.py` — reads and compares LangSmith experiments
+- `tools/trace_insights.py` — clusters errors, analyzes tokens, generates hypotheses from traces
+- `tools/seed_from_traces.py` — imports production traces as test data
+- `tools/analyze_architecture.py` — AST-based topology classification (stdlib-only)
+- `skills/evolve/SKILL.md` — full evolution loop orchestration
+- `skills/setup/SKILL.md` — interactive project setup with AskUserQuestion
+- `skills/status/SKILL.md` — progress and stagnation detection
+- `skills/deploy/SKILL.md` — tag, push, finalize
+- `.evolver.json` as local state (replaces `config.json` + `summary.json`)
+
+### Changed
+
+- Evaluation backend: LangSmith Datasets + Experiments (was custom `tasks/*.json` + `eval.py`)
+- Proposer isolation: native git worktrees via `isolation: "worktree"` (was manual branch management)
+- State: hybrid `.evolver.json` + LangSmith (was local-only `config.json`)
+
+### Removed
+
+- `harness.py` contract — proposers modify real code directly
+- `eval.py` — replaced by `run_eval.py` + LangSmith SDK
+- `tasks/*.json` — replaced by LangSmith Datasets
+- All v2 artifacts and references
+
+---
+
+## [2.9.1] - 2026-03-31
+
+### Changed
+
+- Use preview mode for eval and LangSmith questions in interactive UX
+
+---
+
+## [2.9.0] - 2026-03-31
+
+### Added
+
+- Interactive UX with `AskUserQuestion` in init, evolve, and deploy skills
+- Multi-select for optimization goals, single-select for iteration count
+
+---
+
+## [2.8.0] - 2026-03-31
+
+### Added
+
+- Auto-discover and leverage existing LangSmith production traces
+- Production-aware proposer briefings (real user inputs, error patterns, negative feedback)
+
+### Fixed
+
+- Init timeout scaling for large projects
+- Segfault tolerance in eval orchestrator
+- Auto-detect source files in monorepo setups
+
+---
+
+## [2.6.0] - 2026-03-31
+
+### Added
+
+- `trace_insights.py` — error clustering, token analysis, score cross-referencing, hypothesis generation
+- Test suite growth — add regression examples to dataset after iteration
+- Import production traces from existing LangSmith projects
+
+---
+
+## [2.2.0] - 2026-03-31
+
+### Added
+
+- Adaptive quality-diversity evolution (replaces fixed proposer strategies)
+- 5 parallel proposers per iteration: exploit, explore, crossover, prompt-focused, retrieval-focused
+- LLM-as-judge via subagent + synthetic test generation
+- Per-task champion selection (quality-diversity)
+
+### Fixed
+
+- Process LangSmith runs into readable format for proposers
+- TestGen uses concrete file paths instead of unresolved placeholders
+
+---
+
+## [1.0.0] - 2026-03-31
+
+### Added
+
+- Architect agent (`agents/evolver-architect.md`) — recommends topology changes on stagnation
+- Critic agent (`agents/evolver-critic.md`) — detects evaluator gaming
+- Auto-trigger architect after 3 stagnant iterations or any regression
+- Auto-trigger critic on suspicious score jumps
+- Orchestrator gathers LangSmith + Context7 data before dispatching agents
+- Color-coded agents: proposer (green), architect (blue), critic (red)
+- Parallel multi-candidate evolution: exploit, explore, crossover strategies
+- Optional integrations in installer: LangSmith CLI, Context7, LangChain Docs
+
+---
+
+## [0.5.1] - 2026-03-31
+
+### Added
+
+- Interactive installer with runtime selection (Claude Code, Cursor, Codex, Windsurf) and ASCII branding
+- Intelligent `/harness-evolve-init` with project auto-detection
+- Plugin namespace (`plugin:skill` → `evolver:skill`)
+- Compare, deploy, diagnose skills
+- LLM API key detection in environment during init
+
+### Fixed
+
+- Harness example reads API key from env only, not config
+
+---
+
+## [0.1.0] - 2026-03-31
+
+Initial release.
+
+### Added
+
+- Proposer agent definition
+- Init, evolve, status skills
+- Evaluation orchestrator with trace capture
+- State manager (`summary.json`, `STATE.md`, `PROPOSER_HISTORY.md`)
+- TraceLogger helper for structured trace recording
+- Classifier example with mock mode (10 tasks)
+- npm package and installer for Claude Code
+- LangSmith integration (env var tracing + langsmith-cli)
+- Context7 integration (stack detection + documentation-aware proposer)
