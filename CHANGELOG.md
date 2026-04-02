@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.1] - 2026-04-02
+
+### Fixed
+
+- **API key source tracking** — `ensure_langsmith_api_key()` now reports WHERE the key came from (environment, credentials file, .env) and gives clear error messages when a credentials-file key is invalid instead of a generic 403 traceback
+- **Write permission check** — setup validates write access (create+delete temporary dataset) before proceeding, catching 403 before the real dataset creation
+- **Retry on transient 403** — new `create_dataset_with_retry()` with 3 attempts and exponential backoff for transient LangSmith 403/500 errors (SDK doesn't retry 403)
+- **Baseline experiment saved on score failure** — `run_baseline()` returns experiment name even when score extraction fails (`'dict' object has no attribute 'evaluation_results'`), handling both object and dict SDK result formats
+- **best_experiment always set** — baseline_experiment is always populated when the experiment exists, so best_experiment and history are never null after a successful setup
+
+---
+
 ## [4.2.0] - 2026-04-02
 
 ### Added
