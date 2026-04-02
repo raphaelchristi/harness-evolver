@@ -70,7 +70,7 @@ Three layers, each in its own directory:
 
 1. **Skills** (`skills/*/SKILL.md`) — Claude Code slash commands that orchestrate the workflow. Each skill is a markdown file with frontmatter (`name`, `description`, `allowed-tools`). The four skills are `setup`, `evolve`, `status`, `deploy`.
 
-2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `evolver-proposer` (green, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red, active — detects + fixes gaming), `evolver-architect` (blue, ULTRAPLAN mode with opus), `evolver-consolidator` (cyan, cross-iteration memory), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
+2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `evolver-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red, active — detects + fixes gaming), `evolver-architect` (blue, ULTRAPLAN mode with opus), `evolver-consolidator` (cyan, cross-iteration memory), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
 3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `seed_from_traces.py` and `analyze_architecture.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, and `add_evaluator.py` are new v4.0 tools. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
@@ -85,8 +85,8 @@ Supporting infrastructure:
 
 `/evolver:evolve` → reads `.evolver.json`, then per iteration:
 1. `trace_insights.py` gathers failure data from best experiment
-2. `read_results.py` analyzes per-task failures for adaptive briefings
-3. Spawns 5 `evolver-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with strategies: exploit, explore, crossover, 2x failure-targeted
+2. `synthesize_strategy.py` produces `strategy.md` + `lenses.json` (dynamic investigation questions from failure clusters, architecture analysis, production data, evolution memory)
+3. Spawns N `evolver-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with dynamic investigation lenses — each proposer self-organizes its approach and may self-abstain
 4. `run_eval.py` evaluates each candidate (code-based evaluators only)
 5. Spawns 1 `evolver-evaluator` agent to score ALL candidates via langsmith-cli (LLM-as-judge)
 6. `read_results.py` compares experiments, picks winner + per-task champion

@@ -94,24 +94,16 @@ def consolidate(orientation, signals, existing_memory=None):
     """Phase 3: Merge signals into consolidated memory."""
     insights = []
 
-    # Strategy effectiveness
+    # Winning approach tracking (from comparison data)
     winning = signals.get("winning_strategies", [])
-    strategy_map = {"a": "exploit", "b": "explore", "c": "crossover", "d": "failure-targeted-1", "e": "failure-targeted-2"}
-    win_counts = {}
-    for w in winning:
-        exp = w.get("experiment", "")
-        if exp:
-            suffix = exp[-1]
-            name = strategy_map.get(suffix, suffix)
-            win_counts[name] = win_counts.get(name, 0) + 1
-
-    if win_counts:
-        best_strategy = max(win_counts, key=win_counts.get)
+    if winning:
+        win_count = len(winning)
+        best_score = max(w.get("score", 0) for w in winning)
         insights.append({
             "type": "strategy_effectiveness",
-            "insight": f"Most winning strategy: {best_strategy} ({win_counts[best_strategy]} wins)",
-            "recurrence": win_counts[best_strategy],
-            "data": win_counts,
+            "insight": f"Best candidate score: {best_score:.3f} across {win_count} iterations",
+            "recurrence": win_count,
+            "data": {"win_count": win_count, "best_score": best_score},
         })
 
     # Recurring failures (only promote if seen 2+ times)
