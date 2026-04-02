@@ -79,12 +79,24 @@ claude
 <td>Auto-discovers existing LangSmith production projects. Uses real user inputs for test generation and real error patterns for targeted optimization.</td>
 </tr>
 <tr>
-<td><b>Critic</b></td>
-<td>Auto-triggers when scores jump suspiciously fast. Checks if evaluators are being gamed.</td>
+<td><b>Active Critic</b></td>
+<td>Auto-triggers when scores jump suspiciously fast. Detects evaluator gaming AND implements stricter evaluators to close loopholes.</td>
 </tr>
 <tr>
-<td><b>Architect</b></td>
-<td>Auto-triggers on stagnation. Recommends topology changes (single-call to RAG, chain to ReAct, etc.).</td>
+<td><b>ULTRAPLAN Architect</b></td>
+<td>Auto-triggers on stagnation. Runs with Opus model for deep architectural analysis. Recommends topology changes (single-call to RAG, chain to ReAct, etc.).</td>
+</tr>
+<tr>
+<td><b>Evolution Memory</b></td>
+<td>Cross-iteration memory consolidation inspired by Claude Code's autoDream. Tracks which strategies win, which failures recur, and promotes insights after 2+ occurrences.</td>
+</tr>
+<tr>
+<td><b>Smart Gating</b></td>
+<td>Three-gate iteration triggers (score plateau, cost budget, convergence detection) replace blind N-iteration loops. State validation ensures config hasn't diverged from LangSmith.</td>
+</tr>
+<tr>
+<td><b>Self-Scheduling</b></td>
+<td>Background and cron-based evolution modes for unattended optimization. Schedule nightly runs and get notified on improvements.</td>
 </tr>
 </table>
 
@@ -107,9 +119,10 @@ claude
 |---|---|---|
 | **Proposer** | Modifies agent code in isolated worktrees based on trace analysis | Green |
 | **Evaluator** | LLM-as-judge — reads outputs via langsmith-cli, scores correctness | Yellow |
-| **Architect** | Recommends multi-agent topology changes | Blue |
-| **Critic** | Validates evaluator quality, detects gaming | Red |
-| **TestGen** | Generates test inputs for LangSmith datasets | Cyan |
+| **Architect** | ULTRAPLAN mode — deep topology analysis with Opus model | Blue |
+| **Critic** | Active — detects gaming AND implements stricter evaluators | Red |
+| **Consolidator** | Cross-iteration memory consolidation (autoDream-inspired) | Cyan |
+| **TestGen** | Generates test inputs + adversarial injection mode | Cyan |
 
 ---
 
@@ -118,19 +131,23 @@ claude
 ```
 /evolver:evolve
   |
-  +- 1.  Read state (.evolver.json + LangSmith experiments)
-  +- 1.5 Gather trace insights (cluster errors, tokens, latency)
-  +- 1.8 Analyze per-task failures (adaptive briefings)
-  +- 2.  Spawn 5 proposers in parallel (each in a git worktree)
-  +- 3.  Run target for each candidate (client.evaluate() -> code-based evaluators)
-  +- 3.5 Spawn evaluator agent (reads outputs via langsmith-cli, judges, writes scores)
-  +- 4.  Compare experiments -> select winner + per-task champion
-  +- 5.  Merge winning worktree into main branch
-  +- 5.5 Test suite growth (add regression examples to dataset)
-  +- 6.  Report results
-  +- 6.5 Auto-trigger Critic (if score jumped >0.3)
-  +- 7.  Auto-trigger Architect (if stagnation or regression)
-  +- 8.  Check stop conditions
+  +- 0.5  Validate state (skeptical memory — check .evolver.json vs LangSmith)
+  +- 1.   Read state (.evolver.json + LangSmith experiments)
+  +- 1.5  Gather trace insights (cluster errors, tokens, latency)
+  +- 1.8  Analyze per-task failures (adaptive briefings)
+  +- 1.8a Synthesize strategy document (coordinator synthesis)
+  +- 1.9  Prepare shared proposer context (KV cache-optimized prefix)
+  +- 2.   Spawn 5 proposers in parallel (per-strategy tool restrictions)
+  +- 3.   Run target for each candidate (code-based evaluators)
+  +- 3.5  Spawn evaluator agent (LLM-as-judge via langsmith-cli)
+  +- 4.   Compare experiments -> select winner + per-task champion
+  +- 5.   Merge winning worktree into main branch
+  +- 5.5  Regression tracking (auto-add guard examples to dataset)
+  +- 6.   Report results
+  +- 6.2  Consolidate evolution memory (orient/gather/consolidate/prune)
+  +- 6.5  Auto-trigger Active Critic (detect + fix evaluator gaming)
+  +- 7.   Auto-trigger ULTRAPLAN Architect (opus model, deep analysis)
+  +- 8.   Three-gate check (score plateau, cost budget, convergence)
 ```
 
 ---
@@ -148,19 +165,48 @@ Skills (markdown)
   └── /evolver:deploy   → tags and pushes
 
 Agents (markdown)
-  ├── Proposer (x5)     → modifies code in git worktrees
+  ├── Proposer (x5)     → modifies code in worktrees (per-strategy tool restrictions)
   ├── Evaluator          → LLM-as-judge via langsmith-cli
-  ├── Critic             → detects evaluator gaming
-  ├── Architect          → recommends topology changes
-  └── TestGen            → generates test inputs
+  ├── Critic             → detects gaming + implements stricter evaluators
+  ├── Architect          → ULTRAPLAN deep analysis (opus model)
+  ├── Consolidator       → cross-iteration memory (autoDream-inspired)
+  └── TestGen            → generates test inputs + adversarial injection
 
 Tools (Python + langsmith SDK)
-  ├── setup.py           → creates datasets, configures evaluators
-  ├── run_eval.py        → runs target against dataset
-  ├── read_results.py    → compares experiments
-  ├── trace_insights.py  → clusters errors from traces
-  └── seed_from_traces.py → imports production traces
+  ├── setup.py              → creates datasets, configures evaluators
+  ├── run_eval.py           → runs target against dataset
+  ├── read_results.py       → compares experiments
+  ├── trace_insights.py     → clusters errors from traces
+  ├── seed_from_traces.py   → imports production traces
+  ├── validate_state.py     → validates config vs LangSmith state
+  ├── iteration_gate.py     → three-gate iteration triggers
+  ├── regression_tracker.py → tracks regressions, adds guard examples
+  ├── consolidate.py        → cross-iteration memory consolidation
+  ├── synthesize_strategy.py→ generates strategy document for proposers
+  ├── add_evaluator.py      → programmatically adds evaluators
+  └── adversarial_inject.py → detects memorization, injects adversarial tests
 ```
+
+---
+
+## What's New in v4.0
+
+Twelve features inspired by Claude Code's architecture:
+
+| Feature | What it does |
+|---------|-------------|
+| **State Validation** | Skeptical memory pattern — validates `.evolver.json` vs LangSmith before each iteration |
+| **Three-Gate Triggers** | Score plateau, cost budget, and convergence detection replace blind iteration loops |
+| **Regression Tracking** | Auto-detects fixed examples and injects guard examples to prevent regressions |
+| **autoConsolidate** | Cross-iteration memory with recurrence counting (promote insights after 2+ occurrences) |
+| **KV Cache Optimization** | Shared prompt prefix across 5 proposers for ~80% token savings |
+| **Tool Restrictions** | Exploit/crossover get Edit-only; explore gets full Write access |
+| **Turn Budget** | 16-turn cap with stuck detection prevents runaway proposers |
+| **Coordinator Synthesis** | Generates targeted strategy.md instead of passing raw traces to proposers |
+| **Active Critic** | Detects evaluator gaming AND implements code-based evaluator fixes |
+| **ULTRAPLAN Architect** | Runs with Opus model for deep architectural analysis on stagnation |
+| **Self-Scheduling** | Background and cron-based modes for unattended overnight optimization |
+| **Anti-Distillation** | Detects memorization and injects adversarial examples to test generalization |
 
 ---
 
