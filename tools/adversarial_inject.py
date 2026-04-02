@@ -145,15 +145,20 @@ def generate_adversarial_inputs(client, dataset_name, num_inputs=5):
     return adversarial
 
 
-def inject_adversarial(client, dataset_id, adversarial_inputs):
+def inject_adversarial(client, dataset_id, adversarial_inputs, config=None):
     """Add adversarial examples to dataset."""
+    config = config or {}
     added = 0
     for adv in adversarial_inputs:
         try:
+            split = "train" if random.random() < 0.7 else "held_out"
+            metadata = dict(adv["metadata"])
+            metadata["added_at_iteration"] = config.get("iterations", 0)
             client.create_example(
                 inputs=adv["inputs"],
                 dataset_id=dataset_id,
-                metadata=adv["metadata"],
+                metadata=metadata,
+                split=split,
             )
             added += 1
         except Exception as e:
@@ -182,7 +187,7 @@ def main():
 
     injected = 0
     if args.inject and adversarial:
-        injected = inject_adversarial(client, config["dataset_id"], adversarial)
+        injected = inject_adversarial(client, config["dataset_id"], adversarial, config=config)
 
     result = {
         "memorization_suspects": len(suspicious),

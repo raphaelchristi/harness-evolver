@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import platform
+import random
 import sys
 
 
@@ -107,16 +108,23 @@ def find_transitions(prev_scores, curr_scores, fail_threshold=0.5, pass_threshol
     return transitions, regressions
 
 
-def add_regression_guards(client, dataset_id, transitions, max_guards=5):
+def add_regression_guards(client, dataset_id, transitions, max_guards=5, config=None):
     """Add regression guard examples to the dataset."""
+    config = config or {}
     added = 0
     for t in transitions[:max_guards]:
         try:
             input_data = json.loads(t["input"]) if t["input"].startswith("{") else {"input": t["input"]}
+            split = "train" if random.random() < 0.7 else "held_out"
             client.create_example(
                 inputs=input_data,
                 dataset_id=dataset_id,
-                metadata={"source": "regression_guard", "original_example_id": t["example_id"]},
+                metadata={
+                    "source": "regression_guard",
+                    "original_example_id": t["example_id"],
+                    "added_at_iteration": config.get("iterations", 0),
+                },
+                split=split,
             )
             added += 1
         except Exception as e:
@@ -148,7 +156,7 @@ def main():
 
     added = 0
     if args.add_guards and transitions:
-        added = add_regression_guards(client, config["dataset_id"], transitions, args.max_guards)
+        added = add_regression_guards(client, config["dataset_id"], transitions, args.max_guards, config=config)
 
     result = {
         "previous": args.previous_experiment,
