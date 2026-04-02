@@ -216,6 +216,45 @@ def generate_lenses(strategy, config, insights, results, memory, production, max
                 })
                 break  # at most 1 persistent failure lens
 
+    # Uniform failure lens — when there are failing examples but no cluster lenses were generated
+    # (e.g., all examples fail with same error like "python: not found")
+    failing_examples = strategy.get("failing_examples", [])
+    if failing_examples and not any(l["source"] == "failure_cluster" for l in lenses):
+        # Check if all errors are the same
+        errors = [ex.get("error", "") for ex in failing_examples if ex.get("error")]
+        common_error = errors[0] if errors and len(set(errors)) == 1 else None
+        if common_error:
+            lens_id += 1
+            lenses.append({
+                "id": lens_id,
+                "question": f"All {len(failing_examples)} examples fail with the same error: \"{common_error[:150]}\". Is this a code bug, configuration issue, or environment problem? What's the fix?",
+                "source": "uniform_failure",
+                "severity": "critical",
+                "context": {"error": common_error[:300], "count": len(failing_examples)},
+            })
+        else:
+            # Diverse errors but no clusters — create a general failure lens
+            lens_id += 1
+            lenses.append({
+                "id": lens_id,
+                "question": f"{len(failing_examples)} examples are failing with various errors. What are the root causes and what changes would fix the most failures?",
+                "source": "failure_analysis",
+                "severity": "high",
+                "context": {"count": len(failing_examples)},
+            })
+
+    # Input diversity lens — when we have failing examples, suggest investigating by input type
+    if failing_examples and len(failing_examples) >= 5 and len(lenses) < max_lenses - 1:
+        previews = [ex.get("input_preview", "")[:50] for ex in failing_examples[:5]]
+        lens_id += 1
+        lenses.append({
+            "id": lens_id,
+            "question": f"The agent fails on diverse inputs like: {'; '.join(previews[:3])}. Are there different failure modes for different input types?",
+            "source": "input_diversity",
+            "severity": "medium",
+            "context": {"sample_inputs": previews},
+        })
+
     # Open lens (always included)
     lens_id += 1
     lenses.append({
