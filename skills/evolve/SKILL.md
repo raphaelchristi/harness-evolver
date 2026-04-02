@@ -503,27 +503,40 @@ If the critic added new evaluators, log it:
 Critic added evaluators: {new_evaluators}. Next iteration will use stricter evaluation.
 ```
 
-### 7. Auto-trigger Architect
+### 7. Auto-trigger Architect (ULTRAPLAN Mode)
 
 If 3 consecutive iterations within 1% OR score dropped:
 
 ```
 Agent(
   subagent_type: "evolver-architect",
-  description: "Architect: recommend topology change",
+  model: "opus",
+  description: "Architect ULTRAPLAN: deep topology analysis",
   prompt: |
     <objective>
     The evolution loop has stagnated after {iterations} iterations.
-    Analyze the architecture and recommend changes.
+    Scores: {last_3_scores}.
+    Perform deep architectural analysis and recommend structural changes.
+    Use extended thinking — you have more compute budget than normal agents.
     </objective>
+
+    <tools_path>
+    TOOLS={tools_path}
+    EVOLVER_PY={evolver_py_path}
+    </tools_path>
 
     <files_to_read>
     - .evolver.json
     - trace_insights.json
-    - {entry point and related source files}
+    - evolution_memory.md (if exists)
+    - evolution_memory.json (if exists)
+    - strategy.md (if exists)
+    - {entry point and all related source files}
     </files_to_read>
 )
 ```
+
+After architect completes, include `architecture.md` in proposer `<files_to_read>` for next iteration.
 
 ### 8. Gate Check (Three-Gate Trigger)
 
