@@ -127,6 +127,122 @@ If critical issues found, ask user whether to continue or fix first via AskUserQ
 - "Fix and retry" — attempt auto-fix with `--fix` flag
 - "Abort" — stop the evolution loop
 
+### 0.6. Dataset Health Check
+
+Run the dataset health diagnostic:
+
+```bash
+$EVOLVER_PY $TOOLS/dataset_health.py \
+    --config .evolver.json \
+    --production-seed production_seed.json \
+    --output health_report.json 2>/dev/null
+```
+
+Read `health_report.json`. Print summary:
+```bash
+python3 -c "
+import json, os
+if os.path.exists('health_report.json'):
+    r = json.load(open('health_report.json'))
+    print(f'Dataset Health: {r[\"health_score\"]}/10 ({r[\"example_count\"]} examples)')
+    for issue in r.get('issues', []):
+        print(f'  [{issue[\"severity\"]}] {issue[\"message\"]}')
+"
+```
+
+### 0.7. Auto-Correct Dataset Issues
+
+If `health_report.json` has corrections, apply them automatically:
+
+```bash
+CORRECTIONS=$(python3 -c "
+import json, os
+if os.path.exists('health_report.json'):
+    r = json.load(open('health_report.json'))
+    for c in r.get('corrections', []):
+        print(c['action'])
+" 2>/dev/null)
+```
+
+For each correction:
+
+**If `create_splits`**: Run inline Python to assign 70/30 splits:
+```bash
+$EVOLVER_PY -c "
+from langsmith import Client
+import json, random
+client = Client()
+config = json.load(open('.evolver.json'))
+examples = list(client.list_examples(dataset_name=config['dataset']))
+random.shuffle(examples)
+sp = int(len(examples) * 0.7)
+for ex in examples[:sp]:
+    client.update_example(ex.id, split='train')
+for ex in examples[sp:]:
+    client.update_example(ex.id, split='held_out')
+print(f'Assigned splits: {sp} train, {len(examples)-sp} held_out')
+"
+```
+
+**If `generate_hard`**: Spawn testgen agent with hard-mode instruction:
+```
+Agent(
+  subagent_type: "evolver-testgen",
+  description: "Generate hard examples to rebalance dataset",
+  prompt: |
+    <objective>
+    The dataset is skewed toward easy examples. Generate {count} HARD examples
+    that the current agent is likely to fail on.
+    Focus on: edge cases, adversarial inputs, complex multi-step queries,
+    ambiguous questions, and inputs that require deep reasoning.
+    </objective>
+    <files_to_read>
+    - .evolver.json
+    - strategy.md (if exists)
+    - production_seed.json (if exists)
+    </files_to_read>
+)
+```
+
+**If `fill_coverage`**: Spawn testgen agent with coverage-fill instruction:
+```
+Agent(
+  subagent_type: "evolver-testgen",
+  description: "Generate examples for missing categories",
+  prompt: |
+    <objective>
+    The dataset is missing these production categories: {categories}.
+    Generate 5 examples per missing category.
+    Use production_seed.json for real-world patterns in these categories.
+    </objective>
+    <files_to_read>
+    - .evolver.json
+    - production_seed.json (if exists)
+    </files_to_read>
+)
+```
+
+**If `retire_dead`**: Move dead examples to retired split:
+```bash
+$EVOLVER_PY -c "
+from langsmith import Client
+import json
+client = Client()
+report = json.load(open('health_report.json'))
+dead_ids = report.get('dead_examples', {}).get('ids', [])
+config = json.load(open('.evolver.json'))
+examples = {str(e.id): e for e in client.list_examples(dataset_name=config['dataset'])}
+retired = 0
+for eid in dead_ids:
+    if eid in examples:
+        client.update_example(examples[eid].id, split='retired')
+        retired += 1
+print(f'Retired {retired} dead examples')
+"
+```
+
+After corrections, log what was done. Do NOT re-run health check (corrections may need an experiment cycle to show effect).
+
 For each iteration:
 
 ### 1. Get Next Version
@@ -170,6 +286,7 @@ if [ -n "$BEST" ]; then
     $EVOLVER_PY $TOOLS/read_results.py \
         --experiment "$BEST" \
         --config .evolver.json \
+        --split train \
         --output best_results.json 2>/dev/null
 fi
 ```
