@@ -32,13 +32,19 @@ import tempfile
 from datetime import datetime, timezone
 
 
+# Track where the API key was loaded from
+key_source = None
+
+
 def ensure_langsmith_api_key():
     """Load LANGSMITH_API_KEY from credentials file if not in env.
 
     The installer saves the key to the langsmith-cli credentials file,
     but the SDK only reads the env var. This bridges the gap.
     """
+    global key_source
     if os.environ.get("LANGSMITH_API_KEY"):
+        key_source = "environment"
         return True
 
     # Platform-specific credentials path (matches langsmith-cli)
@@ -56,6 +62,7 @@ def ensure_langsmith_api_key():
                         key = line.split("=", 1)[1].strip()
                         if key:
                             os.environ["LANGSMITH_API_KEY"] = key
+                            key_source = "credentials file"
                             return True
         except OSError:
             pass
@@ -70,6 +77,7 @@ def ensure_langsmith_api_key():
                         key = line.split("=", 1)[1].strip().strip("'\"")
                         if key:
                             os.environ["LANGSMITH_API_KEY"] = key
+                            key_source = ".env file"
                             return True
         except OSError:
             pass
@@ -123,6 +131,21 @@ def resolve_dataset_name(client, base_name):
     return f"{base_name}-eval-{ts}", 0
 
 
+def create_dataset_with_retry(client, dataset_name, description, max_retries=3):
+    """Create dataset with retry for transient errors."""
+    import time
+    for attempt in range(max_retries):
+        try:
+            return client.create_dataset(dataset_name=dataset_name, description=description)
+        except Exception as e:
+            if attempt + 1 < max_retries and ("403" in str(e) or "500" in str(e)):
+                wait = 2 ** attempt + 0.5
+                print(f"  Transient error creating dataset (attempt {attempt + 1}/{max_retries}), retrying in {wait:.0f}s...", file=sys.stderr)
+                time.sleep(wait)
+            else:
+                raise
+
+
 def create_dataset_from_file(client, dataset_name, file_path):
     """Create a LangSmith dataset from a JSON file of inputs."""
     with open(file_path) as f:
@@ -131,8 +154,8 @@ def create_dataset_from_file(client, dataset_name, file_path):
     if isinstance(data, dict):
         data = data.get("examples", data.get("tasks", [data]))
 
-    dataset = client.create_dataset(
-        dataset_name=dataset_name,
+    dataset = create_dataset_with_retry(
+        client, dataset_name,
         description=f"Evaluation dataset created from {os.path.basename(file_path)}",
     )
 
@@ -187,8 +210,8 @@ def create_dataset_from_langsmith(client, dataset_name, source_project, limit=10
     if not runs:
         return None, 0
 
-    dataset = client.create_dataset(
-        dataset_name=dataset_name,
+    dataset = create_dataset_with_retry(
+        client, dataset_name,
         description=f"Evaluation dataset from production traces ({source_project})",
     )
 
@@ -211,8 +234,8 @@ def create_dataset_from_langsmith(client, dataset_name, source_project, limit=10
 
 def create_empty_dataset(client, dataset_name):
     """Create an empty dataset (to be populated by testgen agent)."""
-    dataset = client.create_dataset(
-        dataset_name=dataset_name,
+    dataset = create_dataset_with_retry(
+        client, dataset_name,
         description="Evaluation dataset (pending test generation)",
     )
     return dataset
@@ -339,22 +362,30 @@ def run_baseline(client, dataset_name, entry_point, evaluators):
     )
 
     experiment_name = results.experiment_name
-    # Read aggregate metrics
+
+    # Try to extract scores — this can fail with different SDK versions
+    mean_score = 0.0
     try:
-        project = client.read_project(project_name=experiment_name, include_stats=True)
-        stats = project.model_dump() if hasattr(project, "model_dump") else {}
-    except Exception:
-        stats = {}
+        scores = []
+        for result in results:
+            # Handle both object and dict result formats
+            if hasattr(result, 'evaluation_results'):
+                eval_results = result.evaluation_results
+            elif isinstance(result, dict):
+                eval_results = result.get("evaluation_results", {})
+            else:
+                continue
 
-    # Calculate mean score from results
-    scores = []
-    for result in results:
-        if result.evaluation_results and result.evaluation_results.get("results"):
-            for er in result.evaluation_results["results"]:
-                if er.get("score") is not None:
-                    scores.append(er["score"])
+            results_list = eval_results.get("results", []) if isinstance(eval_results, dict) else []
+            for er in results_list:
+                score = er.get("score") if isinstance(er, dict) else getattr(er, "score", None)
+                if score is not None:
+                    scores.append(score)
 
-    mean_score = sum(scores) / len(scores) if scores else 0.0
+        mean_score = sum(scores) / len(scores) if scores else 0.0
+    except Exception as e:
+        print(f"  Warning: Could not extract baseline scores: {e}", file=sys.stderr)
+        print(f"  Baseline experiment '{experiment_name}' was created — scores will be computed during /evolve", file=sys.stderr)
 
     return experiment_name, mean_score
 
@@ -393,10 +424,28 @@ def main():
     # Verify connection
     try:
         client.list_datasets(limit=1)
-        print("LangSmith connection verified.")
+        print(f"LangSmith connection verified (key from {key_source}).")
     except Exception as e:
-        print(f"Failed to connect to LangSmith: {e}", file=sys.stderr)
-        print("Check LANGSMITH_API_KEY is set correctly.", file=sys.stderr)
+        if key_source in ("credentials file", ".env file"):
+            print(f"ERROR: API key loaded from {key_source} is invalid or lacks permissions.", file=sys.stderr)
+            print(f"The key was loaded from the {key_source} but LangSmith rejected it.", file=sys.stderr)
+            print(f"Fix: export LANGSMITH_API_KEY=lsv2_pt_... (with a valid key)", file=sys.stderr)
+        else:
+            print(f"Failed to connect to LangSmith: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Verify write permissions
+    try:
+        test_ds = client.create_dataset(
+            dataset_name="_evolver-permission-check",
+            description="Temporary — verifying write permissions",
+        )
+        client.delete_dataset(dataset_id=test_ds.id)
+        print("Write permissions verified.")
+    except Exception as e:
+        print(f"ERROR: API key can read but cannot write to LangSmith.", file=sys.stderr)
+        print(f"The key needs 'Editor' role or higher to create datasets.", file=sys.stderr)
+        print(f"Details: {e}", file=sys.stderr)
         sys.exit(1)
 
     project_name = f"evolver-{args.project_name}"
