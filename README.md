@@ -189,27 +189,6 @@ Tools (Python + langsmith SDK)
 
 ---
 
-## What's New in v4.0
-
-Twelve features inspired by Claude Code's architecture:
-
-| Feature | What it does |
-|---------|-------------|
-| **State Validation** | Skeptical memory pattern — validates `.evolver.json` vs LangSmith before each iteration |
-| **Three-Gate Triggers** | Score plateau, cost budget, and convergence detection replace blind iteration loops |
-| **Regression Tracking** | Auto-detects fixed examples and injects guard examples to prevent regressions |
-| **autoConsolidate** | Cross-iteration memory with recurrence counting (promote insights after 2+ occurrences) |
-| **KV Cache Optimization** | Shared prompt prefix across 5 proposers for ~80% token savings |
-| **Tool Restrictions** | Exploit/crossover get Edit-only; explore gets full Write access |
-| **Turn Budget** | 16-turn cap with stuck detection prevents runaway proposers |
-| **Coordinator Synthesis** | Generates targeted strategy.md instead of passing raw traces to proposers |
-| **Active Critic** | Detects evaluator gaming AND implements code-based evaluator fixes |
-| **ULTRAPLAN Architect** | Runs with Opus model for deep architectural analysis on stagnation |
-| **Self-Scheduling** | Background and cron-based modes for unattended overnight optimization |
-| **Anti-Distillation** | Detects memorization and injects adversarial examples to test generalization |
-
----
-
 ## Requirements
 
 - **LangSmith account** + `LANGSMITH_API_KEY`
