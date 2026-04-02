@@ -59,6 +59,17 @@ If no `--iterations` argument was provided, ask the user:
 }
 ```
 
+Write the target to `.evolver.json` for gate checks:
+
+```bash
+python3 -c "
+import json
+c = json.load(open('.evolver.json'))
+c['target_score'] = {target_score_float}  # parsed from user selection, or None for 'No limit'
+json.dump(c, open('.evolver.json', 'w'), indent=2)
+"
+```
+
 ## The Loop
 
 Read config:
@@ -391,11 +402,28 @@ Agent(
 )
 ```
 
-### 8. Check Stop Conditions
+### 8. Gate Check (Three-Gate Trigger)
 
+Before starting the next iteration, run the gate check:
+
+```bash
+GATE_RESULT=$($EVOLVER_PY $TOOLS/iteration_gate.py --config .evolver.json 2>/dev/null)
+PROCEED=$(echo "$GATE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('proceed', True))")
+```
+
+If `PROCEED` is `False`, check suggestions:
+
+```bash
+SUGGEST=$(echo "$GATE_RESULT" | python3 -c "import sys,json; s=json.load(sys.stdin).get('suggestions',[]); print(s[0] if s else '')")
+```
+
+- If `$SUGGEST` is `architect`: auto-trigger architect agent (Step 7)
+- If `$SUGGEST` is `continue_cautious`: ask user via AskUserQuestion whether to continue
+- Otherwise: stop the loop and report final results
+
+Legacy stop conditions still apply:
 - **Target**: `score >= target_score` → stop
-- **N reached**: done
-- **Stagnation post-architect**: 3 more iterations without improvement → stop
+- **N reached**: all requested iterations done → stop
 
 ## When Loop Ends — Final Report
 
