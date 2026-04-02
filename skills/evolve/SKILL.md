@@ -151,6 +151,21 @@ If `best_results.json` exists, parse it to find failing examples (score < 0.7). 
 Generate adaptive briefings for Candidates D and E (same logic as v2).
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
+### 1.8a. Synthesize Strategy
+
+Generate a targeted strategy document from all available analysis:
+
+```bash
+$EVOLVER_PY $TOOLS/synthesize_strategy.py \
+    --config .evolver.json \
+    --trace-insights trace_insights.json \
+    --best-results best_results.json \
+    --evolution-memory evolution_memory.json \
+    --output strategy.md 2>/dev/null
+```
+
+The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). This replaces raw data dumps with a synthesized, actionable document — proposers receive specific targets, not raw traces.
+
 ### 1.9. Prepare Shared Proposer Context
 
 Build the shared context that ALL proposers will receive as an identical prefix. This enables KV cache sharing — spawning 5 proposers costs barely more than 1.
