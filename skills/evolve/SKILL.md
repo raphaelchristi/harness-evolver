@@ -70,6 +70,57 @@ json.dump(c, open('.evolver.json', 'w'), indent=2)
 "
 ```
 
+If iterations > 3, offer execution mode:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Run mode?",
+      "header": "Execution",
+      "multiSelect": false,
+      "options": [
+        {"label": "Interactive", "description": "I'll watch. Show results after each iteration."},
+        {"label": "Background", "description": "Run all iterations in background. Notify on completion or significant improvement."},
+        {"label": "Scheduled", "description": "Schedule iterations to run on a cron (e.g., nightly optimization)."}
+      ]
+    }
+  ]
+}
+```
+
+**If "Background" selected:**
+Run the evolution loop as a background task. Use the `run_in_background` parameter on the main loop execution.
+
+**If "Scheduled" selected:**
+Ask for schedule via AskUserQuestion:
+```json
+{
+  "questions": [
+    {
+      "question": "Schedule?",
+      "header": "Cron Schedule",
+      "multiSelect": false,
+      "options": [
+        {"label": "Every 6 hours", "description": "Run 1 iteration every 6 hours"},
+        {"label": "Nightly (2 AM)", "description": "Run iterations overnight"},
+        {"label": "Custom", "description": "Enter a cron expression"}
+      ]
+    }
+  ]
+}
+```
+
+Then create a cron trigger:
+```
+Use CronCreate tool to schedule:
+  - command: "/evolver:evolve --iterations 1"
+  - schedule: {selected_cron}
+  - description: "Harness Evolver: scheduled optimization iteration"
+```
+
+Report: "Scheduled evolution iterations. Use `/evolver:status` to check progress. Cancel with CronDelete."
+
 ## The Loop
 
 Read config:
