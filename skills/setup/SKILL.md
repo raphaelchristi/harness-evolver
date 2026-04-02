@@ -61,7 +61,21 @@ Look for:
 
 To identify the **framework**, read the entry point file and its immediate imports. The proposer agents will use Context7 MCP for detailed documentation lookup — you don't need to detect every library, just identify the main framework (LangGraph, CrewAI, OpenAI Agents SDK, etc.) from the imports you see.
 
+**Detect virtual environments** — check for venvs in the project or parent directories:
+```bash
+# Check common venv locations
+for venv_dir in .venv venv ../.venv ../venv; do
+    if [ -f "$venv_dir/bin/python" ]; then
+        echo "VENV_FOUND: $venv_dir/bin/python"
+        break
+    fi
+done
+```
+
+If a venv is found, **use it for the entry point** instead of bare `python`. The agent's dependencies are likely installed there, not in the system Python. For example: `../.venv/bin/python agent.py {input}` instead of `python agent.py {input}`.
+
 Identify the **run command** — how to execute the agent. Use `{input}` as a placeholder for the JSON file path:
+- `.venv/bin/python main.py {input}` — if venv detected (preferred)
 - `python main.py {input}` — agent reads JSON file from positional arg
 - `python main.py --input {input}` — agent reads JSON file from `--input` flag
 - `python main.py --query {input_json}` — agent receives inline JSON string

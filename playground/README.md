@@ -15,13 +15,14 @@ All agents use **Gemini 2.0 Flash Lite** (cheapest available) via `langchain-goo
 ## Setup
 
 ```bash
-# Install dependencies (shared across all projects)
+# Create venv and install dependencies (shared across all projects)
 cd playground
-pip install -r requirements.txt
+uv venv .venv            # or: python3 -m venv .venv
+uv pip install -r requirements.txt   # or: .venv/bin/pip install -r requirements.txt
 
 # Set API keys
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with your GOOGLE_API_KEY and LANGSMITH_API_KEY
 
 # Source the env
 export $(grep -v '^#' .env | xargs)
@@ -35,6 +36,9 @@ cd playground/simple-qa   # or react-agent, rag-agent
 
 # Run the evolver
 /evolver:setup
+# IMPORTANT: When asked for entry point, use the venv Python:
+#   ../. venv/bin/python agent.py {input}
+# NOT: python agent.py {input}
 /evolver:evolve
 ```
 
@@ -43,7 +47,7 @@ cd playground/simple-qa   # or react-agent, rag-agent
 ```bash
 cd playground/simple-qa
 echo '{"input": "What is 2+2?"}' > /tmp/test.json
-python agent.py /tmp/test.json
+../.venv/bin/python agent.py /tmp/test.json
 ```
 
 ## Cost estimate per evolution iteration
