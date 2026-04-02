@@ -1,0 +1,22 @@
+[
+  {"input": "What is the capital of Australia?"},
+  {"input": "Calculate 17 * 23 + 45"},
+  {"input": "Explain the difference between TCP and UDP in exactly 2 sentences."},
+  {"input": "What year did the Berlin Wall fall?"},
+  {"input": "Write a Python function that checks if a string is a palindrome."},
+  {"input": "What is the chemical formula for table salt?"},
+  {"input": "List the 5 largest oceans by area."},
+  {"input": "Convert 72 degrees Fahrenheit to Celsius. Show the calculation."},
+  {"input": "Who wrote '1984' and when was it published?"},
+  {"input": "What is the time complexity of binary search and why?"},
+  {"input": "Name 3 countries that border France."},
+  {"input": "What is the difference between RAM and ROM?"},
+  {"input": "How many planets are in our solar system? Name them in order."},
+  {"input": "What does the acronym REST stand for in web development?"},
+  {"input": "Explain what a hash table is in one paragraph."},
+  {"input": "What is the square root of 144?"},
+  {"input": "What programming language is most used for iOS development?"},
+  {"input": "Name the three states of matter."},
+  {"input": "What is photosynthesis? Answer in under 50 words."},
+  {"input": "Who painted the Mona Lisa?"}
+]

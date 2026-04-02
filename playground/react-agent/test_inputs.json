@@ -1,0 +1,22 @@
+[
+  {"input": "What is 247 * 38?"},
+  {"input": "What is Python and when was it created?"},
+  {"input": "What's today's date?"},
+  {"input": "Calculate the area of a circle with radius 7. Use pi = 3.14159."},
+  {"input": "What is the difference between TCP and UDP?"},
+  {"input": "How much is 15% tip on a $86.50 bill?"},
+  {"input": "Tell me about the planet Mars."},
+  {"input": "What is 2^10?"},
+  {"input": "Explain what DNA is."},
+  {"input": "If I have 3 items at $12.99 each and a 8% tax, what's the total?"},
+  {"input": "What is HTTP used for?"},
+  {"input": "Calculate the hypotenuse of a right triangle with sides 3 and 4."},
+  {"input": "What is photosynthesis?"},
+  {"input": "What is the current date and time?"},
+  {"input": "How many seconds are in 3.5 hours?"},
+  {"input": "Tell me about Rust programming language."},
+  {"input": "What is 999 divided by 37?"},
+  {"input": "What is JavaScript?"},
+  {"input": "Convert 100 km/h to m/s. Show the calculation."},
+  {"input": "What's the factorial of 8?"}
+]

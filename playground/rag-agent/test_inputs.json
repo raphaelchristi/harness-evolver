@@ -1,0 +1,22 @@
+[
+  {"input": "What does NovaTech do?"},
+  {"input": "How much does the Professional plan cost?"},
+  {"input": "What languages does Atlas support?"},
+  {"input": "Who is the CEO of NovaTech?"},
+  {"input": "Is NovaTech GDPR compliant?"},
+  {"input": "What results did CloudBase achieve with Atlas?"},
+  {"input": "What is the API rate limit for Enterprise plans?"},
+  {"input": "What's on NovaTech's roadmap for Q3 2026?"},
+  {"input": "How does NovaTech compare to Zendesk AI?"},
+  {"input": "What database does NovaTech use?"},
+  {"input": "Does NovaTech offer a free trial? How long?"},
+  {"input": "What is Beacon and what does it do?"},
+  {"input": "How many tickets does Atlas process daily?"},
+  {"input": "What security certifications does NovaTech have?"},
+  {"input": "Who led NovaTech's Series B funding?"},
+  {"input": "What's the response time SLA for Enterprise critical issues?"},
+  {"input": "Can Atlas integrate with Salesforce?"},
+  {"input": "How much did CloudBase save annually?"},
+  {"input": "What authentication methods does the API support?"},
+  {"input": "When was NovaTech founded and where?"}
+]
