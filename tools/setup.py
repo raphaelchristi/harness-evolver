@@ -462,101 +462,129 @@ def main():
         else:
             print(f"Dataset: '{dataset_name}'")
 
-    # Create dataset
-    print(f"Creating dataset '{dataset_name}'...")
-    if args.dataset_from_file:
-        dataset, count = create_dataset_from_file(client, dataset_name, args.dataset_from_file)
-        print(f"  Created from file: {count} examples")
-    elif args.dataset_from_langsmith:
-        dataset, count = create_dataset_from_langsmith(
-            client, dataset_name, args.dataset_from_langsmith,
-        )
-        if not dataset:
-            print("  No traces found in source project. Creating empty dataset.")
+    # Create dataset — wrapped in try/except to clean up orphaned datasets on failure
+    dataset = None
+    try:
+        print(f"Creating dataset '{dataset_name}'...")
+        if args.dataset_from_file:
+            dataset, count = create_dataset_from_file(client, dataset_name, args.dataset_from_file)
+            print(f"  Created from file: {count} examples")
+        elif args.dataset_from_langsmith:
+            dataset, count = create_dataset_from_langsmith(
+                client, dataset_name, args.dataset_from_langsmith,
+            )
+            if not dataset:
+                print("  No traces found in source project. Creating empty dataset.")
+                dataset = create_empty_dataset(client, dataset_name)
+                count = 0
+            else:
+                print(f"  Created from LangSmith traces: {count} examples")
+        else:
             dataset = create_empty_dataset(client, dataset_name)
             count = 0
+            print("  Created empty dataset (testgen will populate)")
+
+        # Configure evaluators
+        print(f"Configuring evaluators for goals: {goals}")
+        evaluators, evaluator_keys = get_evaluators(goals, args.evaluators)
+        print(f"  Active evaluators: {evaluator_keys}")
+        llm_evaluators = [k for k in evaluator_keys if k in ("correctness", "conciseness")]
+        if llm_evaluators:
+            print(f"  LLM evaluators (agent-based): {llm_evaluators}")
+
+        # Run baseline (code-based evaluators only; LLM scoring done by evaluator agent)
+        baseline_experiment = None
+        baseline_score = 0.0
+        if not args.skip_baseline and count > 0:
+            print(f"Running baseline target ({count} examples)...")
+            try:
+                baseline_experiment, baseline_score = run_baseline(
+                    client, dataset_name, args.entry_point, evaluators,
+                )
+                print(f"  Baseline has_output score: {baseline_score:.3f}")
+                print(f"  Experiment: {baseline_experiment}")
+                if llm_evaluators:
+                    print(f"  Note: LLM scoring pending — evaluator agent will run during /evolver:evolve")
+            except Exception as e:
+                print(f"  Baseline evaluation failed: {e}", file=sys.stderr)
+                print("  Continuing with score 0.0")
+        elif count == 0:
+            print("Skipping baseline (no examples in dataset yet)")
         else:
-            print(f"  Created from LangSmith traces: {count} examples")
-    else:
-        dataset = create_empty_dataset(client, dataset_name)
-        count = 0
-        print("  Created empty dataset (testgen will populate)")
+            print("Skipping baseline (--skip-baseline)")
 
-    # Configure evaluators
-    print(f"Configuring evaluators for goals: {goals}")
-    evaluators, evaluator_keys = get_evaluators(goals, args.evaluators)
-    print(f"  Active evaluators: {evaluator_keys}")
-    llm_evaluators = [k for k in evaluator_keys if k in ("correctness", "conciseness")]
-    if llm_evaluators:
-        print(f"  LLM evaluators (agent-based): {llm_evaluators}")
+        # Resolve Python interpreter in entry_point to absolute path
+        # This ensures the entry point works in worktrees where venvs don't exist
+        entry_point = args.entry_point
+        parts = entry_point.split()
+        if parts:
+            python_path = parts[0]
+            # Resolve relative Python paths (e.g., ../.venv/bin/python, .venv/bin/python)
+            if "/" in python_path and not os.path.isabs(python_path):
+                abs_python = os.path.abspath(python_path)
+                if os.path.exists(abs_python):
+                    parts[0] = abs_python
+                    entry_point = " ".join(parts)
+                    print(f"  Resolved Python path: {abs_python}")
 
-    # Run baseline (code-based evaluators only; LLM scoring done by evaluator agent)
-    baseline_experiment = None
-    baseline_score = 0.0
-    if not args.skip_baseline and count > 0:
-        print(f"Running baseline target ({count} examples)...")
+        # Compute project_dir relative to git root (for worktree path resolution)
+        project_dir = ""
         try:
-            baseline_experiment, baseline_score = run_baseline(
-                client, dataset_name, args.entry_point, evaluators,
+            git_prefix = subprocess.run(
+                ["git", "rev-parse", "--show-prefix"],
+                capture_output=True, text=True, timeout=5,
             )
-            print(f"  Baseline has_output score: {baseline_score:.3f}")
-            print(f"  Experiment: {baseline_experiment}")
-            if llm_evaluators:
-                print(f"  Note: LLM scoring pending — evaluator agent will run during /evolver:evolve")
-        except Exception as e:
-            print(f"  Baseline evaluation failed: {e}", file=sys.stderr)
-            print("  Continuing with score 0.0")
-    elif count == 0:
-        print("Skipping baseline (no examples in dataset yet)")
-    else:
-        print("Skipping baseline (--skip-baseline)")
+            if git_prefix.returncode == 0:
+                project_dir = git_prefix.stdout.strip().rstrip("/")
+        except Exception:
+            pass
 
-    # Compute project_dir relative to git root (for worktree path resolution)
-    project_dir = ""
-    try:
-        git_prefix = subprocess.run(
-            ["git", "rev-parse", "--show-prefix"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if git_prefix.returncode == 0:
-            project_dir = git_prefix.stdout.strip().rstrip("/")
-    except Exception:
-        pass
+        # Write config
+        config = {
+            "version": "3.0.0",
+            "project": project_name,
+            "dataset": dataset_name,
+            "dataset_id": str(dataset.id) if dataset else None,
+            "project_dir": project_dir,
+            "entry_point": entry_point,
+            "evaluators": evaluator_keys,
+            "optimization_goals": goals,
+            "production_project": args.production_project,
+            "baseline_experiment": baseline_experiment,
+            "best_experiment": baseline_experiment,
+            "best_score": baseline_score,
+            "iterations": 0,
+            "framework": args.framework,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "history": [{
+                "version": "baseline",
+                "experiment": baseline_experiment,
+                "score": baseline_score,
+            }] if baseline_experiment else [],
+        }
 
-    # Write config
-    config = {
-        "version": "3.0.0",
-        "project": project_name,
-        "dataset": dataset_name,
-        "dataset_id": str(dataset.id) if dataset else None,
-        "project_dir": project_dir,
-        "entry_point": args.entry_point,
-        "evaluators": evaluator_keys,
-        "optimization_goals": goals,
-        "production_project": args.production_project,
-        "baseline_experiment": baseline_experiment,
-        "best_experiment": baseline_experiment,
-        "best_score": baseline_score,
-        "iterations": 0,
-        "framework": args.framework,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "history": [{
-            "version": "baseline",
-            "experiment": baseline_experiment,
-            "score": baseline_score,
-        }] if baseline_experiment else [],
-    }
+        with open(args.output, "w") as f:
+            json.dump(config, f, indent=2)
 
-    with open(args.output, "w") as f:
-        json.dump(config, f, indent=2)
+        print(f"\nSetup complete. Config saved to {args.output}")
+        print(f"  Project: {project_name}")
+        print(f"  Dataset: {dataset_name} ({count} examples)")
+        print(f"  Evaluators: {evaluator_keys}")
+        if baseline_experiment:
+            print(f"  Baseline: {baseline_score:.3f}")
+        print(f"\nNext: run /evolver:evolve")
 
-    print(f"\nSetup complete. Config saved to {args.output}")
-    print(f"  Project: {project_name}")
-    print(f"  Dataset: {dataset_name} ({count} examples)")
-    print(f"  Evaluators: {evaluator_keys}")
-    if baseline_experiment:
-        print(f"  Baseline: {baseline_score:.3f}")
-    print(f"\nNext: run /evolver:evolve")
+    except Exception as e:
+        # Cleanup orphaned dataset if setup fails after dataset creation
+        if dataset:
+            print(f"Setup failed: {e}", file=sys.stderr)
+            print(f"Cleaning up orphaned dataset '{dataset_name}'...", file=sys.stderr)
+            try:
+                client.delete_dataset(dataset_id=dataset.id)
+                print("  Dataset deleted.", file=sys.stderr)
+            except Exception:
+                print(f"  WARNING: Could not delete dataset. Clean up manually in LangSmith.", file=sys.stderr)
+        raise
 
 
 if __name__ == "__main__":

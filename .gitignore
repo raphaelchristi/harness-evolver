@@ -11,3 +11,4 @@ venv/
 *.log
 .harness-evolver/
 .claude/settings.local.json
+.evolver.json
