@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.0] - 2026-04-02
+
+### Added
+
+- **`tools/dataset_health.py`** — new diagnostic tool that checks dataset quality before evolution: size adequacy, difficulty distribution (easy/medium/hard), dead example detection, production coverage analysis, and split configuration. Outputs `health_report.json` with actionable corrections
+- **LangSmith native splits** — train (70%) / held_out (30%) splits assigned automatically by `setup.py`, `adversarial_inject.py`, and `regression_tracker.py`. Proposers only see train-split results, preventing overfit to held-out data
+- **Enriched metadata** — all created examples tagged with `source`, `added_at_iteration`, and `difficulty` (post-hoc from experiment scores)
+- **Auto-correction** — evolve skill Steps 0.6 + 0.7 run before the iteration loop: creates missing splits, generates hard examples via testgen, fills coverage gaps from production data, retires dead examples
+- **`--split` flag** on `read_results.py` — filter results by dataset split for proposer briefing
+- **Playground** — 3 sample agents (simple-qa, rag-agent, react-agent) for testing the evolver
+
+### Fixed
+
+- **N+1 feedback queries** — `read_results.py`, `trace_insights.py`, and `regression_tracker.py` now batch all feedback in a single API call instead of one call per run
+
+---
+
 ## [4.1.0] - 2026-04-02
 
 ### Added
