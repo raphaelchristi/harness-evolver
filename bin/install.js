@@ -481,20 +481,39 @@ async function configureOptionalIntegrations(rl, nonInteractive) {
   step(c.bold("Optional Integrations"));
   barEmpty();
 
-  // Context7 MCP — check settings files AND plugin marketplace
-  const hasContext7 = (() => {
+  // Helper: check if an MCP server is configured anywhere
+  function hasMcpServer(...names) {
     try {
-      // Check settings.json / .claude.json
       for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
-        if (fs.existsSync(p)) {
-          const s = JSON.parse(fs.readFileSync(p, "utf8"));
-          if (s.mcpServers && (s.mcpServers.context7 || s.mcpServers.Context7)) return true;
+        if (!fs.existsSync(p)) continue;
+        const s = JSON.parse(fs.readFileSync(p, "utf8"));
+        // Check top-level mcpServers
+        if (s.mcpServers) {
+          for (const name of names) {
+            if (s.mcpServers[name]) return true;
+          }
+        }
+        // Check per-project mcpServers (claude mcp add saves here)
+        if (s.projects) {
+          for (const proj of Object.values(s.projects)) {
+            if (proj && proj.mcpServers) {
+              for (const name of names) {
+                if (proj.mcpServers[name]) return true;
+              }
+            }
+          }
         }
       }
-      // Check plugin marketplace install
-      const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "context7", ".mcp.json");
-      if (fs.existsSync(pluginMcp)) return true;
     } catch {}
+    return false;
+  }
+
+  // Context7 MCP — check settings, per-project, AND plugin marketplace
+  const hasContext7 = (() => {
+    if (hasMcpServer("context7", "Context7")) return true;
+    // Check plugin marketplace install
+    const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "context7", ".mcp.json");
+    if (fs.existsSync(pluginMcp)) return true;
     return false;
   })();
 
@@ -517,19 +536,11 @@ async function configureOptionalIntegrations(rl, nonInteractive) {
 
   barEmpty();
 
-  // LangChain Docs MCP — check settings files AND plugin marketplace
+  // LangChain Docs MCP — check settings, per-project, AND plugin marketplace
   const hasLcDocs = (() => {
-    try {
-      for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
-        if (fs.existsSync(p)) {
-          const s = JSON.parse(fs.readFileSync(p, "utf8"));
-          if (s.mcpServers && (s.mcpServers["docs-langchain"] || s.mcpServers["LangChain Docs"])) return true;
-        }
-      }
-      // Check plugin marketplace install
-      const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "docs-langchain", ".mcp.json");
-      if (fs.existsSync(pluginMcp)) return true;
-    } catch {}
+    if (hasMcpServer("docs-langchain", "LangChain Docs")) return true;
+    const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "docs-langchain", ".mcp.json");
+    if (fs.existsSync(pluginMcp)) return true;
     return false;
   })();
 
