@@ -10,27 +10,23 @@ Show current evolution progress.
 
 ## What To Do
 
-Read `.evolver.json` and report:
+### Resolve Tool Path
 
 ```bash
-python3 -c "
-import json
-c = json.load(open('.evolver.json'))
-print(f'Project: {c[\"project\"]}')
-print(f'Dataset: {c[\"dataset\"]}')
-print(f'Framework: {c[\"framework\"]}')
-print(f'Evaluators: {c[\"evaluators\"]}')
-print(f'Iterations: {c[\"iterations\"]}')
-print(f'Best: {c[\"best_experiment\"]} (score: {c[\"best_score\"]:.3f})')
-print(f'Baseline: {c[\"history\"][0][\"score\"]:.3f}' if c['history'] else 'No baseline')
-print()
-print('History:')
-for h in c.get('history', []):
-    print(f'  {h[\"version\"]}: {h[\"score\"]:.3f}')
-"
+TOOLS="${EVOLVER_TOOLS:-$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")}"
+EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")}"
 ```
 
-Detect stagnation: if last 3 scores are within 1% of each other, warn.
-Detect regression: if current best is lower than a previous best, warn.
+### Display Chart
 
-Print LangSmith URL for the best experiment if available.
+```bash
+$EVOLVER_PY $TOOLS/evolution_chart.py --config .evolver.json
+```
+
+### Additional Analysis
+
+After displaying the chart:
+
+- Detect stagnation: if last 3 scores within 1% of each other, warn and suggest `/evolver:evolve` with architect trigger.
+- Detect regression: if current best is lower than a previous best, warn.
+- Print LangSmith experiment URL for the best experiment if available.
