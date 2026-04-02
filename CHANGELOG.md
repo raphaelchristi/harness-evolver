@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.0.3] - 2026-04-02
+
+### Added
+
+- **`/dev:release` skill** — interactive release workflow: changelog generation, version bump in both `package.json` and `plugin.json`, git tag, GitHub release, npm publish — all in one command
+- **`/dev:validate` skill** — plugin integrity checks: skill/agent frontmatter validation, cross-reference verification, Python tool syntax, version sync, hook executability
+- **`/dev:dry-run` skill** — smoke-test the evolve pipeline: offline mode (syntax + argparse checks) or online mode (full setup → eval → read → trace pipeline with mock agent)
+
+---
+
 ## [4.0.2] - 2026-04-02
 
 ### Fixed
