@@ -87,6 +87,19 @@ def check_dependencies():
     return missing
 
 
+def assign_splits(client, dataset_id, train_pct=70):
+    """Assign train/held_out splits to all examples in a dataset."""
+    import random
+    examples = list(client.list_examples(dataset_id=dataset_id))
+    random.shuffle(examples)
+    split_point = int(len(examples) * train_pct / 100)
+    for ex in examples[:split_point]:
+        client.update_example(ex.id, split="train")
+    for ex in examples[split_point:]:
+        client.update_example(ex.id, split="held_out")
+    return len(examples[:split_point]), len(examples[split_point:])
+
+
 def resolve_dataset_name(client, base_name):
     """Find an available dataset name by auto-incrementing the version suffix.
 
@@ -148,10 +161,17 @@ def create_dataset_from_file(client, dataset_name, file_path):
             if "metadata" in item:
                 ex["metadata"] = item["metadata"]
 
+            if "metadata" not in ex:
+                ex["metadata"] = {}
+            ex["metadata"].setdefault("source", "file")
+            ex["metadata"].setdefault("added_at_iteration", 0)
+
             examples.append(ex)
 
     if examples:
         client.create_examples(dataset_id=dataset.id, examples=examples)
+        train_n, held_n = assign_splits(client, dataset.id)
+        print(f"Assigned splits: {train_n} train, {held_n} held_out", file=sys.stderr)
 
     return dataset, len(examples)
 
@@ -178,10 +198,13 @@ def create_dataset_from_langsmith(client, dataset_name, source_project, limit=10
             ex = {"inputs": run.inputs}
             if run.outputs:
                 ex["outputs"] = run.outputs
+            ex["metadata"] = {"source": "production", "added_at_iteration": 0}
             examples.append(ex)
 
     if examples:
         client.create_examples(dataset_id=dataset.id, examples=examples)
+        train_n, held_n = assign_splits(client, dataset.id)
+        print(f"Assigned splits: {train_n} train, {held_n} held_out", file=sys.stderr)
 
     return dataset, len(examples)
 
