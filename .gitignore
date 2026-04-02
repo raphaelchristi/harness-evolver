@@ -10,4 +10,4 @@ node_modules/
 venv/
 *.log
 .harness-evolver/
-.claude/
+.claude/settings.local.json
