@@ -6,6 +6,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.3.0] - 2026-04-02
+
+Refactor inspired by ["Harnessing Claude's Intelligence"](https://claude.com/blog/harnessing-claudes-intelligence) (Lance Martin, Anthropic). Core principle: "What can I stop doing?"
+
+### Added
+
+- **`/evolver:health` skill** — dataset quality check + auto-correct, extracted from evolve. Independently invocable.
+
+### Changed
+
+- **Evolve skill** — 734 → 542 lines (-26%). Agent prompts deduped (reference agent .md instead of inline), `synthesize_strategy.py`/`iteration_gate.py`/`consolidate.py` replaced with direct Claude analysis, health check delegated to `/evolver:health`
+- **Proposer agent** — 158 → 119 lines (-25%). Turn budget as guidance (10-15 turns) not mandate (max 16). Context7 recommended not mandatory. Workflow simplified.
+- **Setup skill** — 3 interactive questions → 1 smart-default confirmation on happy path ("Looks good, proceed" uses defaults)
+- **`seed_from_traces.py`** — 482 → 401 lines (-17%). SDK-only, removed urllib dual implementation
+
+### Removed
+
+- **`synthesize_strategy.py` from evolve loop** — Claude generates strategy.md + lenses.json directly from analysis data
+- **`iteration_gate.py` from evolve loop** — Claude assesses gate conditions directly
+- **`consolidate.py` from evolve loop** — consolidator agent handles everything (tool was redundant scaffolding)
+
+---
+
 ## [4.2.9] - 2026-04-02
 
 ### Fixed
