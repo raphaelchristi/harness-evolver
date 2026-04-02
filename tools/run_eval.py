@@ -166,10 +166,13 @@ def main():
     parser.add_argument("--worktree-path", required=True, help="Path to the candidate's worktree")
     parser.add_argument("--experiment-prefix", required=True, help="Experiment name prefix (e.g. v001a)")
     parser.add_argument("--timeout", type=int, default=120, help="Per-task timeout in seconds")
+    parser.add_argument("--concurrency", type=int, default=None, help="Max concurrent evaluations (default: from config or 1)")
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = json.load(f)
+
+    concurrency = args.concurrency or config.get("eval_concurrency", 1)
 
     os.environ["EVAL_TASK_TIMEOUT"] = str(args.timeout)
     ensure_langsmith_api_key()
@@ -188,6 +191,8 @@ def main():
     print(f"  Dataset: {config['dataset']}")
     print(f"  Worktree: {args.worktree_path}")
     print(f"  Code evaluators: {['has_output'] + code_evaluators}")
+    if concurrency > 1:
+        print(f"  Concurrency: {concurrency} parallel evaluations")
     if llm_evaluators:
         print(f"  Pending LLM evaluators (agent): {llm_evaluators}")
 
@@ -197,7 +202,7 @@ def main():
             data=config["dataset"],
             evaluators=evaluators,
             experiment_prefix=args.experiment_prefix,
-            max_concurrency=1,
+            max_concurrency=concurrency,
         )
 
         experiment_name = results.experiment_name
