@@ -481,15 +481,19 @@ async function configureOptionalIntegrations(rl, nonInteractive) {
   step(c.bold("Optional Integrations"));
   barEmpty();
 
-  // Context7 MCP
+  // Context7 MCP — check settings files AND plugin marketplace
   const hasContext7 = (() => {
     try {
+      // Check settings.json / .claude.json
       for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
         if (fs.existsSync(p)) {
           const s = JSON.parse(fs.readFileSync(p, "utf8"));
           if (s.mcpServers && (s.mcpServers.context7 || s.mcpServers.Context7)) return true;
         }
       }
+      // Check plugin marketplace install
+      const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "context7", ".mcp.json");
+      if (fs.existsSync(pluginMcp)) return true;
     } catch {}
     return false;
   })();
@@ -513,7 +517,7 @@ async function configureOptionalIntegrations(rl, nonInteractive) {
 
   barEmpty();
 
-  // LangChain Docs MCP
+  // LangChain Docs MCP — check settings files AND plugin marketplace
   const hasLcDocs = (() => {
     try {
       for (const p of [path.join(HOME, ".claude", "settings.json"), path.join(HOME, ".claude.json")]) {
@@ -522,6 +526,9 @@ async function configureOptionalIntegrations(rl, nonInteractive) {
           if (s.mcpServers && (s.mcpServers["docs-langchain"] || s.mcpServers["LangChain Docs"])) return true;
         }
       }
+      // Check plugin marketplace install
+      const pluginMcp = path.join(HOME, ".claude", "plugins", "marketplaces", "claude-plugins-official", "external_plugins", "docs-langchain", ".mcp.json");
+      if (fs.existsSync(pluginMcp)) return true;
     } catch {}
     return false;
   })();
