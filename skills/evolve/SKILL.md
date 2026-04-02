@@ -156,44 +156,36 @@ For each iteration:
 python3 -c "import json; c=json.load(open('.evolver.json')); print(f'v{c[\"iterations\"]+1:03d}')"
 ```
 
-### 1.5. Gather Trace Insights
+### 1.5. Gather Analysis Data (Parallel)
 
-Read the best experiment from config. If null (no baseline was run), skip trace insights for this iteration — proposers will work blind on the first pass:
+Read the best experiment from config. If null (no baseline was run), skip data gathering — proposers will work from code analysis only:
 
 ```bash
 BEST=$(python3 -c "import json; b=json.load(open('.evolver.json')).get('best_experiment'); print(b if b else '')")
+PROD=$(python3 -c "import json; c=json.load(open('.evolver.json')); print(c.get('production_project',''))")
+
 if [ -n "$BEST" ]; then
+    # Run all data gathering in parallel — these are independent API calls
     $EVOLVER_PY $TOOLS/trace_insights.py \
         --from-experiment "$BEST" \
-        --output trace_insights.json 2>/dev/null
+        --output trace_insights.json 2>/dev/null &
+
+    $EVOLVER_PY $TOOLS/read_results.py \
+        --experiment "$BEST" \
+        --config .evolver.json \
+        --split train \
+        --output best_results.json 2>/dev/null &
 fi
-```
 
-If a production project is configured, also gather production insights:
-
-```bash
-PROD=$(python3 -c "import json; c=json.load(open('.evolver.json')); print(c.get('production_project',''))")
 if [ -n "$PROD" ] && [ ! -f "production_seed.json" ]; then
     $EVOLVER_PY $TOOLS/seed_from_traces.py \
         --project "$PROD" \
         --output-md production_seed.md \
         --output-json production_seed.json \
-        --limit 100 2>/dev/null
+        --limit 100 2>/dev/null &
 fi
-```
 
-### 1.8. Analyze Per-Task Failures
-
-If `$BEST` is set (not the first iteration without baseline), read results and cluster failures:
-
-```bash
-if [ -n "$BEST" ]; then
-    $EVOLVER_PY $TOOLS/read_results.py \
-        --experiment "$BEST" \
-        --config .evolver.json \
-        --split train \
-        --output best_results.json 2>/dev/null
-fi
+wait  # Wait for all data gathering to complete
 ```
 
 If `best_results.json` exists, parse it to find failing examples (score < 0.7). Group by metadata or error pattern.
@@ -338,20 +330,23 @@ done
 
 Only run evaluation (Step 3) for proposers that committed changes (not abstained, not stuck).
 
-### 3. Run Target for Each Candidate
+### 3. Run Target for Each Candidate (Parallel)
 
-For each worktree that has changes (proposer committed something):
+Run evaluations for ALL candidates simultaneously — they're independent:
 
 ```bash
-# If PROJECT_DIR is set, resolve paths into the worktree subdirectory
-WORKTREE_PROJECT="{worktree_path}"
-[ -n "$PROJECT_DIR" ] && WORKTREE_PROJECT="{worktree_path}/{PROJECT_DIR}"
-
-$EVOLVER_PY $TOOLS/run_eval.py \
-    --config "$WORKTREE_PROJECT/.evolver.json" \
-    --worktree-path "$WORKTREE_PROJECT" \
-    --experiment-prefix v{NNN}-{lens_id} \
-    --timeout 120
+# Launch all evaluations in parallel
+for WORKTREE in {worktree_paths_with_commits}; do
+    WORKTREE_PROJECT="$WORKTREE"
+    [ -n "$PROJECT_DIR" ] && WORKTREE_PROJECT="$WORKTREE/$PROJECT_DIR"
+    
+    $EVOLVER_PY $TOOLS/run_eval.py \
+        --config "$WORKTREE_PROJECT/.evolver.json" \
+        --worktree-path "$WORKTREE_PROJECT" \
+        --experiment-prefix v{NNN}-{lens_id} \
+        --timeout 120 &
+done
+wait  # Wait for all evaluations to complete
 ```
 
 Each candidate becomes a separate LangSmith experiment. This step runs the agent and applies code-based evaluators (has_output, token_efficiency) only.
