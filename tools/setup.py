@@ -511,12 +511,25 @@ def main():
     else:
         print("Skipping baseline (--skip-baseline)")
 
+    # Compute project_dir relative to git root (for worktree path resolution)
+    project_dir = ""
+    try:
+        git_prefix = subprocess.run(
+            ["git", "rev-parse", "--show-prefix"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if git_prefix.returncode == 0:
+            project_dir = git_prefix.stdout.strip().rstrip("/")
+    except Exception:
+        pass
+
     # Write config
     config = {
         "version": "3.0.0",
         "project": project_name,
         "dataset": dataset_name,
         "dataset_id": str(dataset.id) if dataset else None,
+        "project_dir": project_dir,
         "entry_point": args.entry_point,
         "evaluators": evaluator_keys,
         "optimization_goals": goals,
