@@ -87,8 +87,7 @@ If iterations > 3, offer execution mode:
       "multiSelect": false,
       "options": [
         {"label": "Interactive", "description": "I'll watch. Show results after each iteration."},
-        {"label": "Background", "description": "Run all iterations in background. Notify on completion or significant improvement."},
-        {"label": "Scheduled", "description": "Schedule iterations to run on a cron (e.g., nightly optimization)."}
+        {"label": "Background", "description": "Run all iterations in background. Notify on completion or significant improvement."}
       ]
     }
   ]
@@ -97,35 +96,6 @@ If iterations > 3, offer execution mode:
 
 **If "Background" selected:**
 Run the evolution loop as a background task. Use the `run_in_background` parameter on the main loop execution.
-
-**If "Scheduled" selected:**
-Ask for schedule via AskUserQuestion:
-```json
-{
-  "questions": [
-    {
-      "question": "Schedule?",
-      "header": "Cron Schedule",
-      "multiSelect": false,
-      "options": [
-        {"label": "Every 6 hours", "description": "Run 1 iteration every 6 hours"},
-        {"label": "Nightly (2 AM)", "description": "Run iterations overnight"},
-        {"label": "Custom", "description": "Enter a cron expression"}
-      ]
-    }
-  ]
-}
-```
-
-Then create a cron trigger:
-```
-Use CronCreate tool to schedule:
-  - command: "/evolver:evolve --iterations 1 --no-interactive"
-  - schedule: {selected_cron}
-  - description: "Harness Evolver: scheduled optimization iteration"
-```
-
-Report: "Scheduled evolution iterations. Use `/evolver:status` to check progress. Cancel with CronDelete."
 
 ## The Loop
 
@@ -218,10 +188,11 @@ $EVOLVER_PY $TOOLS/synthesize_strategy.py \
     --trace-insights trace_insights.json \
     --best-results best_results.json \
     --evolution-memory evolution_memory.json \
+    --production-seed production_seed.json \
     --output strategy.md 2>/dev/null
 ```
 
-The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). This replaces raw data dumps with a synthesized, actionable document — proposers receive specific targets, not raw traces.
+The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). It synthesizes trace analysis, evolution memory, and production data into an actionable document. Proposers also receive `production_seed.json` directly for access to raw production traces.
 
 ### 1.9. Prepare Shared Proposer Context
 
@@ -233,6 +204,7 @@ SHARED_FILES_BLOCK="<files_to_read>
 - .evolver.json
 - strategy.md (if exists)
 - evolution_memory.md (if exists)
+- production_seed.json (if exists)
 - {entry_point_file}
 </files_to_read>"
 
@@ -309,33 +281,6 @@ APPROACH: {failure_targeted_or_creative}
 ```
 APPROACH: {failure_targeted_or_efficiency}
 {adaptive_briefing_e}
-```
-
-**Tool restrictions per strategy:**
-
-| Strategy | Allowed Tools | Rationale |
-|----------|--------------|-----------|
-| Exploit (A) | Read, Edit, Bash, Glob, Grep | No Write — can't create new files, only edit existing |
-| Explore (B) | Read, Write, Edit, Bash, Glob, Grep | Full access — may need new files for new architecture |
-| Crossover (C) | Read, Edit, Bash, Glob, Grep | No Write — combines existing patterns, doesn't create |
-| Failure-targeted (D, E) | Read, Edit, Bash, Glob, Grep | No Write — focused fixes on specific files |
-
-Apply via the `tools` parameter in each Agent() call. Example for exploit:
-```
-Agent(
-  subagent_type: "evolver-proposer",
-  tools: ["Read", "Edit", "Bash", "Glob", "Grep"],
-  ...
-)
-```
-
-For explore:
-```
-Agent(
-  subagent_type: "evolver-proposer",
-  tools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
-  ...
-)
 ```
 
 Wait for all 5 to complete.

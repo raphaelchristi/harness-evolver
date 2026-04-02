@@ -16,12 +16,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 - **CLAUDE.md** — updated "Five agent types" to Six, added evolver-consolidator
 - **Orphaned consolidator agent** — evolve skill now spawns `evolver-consolidator` via `Agent()` instead of calling `consolidate.py` directly
 - **Cron scheduling** — added `--no-interactive` flag so scheduled runs skip interactive prompts
+- **Production data regression** — `synthesize_strategy.py` now reads `production_seed.json` (was completely ignored, losing real user inputs and error patterns). Also restored `production_seed.json` to proposer `<files_to_read>`
+- **Self-scheduling removed** — `CronCreate` is session-scoped (dies when Claude exits) with 3-day expiry. Removed fake "nightly optimization" option. Kept background mode which actually works
+- **Per-proposer tool restrictions removed** — `Agent()` tool doesn't accept a `tools` parameter. The feature was instructing Claude to pass a non-existent parameter. Removed entirely rather than provide false sense of enforcement
 
 ---
 
 ## [4.0.0] - 2026-04-02
 
-Twelve features inspired by Claude Code's leaked architecture, making the evolution loop smarter, cheaper, and more autonomous.
+New features making the evolution loop smarter and more autonomous.
 
 ### Added
 
@@ -29,22 +32,21 @@ Twelve features inspired by Claude Code's leaked architecture, making the evolut
 - **Three-Gate Iteration Triggers** (`tools/iteration_gate.py`) — score plateau detection, cost budget tracking, and statistical convergence analysis replace blind N-iteration loops. Auto-suggests architect on stagnation.
 - **Regression Tracking** (`tools/regression_tracker.py`) — compares per-example scores between iterations, detects failing-to-passing transitions, and auto-injects regression guard examples into the LangSmith dataset.
 - **autoConsolidate** (`tools/consolidate.py`, `agents/evolver-consolidator.md`) — cross-iteration memory consolidation inspired by Claude Code's autoDream. Four phases: orient, gather, consolidate, prune. Promotes insights to proposer briefings after 2+ recurrences.
-- **KV Cache-Optimized Proposer Spawning** — restructured proposer prompts with a shared byte-identical prefix (objective + files + context) and strategy-only suffix for ~80% token savings across 5 parallel proposers.
-- **Per-Proposer Tool Restrictions** — exploit/crossover/failure-targeted proposers get Edit-only (no Write); explore gets full access. Prevents conservative strategies from creating unnecessary files.
-- **Proposer Turn Budget** — 16-turn cap with phased allocation (orient/diagnose/implement/test/commit) and stuck proposer detection. Prevents runaway agents consuming tokens in loops.
-- **Coordinator Synthesis Phase** (`tools/synthesize_strategy.py`) — generates a targeted `strategy.md` from trace insights, results, and evolution memory. Proposers receive synthesized specs instead of raw data dumps.
-- **Active Critic** (`tools/add_evaluator.py`) — upgraded from passive reporter to active fixer. Detects evaluator gaming AND implements stricter code-based evaluators (`answer_not_question`, `no_hallucination_markers`, `min_length`, `no_repetition`).
+- **Proposer Prompt Optimization** — restructured proposer prompts with a shared prefix (objective + files + context) and strategy-only suffix, enabling prompt cache reuse across 5 parallel proposers.
+- **Proposer Turn Budget** — 16-turn cap with phased allocation (orient/diagnose/implement/test/commit) and stuck proposer detection via git log. Prevents runaway agents.
+- **Coordinator Synthesis Phase** (`tools/synthesize_strategy.py`) — generates a targeted `strategy.md` from trace insights, results, evolution memory, and production traces. Proposers receive synthesized specs alongside raw data.
+- **Active Critic** (`tools/add_evaluator.py`) — upgraded from passive reporter to active fixer. Detects evaluator gaming AND implements stricter code-based evaluators (`answer_not_question`, `no_fabricated_references`, `min_length`, `no_repetition`, `no_empty_filler`).
 - **ULTRAPLAN Architect** — runs with `model: opus` for deep architectural analysis. Full codebase scan, AST-based topology classification, performance pattern analysis from evolution memory, and detailed migration plans.
-- **Self-Scheduling Evolution** — background and cron-based execution modes. Schedule nightly optimization runs with `CronCreate` and check progress via `/evolver:status`.
+- **Background Mode** — run all iterations in background while continuing to work. Get notified on completion or significant improvements.
 - **Anti-Distillation** (`tools/adversarial_inject.py`) — detects potential memorization by comparing agent outputs to reference outputs, then injects adversarial rephrased examples to test generalization.
 
 ### Changed
 
 - `agents/evolver-critic.md` — upgraded to Active Critic v3.1 with three phases (Detect, Act, Verify)
 - `agents/evolver-architect.md` — upgraded to ULTRAPLAN Mode v3.1 with `model: opus` in frontmatter
-- `agents/evolver-proposer.md` — added Turn Budget section and Tool Restrictions documentation
+- `agents/evolver-proposer.md` — added Turn Budget section
 - `agents/evolver-testgen.md` — added Phase 3.5 for adversarial injection mode
-- `skills/evolve/SKILL.md` — expanded with validation, gate checks, synthesis, consolidation, scheduling, and restructured proposer spawning (+378 lines)
+- `skills/evolve/SKILL.md` — expanded with validation, gate checks, synthesis, consolidation, background mode, and restructured proposer spawning
 
 ---
 

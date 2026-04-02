@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Synthesize evolution strategy document from trace analysis.
 
-Reads trace_insights.json, best_results.json, and evolution_memory.json
-to produce a targeted strategy document with specific file paths,
-line numbers, and concrete change recommendations for proposers.
+Reads trace_insights.json, best_results.json, evolution_memory.json,
+and production_seed.json to produce a targeted strategy document with
+specific file paths and concrete change recommendations for proposers.
 
 Usage:
     python3 synthesize_strategy.py \
@@ -11,6 +11,7 @@ Usage:
         --trace-insights trace_insights.json \
         --best-results best_results.json \
         --evolution-memory evolution_memory.json \
+        --production-seed production_seed.json \
         --output strategy.md
 """
 
@@ -42,7 +43,7 @@ def identify_target_files(config):
     return target_files
 
 
-def synthesize(config, insights, results, memory):
+def synthesize(config, insights, results, memory, production=None):
     """Produce strategy recommendations."""
     strategy = {
         "primary_targets": [],
@@ -94,6 +95,28 @@ def synthesize(config, insights, results, memory):
             for eid, data in failing[:10]
         ]
 
+    # Production trace data
+    if production:
+        prod_data = {}
+        stats = production.get("stats", {})
+        if stats:
+            prod_data["total_traces"] = stats.get("total_traces", 0)
+            prod_data["error_rate"] = stats.get("error_rate", 0)
+        categories = production.get("categories", [])
+        if categories:
+            prod_data["traffic_distribution"] = categories[:10]
+        neg = production.get("negative_feedback_inputs", [])
+        if neg:
+            prod_data["negative_feedback"] = neg[:5]
+        errors = production.get("error_patterns", production.get("errors", []))
+        if errors:
+            prod_data["production_errors"] = errors[:5] if isinstance(errors, list) else []
+        slow = production.get("slow_queries", [])
+        if slow:
+            prod_data["slow_queries"] = slow[:5]
+        if prod_data:
+            strategy["production"] = prod_data
+
     return strategy
 
 
@@ -142,6 +165,27 @@ def format_strategy_md(strategy, config):
             lines.append(f"- `{ex['example_id']}` (score: {score:.2f}): {preview}{error}")
         lines.append("")
 
+    prod = strategy.get("production", {})
+    if prod:
+        lines.append("## Production Insights")
+        if prod.get("total_traces"):
+            lines.append(f"- **Traces**: {prod['total_traces']} total, {prod.get('error_rate', 0):.1%} error rate")
+        if prod.get("traffic_distribution"):
+            lines.append(f"- **Traffic**: {', '.join(str(c) for c in prod['traffic_distribution'][:5])}")
+        if prod.get("negative_feedback"):
+            lines.append("- **Negative feedback inputs**:")
+            for nf in prod["negative_feedback"]:
+                lines.append(f"  - {str(nf)[:120]}")
+        if prod.get("production_errors"):
+            lines.append("- **Production errors**:")
+            for pe in prod["production_errors"]:
+                lines.append(f"  - {str(pe)[:120]}")
+        if prod.get("slow_queries"):
+            lines.append("- **Slow queries**:")
+            for sq in prod["slow_queries"]:
+                lines.append(f"  - {str(sq)[:120]}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -151,6 +195,7 @@ def main():
     parser.add_argument("--trace-insights", default="trace_insights.json")
     parser.add_argument("--best-results", default="best_results.json")
     parser.add_argument("--evolution-memory", default="evolution_memory.json")
+    parser.add_argument("--production-seed", default="production_seed.json")
     parser.add_argument("--output", default="strategy.md")
     args = parser.parse_args()
 
@@ -160,8 +205,9 @@ def main():
     insights = load_json_safe(args.trace_insights)
     results = load_json_safe(args.best_results)
     memory = load_json_safe(args.evolution_memory)
+    production = load_json_safe(args.production_seed)
 
-    strategy = synthesize(config, insights, results, memory)
+    strategy = synthesize(config, insights, results, memory, production)
 
     md = format_strategy_md(strategy, config)
     with open(args.output, "w") as f:
