@@ -180,6 +180,7 @@ Agent(
     - trace_insights.json (if exists)
     - production_seed.json (if exists)
     - best_results.json (if exists)
+    - evolution_memory.md (if exists)
     - {entry point file from .evolver.json}
     </files_to_read>
 
@@ -368,6 +369,20 @@ fi
 ### 6. Report
 
 Print: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best} at {best_score})`
+
+### 6.2. Consolidate Evolution Memory
+
+Run the consolidation tool to update cross-iteration memory:
+
+```bash
+$EVOLVER_PY $TOOLS/consolidate.py \
+    --config .evolver.json \
+    --comparison-files comparison.json \
+    --output evolution_memory.md \
+    --output-json evolution_memory.json 2>/dev/null
+```
+
+The `evolution_memory.md` file will be included in proposer briefings for subsequent iterations.
 
 ### 6.5. Auto-trigger Critic
 
