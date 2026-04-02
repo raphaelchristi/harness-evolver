@@ -405,7 +405,15 @@ WINNER_BRANCH={winning_worktree_branch}
 git merge $WINNER_BRANCH --no-edit -m "evolve: merge v{NNN}-{lens_id} (score: {score})"
 ```
 
-Update `.evolver.json`:
+Update `.evolver.json` with enriched history entry:
+
+Extract winner metrics for the chart:
+- `tokens`, `latency_ms`, `errors` → from `comparison.all_candidates` for the winner
+- `passing`, `total` → count per_example scores ≥0.5 vs total from best_results.json (re-read for winner experiment)
+- `per_evaluator` → average each evaluator's scores across per_example from best_results.json
+- `approach` → first line of `## Approach` section from winner's proposal.md
+- `lens` → the `source` field from the winning proposer's lens in lenses.json
+
 ```python
 import json
 c = json.load(open('.evolver.json'))
@@ -415,7 +423,15 @@ c['iterations'] = c['iterations'] + 1
 c['history'].append({
     'version': 'v{NNN}',
     'experiment': '{winner_experiment}',
-    'score': {winner_score}
+    'score': {winner_score},
+    'tokens': {winner_tokens},
+    'latency_ms': {winner_latency_ms},
+    'error_count': {winner_errors},
+    'passing': {winner_passing},
+    'total': {winner_total},
+    'per_evaluator': {winner_per_evaluator_dict},
+    'approach': '{approach_from_proposal_md}',
+    'lens': '{lens_source}'
 })
 json.dump(c, open('.evolver.json', 'w'), indent=2)
 ```
@@ -529,9 +545,13 @@ If stopping, skip to the final report. If continuing, proceed to next iteration.
 
 ## When Loop Ends — Final Report
 
-- Best version and score
-- Improvement over baseline (absolute and %)
-- Total iterations run
-- Key changes made (git log from baseline to current)
-- LangSmith experiment URLs for comparison
+Display the evolution chart:
+
+```bash
+$EVOLVER_PY $TOOLS/evolution_chart.py --config .evolver.json
+```
+
+Then add:
+- LangSmith experiment URL for the best experiment (construct from project name)
+- `git log --oneline` from baseline to current HEAD (key changes summary)
 - Suggest: `/evolver:deploy` to finalize
