@@ -79,6 +79,13 @@ def read_experiment(client, experiment_name):
         total_latency_ms = 0
         errors = 0
 
+        # Batch-fetch all feedback in one API call instead of N+1
+        all_run_ids = [run.id for run in runs]
+        all_feedbacks = list(client.list_feedback(run_ids=all_run_ids))
+        fb_map = {}
+        for fb in all_feedbacks:
+            fb_map.setdefault(str(fb.run_id), []).append(fb)
+
         for run in runs:
             example_id = str(run.reference_example_id or run.id)
             tokens = run.total_tokens or 0
@@ -93,8 +100,8 @@ def read_experiment(client, experiment_name):
             if has_error:
                 errors += 1
 
-            # Read feedback/scores
-            feedbacks = list(client.list_feedback(run_ids=[run.id]))
+            # Read feedback/scores from pre-fetched batch
+            feedbacks = fb_map.get(str(run.id), [])
             scores = {}
             for fb in feedbacks:
                 if fb.score is not None:
@@ -220,6 +227,7 @@ def main():
     parser.add_argument("--config", default=".evolver.json", help="Path to .evolver.json")
     parser.add_argument("--output", default=None, help="Output JSON path")
     parser.add_argument("--format", default="json", choices=["json", "markdown"], help="Output format")
+    parser.add_argument("--split", default=None, help="Filter by dataset split (e.g., 'train')")
     args = parser.parse_args()
     ensure_langsmith_api_key()
 
@@ -232,6 +240,17 @@ def main():
         if not result:
             print(f"No results found for experiment: {args.experiment}", file=sys.stderr)
             sys.exit(1)
+
+        if args.split and result and "per_example" in result:
+            with open(args.config) as f:
+                cfg = json.load(f)
+            split_example_ids = set()
+            for ex in client.list_examples(dataset_name=cfg["dataset"], splits=[args.split]):
+                split_example_ids.add(str(ex.id))
+            result["per_example"] = {k: v for k, v in result["per_example"].items() if k in split_example_ids}
+            all_scores = [v["score"] for v in result["per_example"].values()]
+            result["combined_score"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
+            result["num_examples"] = len(result["per_example"])
 
         if args.format == "markdown":
             output = format_markdown(result)
