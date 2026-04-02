@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.2] - 2026-04-02
+
+### Fixed
+
+- **LangSmith runs query limit** — changed `limit=200` to `limit=100` in 5 tools (`read_results.py`, `regression_tracker.py`, `adversarial_inject.py`, `trace_insights.py`, `dataset_health.py`). LangSmith API rejects `POST /runs/query` with limit > 100, causing Step 1.8 (per-task failure analysis) to return empty results and degrade lens generation
+
+---
+
 ## [4.2.1] - 2026-04-02
 
 ### Fixed
