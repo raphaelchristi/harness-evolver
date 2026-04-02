@@ -95,8 +95,8 @@ claude
 <td>Three-gate iteration triggers (score plateau, cost budget, convergence detection) replace blind N-iteration loops. State validation ensures config hasn't diverged from LangSmith.</td>
 </tr>
 <tr>
-<td><b>Self-Scheduling</b></td>
-<td>Background and cron-based evolution modes for unattended optimization. Schedule nightly runs and get notified on improvements.</td>
+<td><b>Background Mode</b></td>
+<td>Run all iterations in background while you continue working. Get notified on completion or significant improvements.</td>
 </tr>
 </table>
 
@@ -137,7 +137,7 @@ claude
   +- 1.8  Analyze per-task failures (adaptive briefings)
   +- 1.8a Synthesize strategy document (coordinator synthesis)
   +- 1.9  Prepare shared proposer context (KV cache-optimized prefix)
-  +- 2.   Spawn 5 proposers in parallel (per-strategy tool restrictions)
+  +- 2.   Spawn 5 proposers in parallel (each in a git worktree)
   +- 3.   Run target for each candidate (code-based evaluators)
   +- 3.5  Spawn evaluator agent (LLM-as-judge via langsmith-cli)
   +- 4.   Compare experiments -> select winner + per-task champion
@@ -165,7 +165,7 @@ Skills (markdown)
   └── /evolver:deploy   → tags and pushes
 
 Agents (markdown)
-  ├── Proposer (x5)     → modifies code in worktrees (per-strategy tool restrictions)
+  ├── Proposer (x5)     → modifies code in isolated git worktrees
   ├── Evaluator          → LLM-as-judge via langsmith-cli
   ├── Critic             → detects gaming + implements stricter evaluators
   ├── Architect          → ULTRAPLAN deep analysis (opus model)
