@@ -37,6 +37,27 @@ python tools/seed_from_traces.py --project my-prod-project --output-md productio
 
 # AST-based architecture analysis (stdlib-only, no langsmith needed)
 python tools/analyze_architecture.py --harness path/to/agent -o output.json
+
+# Validate state before evolution
+python tools/validate_state.py --config .evolver.json --output validation.json
+
+# Check iteration gates
+python tools/iteration_gate.py --config .evolver.json --output gate_result.json
+
+# Track regressions between iterations
+python tools/regression_tracker.py --config .evolver.json --previous-experiment v001a --current-experiment v002c --output regression_report.json
+
+# Consolidate cross-iteration memory
+python tools/consolidate.py --config .evolver.json --output evolution_memory.md
+
+# Synthesize evolution strategy document
+python tools/synthesize_strategy.py --config .evolver.json --output strategy.md
+
+# Add evaluator to config
+python tools/add_evaluator.py --config .evolver.json --evaluator factual_accuracy --type llm
+
+# Inject adversarial examples
+python tools/adversarial_inject.py --config .evolver.json --experiment v003a --inject
 ```
 
 ## Testing
@@ -51,7 +72,7 @@ Three layers, each in its own directory:
 
 2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Five agent types: `evolver-proposer` (green, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red), `evolver-architect` (blue), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
-3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `seed_from_traces.py` and `analyze_architecture.py` are stdlib-only (no langsmith dependency).
+3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `seed_from_traces.py` and `analyze_architecture.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, and `add_evaluator.py` are new v4.0 tools. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
 Supporting infrastructure:
 - **Plugin manifest** (`.claude-plugin/plugin.json`) — registers as a Claude Code plugin
