@@ -1,7 +1,14 @@
-__pycache__/
-*.pyc
-tests/
+# Don't ship compiled Python bytecode
+tools/__pycache__/
+**/__pycache__/
+
+# Dev files
+.claude/
+.github/
 docs/
-.claude-plugin/
+playground/
+tests/
 .gitignore
+.worktreeinclude
 CLAUDE.md
+CHANGELOG.md
