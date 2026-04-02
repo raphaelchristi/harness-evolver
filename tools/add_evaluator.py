@@ -15,9 +15,9 @@ import sys
 
 
 CODE_EVALUATOR_TEMPLATES = {
-    "no_hallucination_markers": {
-        "description": "Check output doesn't contain hallucination markers",
-        "check": "not any(m in output for m in ['I think', 'probably', 'I believe', 'not sure'])",
+    "no_fabricated_references": {
+        "description": "Check output doesn't contain fabricated citation patterns",
+        "check": "not any(p in output for p in ['http://fake', 'doi.org/10.xxxx', 'ISBN 000'])",
     },
     "answer_not_question": {
         "description": "Check output doesn't just repeat the input question",
@@ -30,6 +30,10 @@ CODE_EVALUATOR_TEMPLATES = {
     "no_repetition": {
         "description": "Check output doesn't have excessive repetition",
         "check": "len(set(output.split())) / max(len(output.split()), 1) > 0.3",
+    },
+    "no_empty_filler": {
+        "description": "Check output isn't padded with filler phrases to appear longer",
+        "check": "output.count('In conclusion') + output.count('As mentioned') + output.count('It is important to note') < 3",
     },
 }
 
