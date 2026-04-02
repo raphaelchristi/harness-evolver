@@ -243,6 +243,21 @@ print(f'Retired {retired} dead examples')
 
 After corrections, log what was done. Do NOT re-run health check (corrections may need an experiment cycle to show effect).
 
+### 0.8. Resolve Project Directory
+
+If the project is in a subdirectory of the git repo (e.g., `playground/react-agent/`), worktrees replicate the full repo structure. Read `project_dir` from `.evolver.json` to resolve paths correctly:
+
+```bash
+PROJECT_DIR=$(python3 -c "import json; print(json.load(open('.evolver.json')).get('project_dir', ''))")
+```
+
+If `PROJECT_DIR` is non-empty, all worktree paths must include it:
+- Config in worktree: `{worktree_path}/{PROJECT_DIR}/.evolver.json`
+- CWD in worktree: `{worktree_path}/{PROJECT_DIR}`
+- proposal.md in worktree: `{worktree_path}/{PROJECT_DIR}/proposal.md`
+
+If `PROJECT_DIR` is empty (project at git root), paths are unchanged: `{worktree_path}/.evolver.json`, etc.
+
 For each iteration:
 
 ### 1. Get Next Version
@@ -402,7 +417,11 @@ After all proposers complete, check which ones committed and which abstained:
 
 ```bash
 for WORKTREE in {worktree_paths}; do
-    if [ -f "$WORKTREE/proposal.md" ] && grep -q "## ABSTAIN" "$WORKTREE/proposal.md" 2>/dev/null; then
+    # Resolve project path within worktree
+    WT_PROJECT="$WORKTREE"
+    [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WORKTREE/$PROJECT_DIR"
+
+    if [ -f "$WT_PROJECT/proposal.md" ] && grep -q "## ABSTAIN" "$WT_PROJECT/proposal.md" 2>/dev/null; then
         echo "Proposer in $WORKTREE abstained — skipping evaluation"
     elif [ $(cd "$WORKTREE" && git log --oneline -1 --since="10 minutes ago" 2>/dev/null | wc -l) -eq 0 ]; then
         echo "Proposer in $WORKTREE made no commits — skipping"
@@ -417,9 +436,13 @@ Only run evaluation (Step 3) for proposers that committed changes (not abstained
 For each worktree that has changes (proposer committed something):
 
 ```bash
+# If PROJECT_DIR is set, resolve paths into the worktree subdirectory
+WORKTREE_PROJECT="{worktree_path}"
+[ -n "$PROJECT_DIR" ] && WORKTREE_PROJECT="{worktree_path}/{PROJECT_DIR}"
+
 $EVOLVER_PY $TOOLS/run_eval.py \
-    --config .evolver.json \
-    --worktree-path {worktree_path} \
+    --config "$WORKTREE_PROJECT/.evolver.json" \
+    --worktree-path "$WORKTREE_PROJECT" \
     --experiment-prefix v{NNN}-{lens_id} \
     --timeout 120
 ```
