@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.3] - 2026-04-02
+
+### Fixed
+
+- **Worktree subdirectory resolution** — `setup.py` computes `project_dir` (relative path from git root via `git rev-parse --show-prefix`) and stores it in `.evolver.json`. Evolve skill Step 0.8 reads this to resolve all worktree paths correctly. Fixes `FileNotFoundError` when project is in a monorepo subdirectory.
+- **Smarter uniform-failure lenses** — when all examples fail with the same error, `synthesize_strategy.py` now generates a `uniform_failure` lens (critical) + `input_diversity` lens instead of only the generic open lens
+
+---
+
 ## [4.2.2] - 2026-04-02
 
 ### Fixed
