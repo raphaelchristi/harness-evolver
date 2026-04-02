@@ -68,7 +68,7 @@ def read_experiment(client, experiment_name):
         runs = list(client.list_runs(
             project_name=experiment_name,
             is_root=True,
-            limit=200,
+            limit=100,
         ))
 
         if not runs:

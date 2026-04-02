@@ -59,7 +59,7 @@ def detect_memorization(client, experiment_name, dataset_name):
     """Check if agent outputs are suspiciously similar to reference outputs."""
     suspicious = []
     try:
-        runs = list(client.list_runs(project_name=experiment_name, is_root=True, limit=200))
+        runs = list(client.list_runs(project_name=experiment_name, is_root=True, limit=100))
         examples = {str(e.id): e for e in client.list_examples(dataset_name=dataset_name, limit=500)}
 
         for run in runs:

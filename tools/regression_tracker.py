@@ -60,7 +60,7 @@ def get_per_example_scores(client, experiment_name):
     """Get per-example scores from an experiment."""
     scores = {}
     try:
-        runs = list(client.list_runs(project_name=experiment_name, is_root=True, limit=200))
+        runs = list(client.list_runs(project_name=experiment_name, is_root=True, limit=100))
         all_run_ids = [run.id for run in runs]
         all_feedbacks = list(client.list_feedback(run_ids=all_run_ids))
         fb_map = {}

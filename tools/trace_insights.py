@@ -332,7 +332,7 @@ def fetch_scores_from_experiment(experiment_name):
         runs = list(client.list_runs(
             project_name=experiment_name,
             is_root=True,
-            limit=200,
+            limit=100,
         ))
 
         all_run_ids = [run.id for run in runs]

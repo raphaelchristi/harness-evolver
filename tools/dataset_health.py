@@ -68,7 +68,7 @@ def check_difficulty(client, config):
         return None
 
     try:
-        runs = list(client.list_runs(project_name=best_exp, is_root=True, limit=200))
+        runs = list(client.list_runs(project_name=best_exp, is_root=True, limit=100))
         if not runs:
             return None
 
@@ -129,7 +129,7 @@ def check_dead_examples(client, config):
 
     for exp_name in recent_exps:
         try:
-            runs = list(client.list_runs(project_name=exp_name, is_root=True, limit=200))
+            runs = list(client.list_runs(project_name=exp_name, is_root=True, limit=100))
             all_run_ids = [run.id for run in runs]
             if not all_run_ids:
                 continue
