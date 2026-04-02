@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.7] - 2026-04-02
+
+### Fixed
+
+- **npm tarball size** — `__pycache__/*.pyc` excluded via `files: tools/*.py` in package.json. Tarball: 107kB → 69kB, 39 → 31 files.
+
+---
+
 ## [4.2.6] - 2026-04-02
 
 ### Added
