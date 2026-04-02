@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.0.1] - 2026-04-02
+
+### Fixed
+
+- **Adversarial injection** — replaced fake `[REPHRASE]` string prefix with 4 real variation strategies: negation, constraint, ambiguous, partial input
+- **State validator `--fix` flag** — was accepted by argparse but never used. Now auto-fixes dataset_id mismatch and history/best_experiment divergence
+- **Evaluator templates** — replaced `no_hallucination_markers` (penalized hedging phrases, incentivizing overconfident wrong answers) with `no_fabricated_references` and `no_empty_filler`
+- **CLAUDE.md** — updated "Five agent types" to Six, added evolver-consolidator
+- **Orphaned consolidator agent** — evolve skill now spawns `evolver-consolidator` via `Agent()` instead of calling `consolidate.py` directly
+- **Cron scheduling** — added `--no-interactive` flag so scheduled runs skip interactive prompts
+
+---
+
 ## [4.0.0] - 2026-04-02
 
 Twelve features inspired by Claude Code's leaked architecture, making the evolution loop smarter, cheaper, and more autonomous.
