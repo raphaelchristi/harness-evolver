@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.4] - 2026-04-02
+
+### Fixed
+
+- **Venv detection in setup skill** — Phase 1 now checks `.venv/`, `venv/`, `../.venv/`, `../venv/` and suggests the venv Python for the entry point instead of bare `python`. Prevents "module not found" failures when agent dependencies are in a venv.
+- **Playground docs** — updated README with venv creation instructions (`uv venv`) and correct entry point using venv Python
+
+---
+
 ## [4.2.3] - 2026-04-02
 
 ### Fixed
