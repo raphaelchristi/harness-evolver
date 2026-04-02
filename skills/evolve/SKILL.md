@@ -59,12 +59,97 @@ If no `--iterations` argument was provided, ask the user:
 }
 ```
 
+Write the target to `.evolver.json` for gate checks:
+
+```bash
+python3 -c "
+import json
+c = json.load(open('.evolver.json'))
+c['target_score'] = {target_score_float}  # parsed from user selection, or None for 'No limit'
+json.dump(c, open('.evolver.json', 'w'), indent=2)
+"
+```
+
+If iterations > 3, offer execution mode:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Run mode?",
+      "header": "Execution",
+      "multiSelect": false,
+      "options": [
+        {"label": "Interactive", "description": "I'll watch. Show results after each iteration."},
+        {"label": "Background", "description": "Run all iterations in background. Notify on completion or significant improvement."},
+        {"label": "Scheduled", "description": "Schedule iterations to run on a cron (e.g., nightly optimization)."}
+      ]
+    }
+  ]
+}
+```
+
+**If "Background" selected:**
+Run the evolution loop as a background task. Use the `run_in_background` parameter on the main loop execution.
+
+**If "Scheduled" selected:**
+Ask for schedule via AskUserQuestion:
+```json
+{
+  "questions": [
+    {
+      "question": "Schedule?",
+      "header": "Cron Schedule",
+      "multiSelect": false,
+      "options": [
+        {"label": "Every 6 hours", "description": "Run 1 iteration every 6 hours"},
+        {"label": "Nightly (2 AM)", "description": "Run iterations overnight"},
+        {"label": "Custom", "description": "Enter a cron expression"}
+      ]
+    }
+  ]
+}
+```
+
+Then create a cron trigger:
+```
+Use CronCreate tool to schedule:
+  - command: "/evolver:evolve --iterations 1"
+  - schedule: {selected_cron}
+  - description: "Harness Evolver: scheduled optimization iteration"
+```
+
+Report: "Scheduled evolution iterations. Use `/evolver:status` to check progress. Cancel with CronDelete."
+
 ## The Loop
 
 Read config:
 ```bash
 python3 -c "import json; c=json.load(open('.evolver.json')); print(f'Best: {c[\"best_experiment\"]} ({c[\"best_score\"]:.3f}), Iterations: {c[\"iterations\"]}')"
 ```
+
+### 0.5. Validate State
+
+Before starting the loop, verify `.evolver.json` matches LangSmith reality:
+
+```bash
+VALIDATION=$($EVOLVER_PY $TOOLS/validate_state.py --config .evolver.json 2>/dev/null)
+VALID=$(echo "$VALIDATION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('valid', False))")
+if [ "$VALID" = "False" ]; then
+    echo "WARNING: State validation found issues:"
+    echo "$VALIDATION" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for issue in data.get('issues', []):
+    print(f'  [{issue[\"severity\"]}] {issue[\"message\"]}')
+"
+fi
+```
+
+If critical issues found, ask user whether to continue or fix first via AskUserQuestion:
+- "Continue anyway" — proceed with warnings
+- "Fix and retry" — attempt auto-fix with `--fix` flag
+- "Abort" — stop the evolution loop
 
 For each iteration:
 
@@ -117,66 +202,152 @@ If `best_results.json` exists, parse it to find failing examples (score < 0.7). 
 Generate adaptive briefings for Candidates D and E (same logic as v2).
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
+### 1.8a. Synthesize Strategy
+
+Generate a targeted strategy document from all available analysis:
+
+```bash
+$EVOLVER_PY $TOOLS/synthesize_strategy.py \
+    --config .evolver.json \
+    --trace-insights trace_insights.json \
+    --best-results best_results.json \
+    --evolution-memory evolution_memory.json \
+    --output strategy.md 2>/dev/null
+```
+
+The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). This replaces raw data dumps with a synthesized, actionable document — proposers receive specific targets, not raw traces.
+
+### 1.9. Prepare Shared Proposer Context
+
+Build the shared context that ALL proposers will receive as an identical prefix. This enables KV cache sharing — spawning 5 proposers costs barely more than 1.
+
+```bash
+# Build shared context block (identical for all 5 proposers)
+SHARED_FILES_BLOCK="<files_to_read>
+- .evolver.json
+- strategy.md (if exists)
+- evolution_memory.md (if exists)
+- {entry_point_file}
+</files_to_read>"
+
+SHARED_CONTEXT_BLOCK="<context>
+Best experiment: {best_experiment} (score: {best_score})
+Framework: {framework}
+Entry point: {entry_point}
+Evaluators: {evaluators}
+Iteration: {iteration_number} of {total_iterations}
+Score history: {score_history_summary}
+</context>"
+
+SHARED_OBJECTIVE="<objective>
+Improve the agent code to score higher on the evaluation dataset.
+You are working in an isolated git worktree — modify any file freely.
+</objective>"
+```
+
+**CRITICAL for cache sharing**: The `<objective>`, `<files_to_read>`, and `<context>` blocks MUST be byte-identical across all 5 proposer prompts. Only the `<strategy>` block differs. Place the strategy block LAST in the prompt so the shared prefix is maximized.
+
 ### 2. Spawn 5 Proposers in Parallel
 
-Each proposer runs in a **git worktree** via Claude Code's native `isolation: "worktree"` parameter.
+Each proposer receives the IDENTICAL prefix (objective + files + context) followed by its unique strategy suffix.
 
-**Candidate A (Exploit)** — `run_in_background: true`:
+**All 5 candidates** — `run_in_background: true, isolation: "worktree"`:
 
+The prompt for EACH proposer follows this structure:
+```
+{SHARED_OBJECTIVE}
+
+{SHARED_FILES_BLOCK}
+
+{SHARED_CONTEXT_BLOCK}
+
+<strategy>
+{UNIQUE PER CANDIDATE — see below}
+</strategy>
+
+<output>
+1. Modify the code to improve performance
+2. Commit your changes with a descriptive message
+3. Write proposal.md explaining what you changed and why
+</output>
+```
+
+**Candidate A strategy block:**
+```
+APPROACH: exploitation
+Make targeted improvements to the current best version.
+Focus on the specific failures identified in the results.
+```
+
+**Candidate B strategy block:**
+```
+APPROACH: exploration
+Try a fundamentally different approach. Change algorithms, prompts, routing, architecture.
+Don't be afraid to make big changes — this worktree is disposable.
+```
+
+**Candidate C strategy block:**
+```
+APPROACH: crossover
+Combine strengths from previous iterations. Check git log for what was tried.
+Recent changes: {git_log_last_5}
+```
+
+**Candidate D strategy block:**
+```
+APPROACH: {failure_targeted_or_creative}
+{adaptive_briefing_d}
+```
+
+**Candidate E strategy block:**
+```
+APPROACH: {failure_targeted_or_efficiency}
+{adaptive_briefing_e}
+```
+
+**Tool restrictions per strategy:**
+
+| Strategy | Allowed Tools | Rationale |
+|----------|--------------|-----------|
+| Exploit (A) | Read, Edit, Bash, Glob, Grep | No Write — can't create new files, only edit existing |
+| Explore (B) | Read, Write, Edit, Bash, Glob, Grep | Full access — may need new files for new architecture |
+| Crossover (C) | Read, Edit, Bash, Glob, Grep | No Write — combines existing patterns, doesn't create |
+| Failure-targeted (D, E) | Read, Edit, Bash, Glob, Grep | No Write — focused fixes on specific files |
+
+Apply via the `tools` parameter in each Agent() call. Example for exploit:
 ```
 Agent(
   subagent_type: "evolver-proposer",
-  description: "Proposer A: exploit best version",
-  isolation: "worktree",
-  run_in_background: true,
-  prompt: |
-    <objective>
-    Improve the agent code to score higher on the evaluation dataset.
-    You are working in an isolated git worktree — modify any file freely.
-    </objective>
-
-    <strategy>
-    APPROACH: exploitation
-    Make targeted improvements to the current best version.
-    Focus on the specific failures identified in the results.
-    </strategy>
-
-    <files_to_read>
-    - .evolver.json
-    - trace_insights.json (if exists)
-    - production_seed.json (if exists)
-    - best_results.json (if exists)
-    - {entry point file from .evolver.json}
-    </files_to_read>
-
-    <context>
-    Best experiment: {best_experiment} (score: {best_score})
-    Framework: {framework}
-    Entry point: {entry_point}
-    Evaluators: {evaluators}
-    Failing examples: {failing_example_summary}
-    </context>
-
-    <output>
-    1. Modify the code to improve performance
-    2. Commit your changes with a descriptive message
-    3. Write proposal.md explaining what you changed and why
-    </output>
+  tools: ["Read", "Edit", "Bash", "Glob", "Grep"],
+  ...
 )
 ```
 
-**Candidate B (Explorer)** — `run_in_background: true`:
-Same structure but `APPROACH: exploration` — bold, fundamentally different approach.
-
-**Candidate C (Crossover)** — `run_in_background: true`:
-Same structure but `APPROACH: crossover` — combine strengths from previous iterations.
-Include git log of recent changes so it can see what was tried.
-
-**Candidates D and E (Failure-Targeted)** — `run_in_background: true`:
-Same structure but `APPROACH: failure-targeted` with specific failing example clusters.
-If ALL_PASSING: D gets `creative`, E gets `efficiency`.
+For explore:
+```
+Agent(
+  subagent_type: "evolver-proposer",
+  tools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+  ...
+)
+```
 
 Wait for all 5 to complete.
+
+**Stuck proposer detection**: If any proposer hasn't completed after 10 minutes, it may be stuck in a loop. The Claude Code runtime handles this via the agent's turn limit. If a proposer returns without committing changes, skip it — don't retry.
+
+After all proposers complete, check which ones actually committed:
+
+```bash
+for WORKTREE in {worktree_paths}; do
+    CHANGES=$(cd "$WORKTREE" && git log --oneline -1 --since="10 minutes ago" 2>/dev/null | wc -l)
+    if [ "$CHANGES" -eq 0 ]; then
+        echo "Proposer in $WORKTREE made no commits — skipping"
+    fi
+done
+```
+
+Only run evaluation (Step 3) for proposers that committed changes.
 
 ### 3. Run Target for Each Candidate
 
@@ -298,81 +469,148 @@ Iteration {i}/{N} — 5 candidates evaluated:
   Per-task champion: {champion} (beats winner on {N} tasks)
 ```
 
-### 5.5. Test Suite Growth
+### 5.5. Regression Tracking & Test Suite Growth
 
-If previously-failing examples now pass, add regression examples to the dataset:
+If this is not the first iteration (previous experiment exists), track regressions and auto-add guards:
 
 ```bash
-python3 -c "
-from langsmith import Client
+PREV_EXP=$(python3 -c "
 import json
-
-client = Client()
-config = json.load(open('.evolver.json'))
-
-# Find examples that improved significantly
-# (score went from <0.5 to >0.8 between iterations)
-# Generate variations and add to dataset
-# client.create_examples(dataset_id=config['dataset_id'], examples=[...])
-print('Test suite growth: added N regression examples')
+h = json.load(open('.evolver.json')).get('history', [])
+print(h[-2]['experiment'] if len(h) >= 2 else '')
+")
+if [ -n "$PREV_EXP" ]; then
+    $EVOLVER_PY $TOOLS/regression_tracker.py \
+        --config .evolver.json \
+        --previous-experiment "$PREV_EXP" \
+        --current-experiment "{winner_experiment}" \
+        --add-guards --max-guards 5 \
+        --output regression_report.json 2>/dev/null
+    
+    # Report regressions
+    python3 -c "
+import json, os
+if os.path.exists('regression_report.json'):
+    r = json.load(open('regression_report.json'))
+    if r['regression_count'] > 0:
+        print(f'WARNING: {r[\"regression_count\"]} regressions detected')
+    if r['guards_added'] > 0:
+        print(f'  Added {r[\"guards_added\"]} regression guard examples to dataset')
+    if r['fixed_count'] > 0:
+        print(f'  {r[\"fixed_count\"]} previously-failing examples now pass')
 " 2>/dev/null
+fi
 ```
 
 ### 6. Report
 
 Print: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best} at {best_score})`
 
-### 6.5. Auto-trigger Critic
+### 6.2. Consolidate Evolution Memory
+
+Run the consolidation tool to update cross-iteration memory:
+
+```bash
+$EVOLVER_PY $TOOLS/consolidate.py \
+    --config .evolver.json \
+    --comparison-files comparison.json \
+    --output evolution_memory.md \
+    --output-json evolution_memory.json 2>/dev/null
+```
+
+The `evolution_memory.md` file will be included in proposer briefings for subsequent iterations.
+
+### 6.5. Auto-trigger Active Critic
 
 If score jumped >0.3 from previous iteration OR reached target in <3 iterations:
-
-Spawn the critic agent to analyze evaluator quality:
 
 ```
 Agent(
   subagent_type: "evolver-critic",
-  description: "Critic: check evaluator gaming",
+  description: "Active Critic: detect and fix evaluator gaming",
   prompt: |
     <objective>
-    EVAL GAMING DETECTED: Score jumped from {prev_score} to {score}.
+    EVAL GAMING CHECK: Score jumped from {prev_score} to {score}.
     Check if the LangSmith evaluators are being gamed.
+    If gaming detected, add stricter evaluators using $TOOLS/add_evaluator.py.
     </objective>
+
+    <tools_path>
+    TOOLS={tools_path}
+    EVOLVER_PY={evolver_py_path}
+    </tools_path>
 
     <files_to_read>
     - .evolver.json
     - comparison.json
     - trace_insights.json
+    - evolution_memory.md (if exists)
     </files_to_read>
 )
 ```
 
-### 7. Auto-trigger Architect
+If the critic added new evaluators, log it:
+```
+Critic added evaluators: {new_evaluators}. Next iteration will use stricter evaluation.
+```
+
+### 7. Auto-trigger Architect (ULTRAPLAN Mode)
 
 If 3 consecutive iterations within 1% OR score dropped:
 
 ```
 Agent(
   subagent_type: "evolver-architect",
-  description: "Architect: recommend topology change",
+  model: "opus",
+  description: "Architect ULTRAPLAN: deep topology analysis",
   prompt: |
     <objective>
     The evolution loop has stagnated after {iterations} iterations.
-    Analyze the architecture and recommend changes.
+    Scores: {last_3_scores}.
+    Perform deep architectural analysis and recommend structural changes.
+    Use extended thinking — you have more compute budget than normal agents.
     </objective>
+
+    <tools_path>
+    TOOLS={tools_path}
+    EVOLVER_PY={evolver_py_path}
+    </tools_path>
 
     <files_to_read>
     - .evolver.json
     - trace_insights.json
-    - {entry point and related source files}
+    - evolution_memory.md (if exists)
+    - evolution_memory.json (if exists)
+    - strategy.md (if exists)
+    - {entry point and all related source files}
     </files_to_read>
 )
 ```
 
-### 8. Check Stop Conditions
+After architect completes, include `architecture.md` in proposer `<files_to_read>` for next iteration.
 
+### 8. Gate Check (Three-Gate Trigger)
+
+Before starting the next iteration, run the gate check:
+
+```bash
+GATE_RESULT=$($EVOLVER_PY $TOOLS/iteration_gate.py --config .evolver.json 2>/dev/null)
+PROCEED=$(echo "$GATE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('proceed', True))")
+```
+
+If `PROCEED` is `False`, check suggestions:
+
+```bash
+SUGGEST=$(echo "$GATE_RESULT" | python3 -c "import sys,json; s=json.load(sys.stdin).get('suggestions',[]); print(s[0] if s else '')")
+```
+
+- If `$SUGGEST` is `architect`: auto-trigger architect agent (Step 7)
+- If `$SUGGEST` is `continue_cautious`: ask user via AskUserQuestion whether to continue
+- Otherwise: stop the loop and report final results
+
+Legacy stop conditions still apply:
 - **Target**: `score >= target_score` → stop
-- **N reached**: done
-- **Stagnation post-architect**: 3 more iterations without improvement → stop
+- **N reached**: all requested iterations done → stop
 
 ## When Loop Ends — Final Report
 
