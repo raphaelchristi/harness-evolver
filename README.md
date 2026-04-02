@@ -91,8 +91,12 @@ claude
 <td>Cross-iteration memory consolidation inspired by Claude Code's autoDream. Tracks which approaches win, which failures recur, and promotes insights after 2+ occurrences.</td>
 </tr>
 <tr>
+<td><b>Dataset Health</b></td>
+<td>Pre-flight dataset quality check: size adequacy, difficulty distribution, dead example detection, production coverage analysis, train/held-out splits. Auto-corrects issues before evolution starts.</td>
+</tr>
+<tr>
 <td><b>Smart Gating</b></td>
-<td>Three-gate iteration triggers (score plateau, cost budget, convergence detection) replace blind N-iteration loops. State validation ensures config hasn't diverged from LangSmith.</td>
+<td>Claude assesses gate conditions directly — score plateau, target reached, diminishing returns. No hardcoded thresholds. State validation ensures config hasn't diverged from LangSmith.</td>
 </tr>
 <tr>
 <td><b>Background Mode</b></td>
@@ -107,6 +111,7 @@ claude
 | Command | What it does |
 |---|---|
 | `/evolver:setup` | Explore project, configure LangSmith (dataset, evaluators), run baseline |
+| `/evolver:health` | Check dataset quality (size, difficulty, coverage, splits), auto-correct issues |
 | `/evolver:evolve` | Run the optimization loop (dynamic self-organizing proposers in worktrees) |
 | `/evolver:status` | Show progress, scores, history |
 | `/evolver:deploy` | Tag, push, clean up temporary files |
@@ -132,10 +137,11 @@ claude
 /evolver:evolve
   |
   +- 0.5  Validate state (skeptical memory — check .evolver.json vs LangSmith)
+  +- 0.6  /evolver:health — dataset quality check + auto-correct
   +- 1.   Read state (.evolver.json + LangSmith experiments)
   +- 1.5  Gather trace insights (cluster errors, tokens, latency)
-  +- 1.8  Analyze per-task failures
-  +- 1.8a Synthesize strategy document + dynamic lenses (investigation questions)
+  +- 1.8  Analyze per-task failures (train split only — proposers don't see held-out)
+  +- 1.8a Claude generates strategy.md + lenses.json from analysis data
   +- 1.9  Prepare shared proposer context (KV cache-optimized prefix)
   +- 2.   Spawn N self-organizing proposers in parallel (each in a git worktree)
   +- 3.   Run target for each candidate (code-based evaluators)
@@ -144,10 +150,10 @@ claude
   +- 5.   Merge winning worktree into main branch
   +- 5.5  Regression tracking (auto-add guard examples to dataset)
   +- 6.   Report results
-  +- 6.2  Consolidate evolution memory (orient/gather/consolidate/prune)
+  +- 6.2  Consolidator agent updates evolution memory (runs in background)
   +- 6.5  Auto-trigger Active Critic (detect + fix evaluator gaming)
   +- 7.   Auto-trigger ULTRAPLAN Architect (opus model, deep analysis)
-  +- 8.   Three-gate check (score plateau, cost budget, convergence)
+  +- 8.   Claude assesses gate conditions (plateau, target, diminishing returns)
 ```
 
 ---
@@ -159,7 +165,8 @@ Plugin hook (SessionStart)
   └→ Creates venv, installs langsmith + langsmith-cli, exports env vars
 
 Skills (markdown)
-  ├── /evolver:setup    → explores project, runs setup.py
+  ├── /evolver:setup    → explores project, smart defaults, runs setup.py
+  ├── /evolver:health   → dataset quality check + auto-correct
   ├── /evolver:evolve   → orchestrates the evolution loop
   ├── /evolver:status   → reads .evolver.json + LangSmith
   └── /evolver:deploy   → tags and pushes
@@ -179,10 +186,8 @@ Tools (Python + langsmith SDK)
   ├── trace_insights.py     → clusters errors from traces
   ├── seed_from_traces.py   → imports production traces
   ├── validate_state.py     → validates config vs LangSmith state
-  ├── iteration_gate.py     → three-gate iteration triggers
+  ├── dataset_health.py     → dataset quality diagnostic (size, difficulty, coverage, splits)
   ├── regression_tracker.py → tracks regressions, adds guard examples
-  ├── consolidate.py        → cross-iteration memory consolidation
-  ├── synthesize_strategy.py→ generates strategy document + investigation lenses
   ├── add_evaluator.py      → programmatically adds evaluators
   └── adversarial_inject.py → detects memorization, injects adversarial tests
 ```
@@ -221,6 +226,7 @@ LangSmith traces **any** AI framework. The evolver works with all of them:
 - [Darwin Godel Machine](https://sakana.ai/dgm/) — Sakana AI
 - [AlphaEvolve](https://deepmind.google/blog/alphaevolve/) — DeepMind
 - [LangSmith Evaluation](https://docs.smith.langchain.com/evaluation) — LangChain
+- [Harnessing Claude's Intelligence](https://claude.com/blog/harnessing-claudes-intelligence) — Martin, Anthropic, 2026
 - [Traces Start the Agent Improvement Loop](https://www.langchain.com/conceptual-guides/traces-start-agent-improvement-loop) — LangChain
 
 ---
