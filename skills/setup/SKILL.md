@@ -86,82 +86,84 @@ The runner writes `{"input": "user question..."}` to a temp `.json` file and rep
 
 If no placeholder and no `--input` flag detected, the runner appends `--input <path> --output <path>`.
 
-## Phase 2: Confirm Detection (interactive)
+## Phase 2: Confirm Configuration (interactive)
+
+Present all detected configuration in one view with smart defaults and ask for confirmation.
 
 Use AskUserQuestion:
 
 ```json
 {
   "questions": [{
-    "question": "Here's what I detected. Does this look right?\n\nEntry point: {path}\nFramework: {framework}\nRun command: {command}\nLangSmith: {status}",
-    "header": "Confirm",
+    "question": "Here's the configuration for your project:\n\n**Entry point**: {command}\n**Framework**: {framework}\n**Python**: {venv_path or 'system python3'}\n**Optimization goals**: accuracy (correctness evaluator)\n**Test data**: generate 30 examples with AI\n\nDoes this look good?",
+    "header": "Setup Configuration",
     "multiSelect": false,
     "options": [
-      {"label": "Looks good, proceed", "description": "Continue with detected configuration"},
-      {"label": "Let me adjust", "description": "I'll provide correct paths and commands"},
-      {"label": "Wrong directory", "description": "I need to cd somewhere else first"}
+      {"label": "Looks good, proceed", "description": "Use these settings and start setup"},
+      {"label": "Customize goals", "description": "Choose different optimization goals"},
+      {"label": "I have test data", "description": "Use existing JSON file or LangSmith project"},
+      {"label": "Let me adjust everything", "description": "Change entry point, framework, goals, and data source"}
     ]
   }]
 }
 ```
 
-## Phase 3: What to Optimize (interactive)
+**If "Looks good, proceed"**: Use defaults — goals=accuracy, data=generate 30 with testgen. Skip straight to Phase 3.
 
-Use AskUserQuestion:
+**If "Customize goals"**: Ask the goals question, then proceed to Phase 3 with testgen as default data source.
 
-```json
-{
-  "questions": [{
-    "question": "What do you want to optimize?",
-    "header": "Goals",
-    "multiSelect": true,
-    "options": [
-      {"label": "Accuracy", "description": "Correctness of outputs — LLM-as-judge evaluator"},
-      {"label": "Latency", "description": "Response time — track and minimize"},
-      {"label": "Token efficiency", "description": "Fewer tokens for same quality"},
-      {"label": "Error handling", "description": "Reduce failures, timeouts, crashes"}
-    ]
-  }]
-}
-```
+  Use AskUserQuestion:
 
-Map selections to evaluator configuration for setup.py.
+  ```json
+  {
+    "questions": [{
+      "question": "What do you want to optimize?",
+      "header": "Goals",
+      "multiSelect": true,
+      "options": [
+        {"label": "Accuracy", "description": "Correctness of outputs — LLM-as-judge evaluator"},
+        {"label": "Latency", "description": "Response time — track and minimize"},
+        {"label": "Token efficiency", "description": "Fewer tokens for same quality"},
+        {"label": "Error handling", "description": "Reduce failures, timeouts, crashes"}
+      ]
+    }]
+  }
+  ```
 
-## Phase 4: Test Data Source (interactive)
+  Map selections to evaluator configuration for setup.py.
 
-Use AskUserQuestion with **preview**:
+**If "I have test data"**: Ask the data source question, then proceed to Phase 3 with accuracy as default goal.
 
-```json
-{
-  "questions": [{
-    "question": "Where should test inputs come from?",
-    "header": "Test data",
-    "multiSelect": false,
-    "options": [
-      {
-        "label": "Import from LangSmith",
-        "description": "Use real production traces as test inputs",
-        "preview": "## Import from LangSmith\n\nFetches up to 100 recent traces from your production project.\nPrioritizes traces with negative feedback.\nCreates a LangSmith Dataset with real user inputs.\n\nRequires: an existing LangSmith project with traces."
-      },
-      {
-        "label": "Generate from code",
-        "description": "AI generates test inputs by analyzing your code",
-        "preview": "## Generate from Code\n\nThe testgen agent reads your source code and generates\n30 diverse test inputs:\n- 40% standard cases\n- 20% edge cases\n- 20% cross-domain\n- 20% adversarial\n\nOutputs are scored by LLM-as-judge."
-      },
-      {
-        "label": "I have test data",
-        "description": "Point to an existing file with test inputs",
-        "preview": "## Provide Test Data\n\nSupported formats:\n- JSON array of inputs\n- JSON with {\"inputs\": {...}} objects\n- CSV with input columns\n\nExample:\n```json\n[\n  {\"input\": \"What is Python?\"},\n  {\"input\": \"Explain quantum computing\"}\n]\n```"
-      }
-    ]
-  }]
-}
-```
+  Use AskUserQuestion with **preview**:
 
-If "Import from LangSmith": discover projects and ask which one (same as v2 Phase 1.9).
-If "I have test data": ask for file path.
+  ```json
+  {
+    "questions": [{
+      "question": "Where should test inputs come from?",
+      "header": "Test data",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Import from LangSmith",
+          "description": "Use real production traces as test inputs",
+          "preview": "## Import from LangSmith\n\nFetches up to 100 recent traces from your production project.\nPrioritizes traces with negative feedback.\nCreates a LangSmith Dataset with real user inputs.\n\nRequires: an existing LangSmith project with traces."
+        },
+        {
+          "label": "I have a file",
+          "description": "Point to an existing file with test inputs",
+          "preview": "## Provide Test Data\n\nSupported formats:\n- JSON array of inputs\n- JSON with {\"inputs\": {...}} objects\n- CSV with input columns\n\nExample:\n```json\n[\n  {\"input\": \"What is Python?\"},\n  {\"input\": \"Explain quantum computing\"}\n]\n```"
+        }
+      ]
+    }]
+  }
+  ```
 
-## Phase 5: Run Setup
+  If "Import from LangSmith": discover projects and ask which one (same as v2 Phase 1.9).
+  If "I have a file": ask for file path.
+
+**If "Let me adjust everything"**: Ask all three original questions in sequence — confirm detection (entry point, framework, run command), then goals, then data source — using the question formats above.
+
+## Phase 3: Run Setup
 
 Build the setup.py command based on all gathered information:
 
@@ -178,7 +180,7 @@ $EVOLVER_PY $TOOLS/setup.py \
 
 If "Generate from code" was selected AND no test data file exists, first spawn the testgen agent to generate inputs, then pass the generated file to setup.py.
 
-## Phase 6: Generate Test Data (if needed)
+## Phase 4: Generate Test Data (if needed)
 
 If testgen is needed, spawn it:
 
@@ -205,7 +207,7 @@ Agent(
 
 Then pass `--dataset-from-file test_inputs.json` to setup.py.
 
-## Phase 7: Report
+## Phase 5: Report
 
 ```
 Setup complete!

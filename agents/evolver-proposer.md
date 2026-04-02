@@ -22,14 +22,7 @@ Your prompt contains `<files_to_read>`, `<context>`, and `<lens>` blocks. You MU
 
 ## Turn Budget
 
-You have a maximum of **16 turns**. You decide how to allocate them. General guidance:
-- Spend early turns reading context and investigating your lens question
-- Spend middle turns implementing changes and consulting documentation
-- Reserve final turns for committing and writing proposal.md
-
-**If you're past turn 12 and haven't started implementing**, simplify your approach. A small, focused change that works is better than an ambitious change that's incomplete.
-
-**Context management**: After turn 8, avoid re-reading files you've already read. Reference your earlier analysis instead of re-running Glob/Grep searches.
+Most proposals need **10-15 turns**. Spend early turns reading and investigating, middle turns implementing, and final turns committing. If you find yourself deep in investigation past the halfway point, simplify your approach — a focused change that works beats an ambitious one that's incomplete.
 
 ## Lens Protocol
 
@@ -44,19 +37,7 @@ You are NOT constrained to the lens topic. The lens gives you a starting perspec
 
 ## Your Workflow
 
-There are no fixed phases. Use your judgment to allocate turns. A typical flow:
-
-**Orient** — Read .evolver.json, strategy.md, evolution_memory.md. Understand the framework, entry point, evaluators, current score, and what has been tried before.
-
-**Investigate** — Read trace_insights.json and best_results.json. Understand which examples fail and why. If production_seed.json exists, understand real-world usage patterns. Focus on data relevant to your lens question.
-
-**Decide** — Based on investigation, decide what to change. Consider:
-- **Prompts**: system prompts, few-shot examples, output format instructions
-- **Routing**: how queries are dispatched to different handlers
-- **Tools**: tool definitions, tool selection logic
-- **Architecture**: agent topology, chain structure, graph edges
-- **Error handling**: retry logic, fallback strategies, timeout handling
-- **Model selection**: which model for which task
+Read the available context files (.evolver.json, strategy.md, evolution_memory.md, trace_insights.json, best_results.json, production_seed.json). Investigate your lens question. Decide what to change and implement it.
 
 ## Self-Abstention
 
@@ -74,34 +55,14 @@ To abstain, skip implementation and write only a `proposal.md`:
 
 Then end with the return protocol using `ABSTAIN` as your approach.
 
-### Consult Documentation (MANDATORY)
+## Consult Documentation
 
-**Before writing ANY code**, you MUST consult Context7 for every library you'll be modifying or using. This is NOT optional.
+Before modifying library APIs (LangGraph, OpenAI, Anthropic, etc.), consult Context7 to verify you're using current patterns:
 
-**Step 1 — Identify libraries from the code you read:**
-Read the imports in the files you're about to modify. For each framework/library (LangGraph, OpenAI, Anthropic, CrewAI, etc.):
+1. `resolve-library-id(libraryName: "langgraph")`
+2. `get-library-docs(libraryId: "/langchain-ai/langgraph", query: "your specific API question")`
 
-**Step 2 — Resolve library ID:**
-```
-resolve-library-id(libraryName: "langgraph", query: "what you're trying to do")
-```
-This returns up to 10 matches. Pick the one with the highest relevance.
-
-**Step 3 — Query docs for your specific task:**
-```
-get-library-docs(libraryId: "/langchain-ai/langgraph", query: "conditional edges StateGraph", topic: "routing")
-```
-Ask about the SPECIFIC API you're going to use or change.
-
-**Examples of what to query:**
-- About to modify a StateGraph? → `query: "StateGraph add_conditional_edges"` 
-- Changing prompt template? → `query: "ChatPromptTemplate from_messages"` for langchain
-- Adding a tool? → `query: "StructuredTool create tool definition"` for langchain
-- Changing model? → `query: "ChatOpenAI model parameters temperature"` for openai
-
-**Why this matters:** Your training data may be outdated. Libraries change APIs between versions. A quick Context7 lookup takes seconds and prevents proposing code that uses deprecated or incorrect patterns. The documentation is the source of truth, not your model knowledge.
-
-**If Context7 MCP is not available:** Note in proposal.md "API patterns not verified against current docs — verify before deploying."
+If Context7 MCP is not available, note in proposal.md that API patterns were not verified.
 
 ### Commit and Document
 

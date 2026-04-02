@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Fetch and summarize production LangSmith traces for Harness Evolver.
 
-Queries the LangSmith REST API directly (urllib, stdlib-only) to fetch
-production traces and produce:
+Uses the LangSmith Python SDK to fetch production traces and produce:
   1. A markdown seed file for the testgen agent (production_seed.md)
   2. A JSON summary for programmatic use (production_seed.json)
 
@@ -11,84 +10,17 @@ Usage:
         --project ceppem-langgraph \
         --output-md production_seed.md \
         --output-json production_seed.json \
-        [--api-key-env LANGSMITH_API_KEY] \
         [--limit 100]
 
-Stdlib-only. No external dependencies (no langsmith-cli needed).
+Requires: pip install langsmith
 """
 
 import argparse
 import json
 import os
 import sys
-import urllib.parse
-import urllib.request
 from collections import Counter
 from datetime import datetime, timezone
-
-LANGSMITH_API_BASE = "https://api.smith.langchain.com/api/v1"
-
-
-def langsmith_request(endpoint, api_key, method="GET", body=None, params=None):
-    """Make a request to the LangSmith REST API."""
-    url = f"{LANGSMITH_API_BASE}/{endpoint}"
-    if params:
-        url += "?" + urllib.parse.urlencode(params)
-
-    headers = {
-        "x-api-key": api_key,
-        "Accept": "application/json",
-    }
-
-    data = None
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(body).encode("utf-8")
-
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body_text = ""
-        try:
-            body_text = e.read().decode("utf-8", errors="replace")[:500]
-        except Exception:
-            pass
-        print(f"LangSmith API error {e.code}: {body_text}", file=sys.stderr)
-        return None
-    except Exception as e:
-        print(f"LangSmith API request failed: {e}", file=sys.stderr)
-        return None
-
-
-def fetch_runs(project_name, api_key, limit=100):
-    """Fetch recent root runs from a LangSmith project."""
-    # Try POST /runs/query first (newer API)
-    body = {
-        "project_name": project_name,
-        "is_root": True,
-        "limit": limit,
-    }
-    result = langsmith_request("runs/query", api_key, method="POST", body=body)
-    if result and isinstance(result, dict):
-        return result.get("runs", result.get("results", []))
-    if result and isinstance(result, list):
-        return result
-
-    # Fallback: GET /runs with query params
-    params = {
-        "project_name": project_name,
-        "is_root": "true",
-        "limit": str(limit),
-    }
-    result = langsmith_request("runs", api_key, params=params)
-    if result and isinstance(result, list):
-        return result
-    if result and isinstance(result, dict):
-        return result.get("runs", result.get("results", []))
-
-    return []
 
 
 def extract_input(run):
@@ -396,48 +328,35 @@ def generate_json_summary(analysis, project_name):
 def main():
     parser = argparse.ArgumentParser(description="Fetch and summarize production LangSmith traces")
     parser.add_argument("--project", required=True, help="LangSmith project name")
-    parser.add_argument("--api-key-env", default="LANGSMITH_API_KEY",
-                        help="Env var containing API key (default: LANGSMITH_API_KEY)")
     parser.add_argument("--limit", type=int, default=100, help="Max traces to fetch (default: 100)")
     parser.add_argument("--output-md", required=True, help="Output path for markdown seed")
     parser.add_argument("--output-json", required=True, help="Output path for JSON summary")
-    parser.add_argument("--use-sdk", action="store_true",
-                        help="Use langsmith Python SDK instead of REST API (v3 mode)")
+    # Kept for backwards compatibility — silently ignored (SDK is now the only mode)
+    parser.add_argument("--use-sdk", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     print(f"Fetching up to {args.limit} traces from LangSmith project '{args.project}'...")
 
-    if args.use_sdk:
-        try:
-            from langsmith import Client
-            client = Client()
-            raw_runs = list(client.list_runs(
-                project_name=args.project, is_root=True, limit=args.limit,
-            ))
-            # Convert SDK run objects to dicts matching our format
-            runs = []
-            for r in raw_runs:
-                run_dict = {
-                    "id": str(r.id),
-                    "name": r.name,
-                    "inputs": r.inputs,
-                    "outputs": r.outputs,
-                    "error": r.error,
-                    "total_tokens": r.total_tokens,
-                    "feedback_stats": None,
-                    "start_time": r.start_time.isoformat() if r.start_time else None,
-                    "end_time": r.end_time.isoformat() if r.end_time else None,
-                }
-                runs.append(run_dict)
-        except ImportError:
-            print("langsmith package not installed. Use --use-sdk with pip install langsmith", file=sys.stderr)
-            sys.exit(1)
-    else:
-        api_key = os.environ.get(args.api_key_env, "")
-        if not api_key:
-            print(f"No API key found in ${args.api_key_env} — cannot fetch production traces", file=sys.stderr)
-            sys.exit(1)
-        runs = fetch_runs(args.project, api_key, args.limit)
+    from langsmith import Client
+    client = Client()
+    raw_runs = list(client.list_runs(
+        project_name=args.project, is_root=True, limit=args.limit,
+    ))
+    # Convert SDK run objects to dicts matching our analysis format
+    runs = []
+    for r in raw_runs:
+        run_dict = {
+            "id": str(r.id),
+            "name": r.name,
+            "inputs": r.inputs,
+            "outputs": r.outputs,
+            "error": r.error,
+            "total_tokens": r.total_tokens,
+            "feedback_stats": None,
+            "start_time": r.start_time.isoformat() if r.start_time else None,
+            "end_time": r.end_time.isoformat() if r.end_time else None,
+        }
+        runs.append(run_dict)
 
     if not runs:
         print("No traces found. The project may be empty or the name may be wrong.")
