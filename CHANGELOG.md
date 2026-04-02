@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.0.2] - 2026-04-02
+
+### Fixed
+
+- **Production data regression** — `synthesize_strategy.py` now reads `production_seed.json` via `--production-seed` flag (was completely ignored, losing real user inputs, error patterns, and negative feedback). Also restored `production_seed.json` to proposer `<files_to_read>`
+
+### Removed
+
+- **Self-scheduling** — `CronCreate` is session-scoped (dies when Claude exits) with 3-day expiry. "Nightly optimization" was impossible. Kept background mode which actually works
+- **Per-proposer tool restrictions** — `Agent()` tool doesn't accept a `tools` parameter (`additionalProperties: false` in schema). Removed rather than provide false sense of enforcement
+
+---
+
 ## [4.0.1] - 2026-04-02
 
 ### Fixed
@@ -16,9 +29,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 - **CLAUDE.md** — updated "Five agent types" to Six, added evolver-consolidator
 - **Orphaned consolidator agent** — evolve skill now spawns `evolver-consolidator` via `Agent()` instead of calling `consolidate.py` directly
 - **Cron scheduling** — added `--no-interactive` flag so scheduled runs skip interactive prompts
-- **Production data regression** — `synthesize_strategy.py` now reads `production_seed.json` (was completely ignored, losing real user inputs and error patterns). Also restored `production_seed.json` to proposer `<files_to_read>`
-- **Self-scheduling removed** — `CronCreate` is session-scoped (dies when Claude exits) with 3-day expiry. Removed fake "nightly optimization" option. Kept background mode which actually works
-- **Per-proposer tool restrictions removed** — `Agent()` tool doesn't accept a `tools` parameter. The feature was instructing Claude to pass a non-existent parameter. Removed entirely rather than provide false sense of enforcement
 
 ---
 
