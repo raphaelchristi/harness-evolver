@@ -374,7 +374,7 @@ function installPythonDeps() {
   return false;
 }
 
-async function configureLangSmith(rl) {
+async function configureLangSmith(rl, nonInteractive) {
   const langsmithCredsDir = process.platform === "darwin"
     ? path.join(HOME, "Library", "Application Support", "langsmith-cli")
     : path.join(HOME, ".config", "langsmith-cli");
@@ -393,13 +393,28 @@ async function configureLangSmith(rl) {
     try {
       const content = fs.readFileSync(langsmithCredsFile, "utf8");
       if (content.includes("LANGSMITH_API_KEY=lsv2_")) {
-        stepDone("API key found in credentials file");
-        hasKey = true;
+        // Validate existing key with a real request
+        const existingKey = content.match(/LANGSMITH_API_KEY=(lsv2_[^\s\n]+)/)?.[1];
+        if (existingKey) {
+          try {
+            execSync(`curl -sf -o /dev/null -w "%{http_code}" -H "x-api-key: ${existingKey}" https://api.smith.langchain.com/info`, { stdio: "pipe", timeout: 10000 });
+            stepDone("API key found and validated");
+            hasKey = true;
+          } catch {
+            barLine(c.yellow("API key found but could not be validated — LangSmith may be unreachable"));
+            barLine(c.dim("Will ask for a new key just in case."));
+          }
+        }
       }
     } catch {}
   }
 
   if (!hasKey) {
+    if (nonInteractive) {
+      stepError("No API key found — set LANGSMITH_API_KEY in environment and re-run");
+      barLine(c.dim("Run: export LANGSMITH_API_KEY=lsv2_pt_your_key"));
+      return;
+    }
     barLine(c.dim("Get yours at https://smith.langchain.com/settings"));
     barLine(c.dim("LangSmith is required. The evolver won't work without it."));
     barEmpty();
@@ -410,6 +425,13 @@ async function configureLangSmith(rl) {
       const key = apiKey.trim();
 
       if (key && key.startsWith("lsv2_")) {
+        // Validate key with a real request before saving
+        try {
+          execSync(`curl -sf -o /dev/null -w "%{http_code}" -H "x-api-key: ${key}" https://api.smith.langchain.com/info`, { stdio: "pipe", timeout: 10000 });
+        } catch {
+          barLine(c.yellow("Key could not be validated — LangSmith may be unreachable"));
+          barLine(c.dim("Saving anyway. If it doesn't work, re-run the installer."));
+        }
         try {
           fs.mkdirSync(langsmithCredsDir, { recursive: true });
           fs.writeFileSync(langsmithCredsFile, `LANGSMITH_API_KEY=${key}\n`);
@@ -454,7 +476,7 @@ async function configureLangSmith(rl) {
   }
 }
 
-async function configureOptionalIntegrations(rl) {
+async function configureOptionalIntegrations(rl, nonInteractive) {
   barEmpty();
   step(c.bold("Optional Integrations"));
   barEmpty();
@@ -474,7 +496,7 @@ async function configureOptionalIntegrations(rl) {
 
   if (hasContext7) {
     stepDone("Context7 MCP already configured");
-  } else {
+  } else if (!nonInteractive) {
     barLine(c.bold("Context7 MCP") + " \u2014 " + c.dim("up-to-date library documentation"));
     const c7Answer = await ask(rl, `${c.cyan(S.stepActive)}  Install Context7 MCP? [y/N]: `);
     if (c7Answer.trim().toLowerCase() === "y") {
@@ -506,7 +528,7 @@ async function configureOptionalIntegrations(rl) {
 
   if (hasLcDocs) {
     stepDone("LangChain Docs MCP already configured");
-  } else {
+  } else if (!nonInteractive) {
     barLine(c.bold("LangChain Docs MCP") + " \u2014 " + c.dim("LangChain/LangGraph/LangSmith docs"));
     const lcAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Install LangChain Docs MCP? [y/N]: `);
     if (lcAnswer.trim().toLowerCase() === "y") {
@@ -525,6 +547,8 @@ async function configureOptionalIntegrations(rl) {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
+  const nonInteractive = process.argv.includes("--yes") || process.argv.includes("-y");
+
   banner();
 
   header("harness-evolver");
@@ -539,6 +563,21 @@ async function main() {
       barLine(c.dim(`Run: npx harness-evolver@${latest}`));
     }
   } catch {}
+
+  // Check installed version
+  const versionPath = path.join(HOME, ".evolver", "VERSION");
+  let installedVersion = null;
+  if (fs.existsSync(versionPath)) {
+    installedVersion = fs.readFileSync(versionPath, "utf8").trim();
+  }
+
+  if (installedVersion && installedVersion !== VERSION) {
+    step(`Upgrading ${c.dim(installedVersion)} → ${c.cyan(VERSION)}`);
+  } else if (installedVersion === VERSION) {
+    step(`Reinstalling ${c.cyan(VERSION)}`);
+  } else {
+    step(`Fresh install ${c.cyan(VERSION)}`);
+  }
 
   barEmpty();
 
@@ -567,6 +606,11 @@ async function main() {
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
+  function askOrDefault(question, defaultValue) {
+    if (nonInteractive) return Promise.resolve(defaultValue);
+    return ask(rl, question);
+  }
+
   // Runtime selection
   barEmpty();
   stepPrompt("Which runtime(s) to install for?");
@@ -577,7 +621,7 @@ async function main() {
     barLine(c.dim("Select multiple: 1,2 or 1 2"));
   }
 
-  const runtimeAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Choice [1]: `);
+  const runtimeAnswer = await askOrDefault(`${c.cyan(S.stepActive)}  Choice [1]: `, "1");
   const runtimeInput = (runtimeAnswer.trim() || "1");
 
   let selected;
@@ -598,7 +642,7 @@ async function main() {
   barLine(`  ${c.bold("1")}  Global ${c.dim(`(~/${selected[0].dir})`)}`);
   barLine(`  ${c.bold("2")}  Local  ${c.dim(`(./${selected[0].dir})`)}`);
 
-  const scopeAnswer = await ask(rl, `${c.cyan(S.stepActive)}  Choice [1]: `);
+  const scopeAnswer = await askOrDefault(`${c.cyan(S.stepActive)}  Choice [1]: `, "1");
   const scope = (scopeAnswer.trim() === "2") ? "local" : "global";
 
   stepDone(`Scope: ${c.cyan(scope)}`);
@@ -632,8 +676,20 @@ async function main() {
   const toolCount = installTools();
   stepDone(`${toolCount} tools installed to ~/.evolver/tools/`);
 
-  // Version marker
-  const versionPath = path.join(HOME, ".evolver", "VERSION");
+  // Suggest .worktreeinclude for worktree support
+  barEmpty();
+  const cwdGit = fs.existsSync(path.join(process.cwd(), ".git"));
+  const cwdWorktreeInclude = fs.existsSync(path.join(process.cwd(), ".worktreeinclude"));
+  if (cwdGit && !cwdWorktreeInclude) {
+    step("Worktree support");
+    barLine(c.dim("For /evolver:evolve to work, .evolver.json needs to be in worktrees."));
+    barLine(c.dim("Create .worktreeinclude in your project root with:"));
+    barLine(c.dim("  .evolver.json"));
+    barLine(c.dim("  .env"));
+    stepDone("Tip shown");
+  }
+
+  // Version marker (versionPath declared earlier for upgrade check)
   fs.mkdirSync(path.dirname(versionPath), { recursive: true });
   fs.writeFileSync(versionPath, VERSION);
 
@@ -642,10 +698,10 @@ async function main() {
   installPythonDeps();
 
   // Configure LangSmith
-  await configureLangSmith(rl);
+  await configureLangSmith(rl, nonInteractive);
 
   // Optional integrations
-  await configureOptionalIntegrations(rl);
+  await configureOptionalIntegrations(rl, nonInteractive);
 
   // Done
   barEmpty();
@@ -656,6 +712,9 @@ async function main() {
   barLine(`  ${c.cyan("/evolver:evolve")}  \u2014 run the optimization loop`);
   barLine(`  ${c.cyan("/evolver:status")} \u2014 check progress`);
   barLine(`  ${c.cyan("/evolver:deploy")}  \u2014 finalize and push`);
+  barEmpty();
+  barLine(c.dim("Plugin marketplace (auto-updates):"));
+  barLine(`  ${c.cyan("/plugin install harness-evolver")}  ${c.dim("— from Claude Code marketplace")}`);
   barEmpty();
   barLine(c.dim("GitHub: https://github.com/raphaelchristi/harness-evolver"));
   footer();
