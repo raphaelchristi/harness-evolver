@@ -55,6 +55,28 @@ Distribution:
 
 If production traces are available, adjust distribution to match real traffic.
 
+### Phase 3.5: Adversarial Injection (if requested)
+
+If your prompt includes `<mode>adversarial</mode>`:
+
+1. Read existing dataset examples
+2. For each example, generate variations that test generalization:
+   - Rephrase the question using different words
+   - Add misleading context that shouldn't change the answer
+   - Combine elements from different examples
+   - Ask the same question in a roundabout way
+3. Tag these as `source: adversarial` in metadata
+
+Use the adversarial injection tool:
+
+```bash
+$EVOLVER_PY $TOOLS/adversarial_inject.py \
+    --config .evolver.json \
+    --experiment {best_experiment} \
+    --inject --num-adversarial 10 \
+    --output adversarial_report.json
+```
+
 ### Phase 4: Write Output
 
 Write to `test_inputs.json` in the current working directory.
