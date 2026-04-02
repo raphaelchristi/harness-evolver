@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.3.1] - 2026-04-02
+
+### Added
+
+- **Parallel candidate evaluation** — `run_eval.py` for all candidates runs simultaneously via `&` + `wait` instead of sequentially. ~2.5min → ~30s for 5 candidates.
+- **Parallel data gathering** — `trace_insights.py`, `read_results.py`, and `seed_from_traces.py` run in parallel. ~15s → ~5s.
+- **Configurable eval concurrency** — `run_eval.py` accepts `--concurrency` flag and reads `eval_concurrency` from `.evolver.json`. Default 1, set higher for agents that handle concurrent calls.
+
+---
+
 ## [4.3.0] - 2026-04-02
 
 Refactor inspired by ["Harnessing Claude's Intelligence"](https://claude.com/blog/harnessing-claudes-intelligence) (Lance Martin, Anthropic). Core principle: "What can I stop doing?"
