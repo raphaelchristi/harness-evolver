@@ -469,28 +469,38 @@ $EVOLVER_PY $TOOLS/consolidate.py \
 
 The `evolution_memory.md` file will be included in proposer briefings for subsequent iterations.
 
-### 6.5. Auto-trigger Critic
+### 6.5. Auto-trigger Active Critic
 
 If score jumped >0.3 from previous iteration OR reached target in <3 iterations:
-
-Spawn the critic agent to analyze evaluator quality:
 
 ```
 Agent(
   subagent_type: "evolver-critic",
-  description: "Critic: check evaluator gaming",
+  description: "Active Critic: detect and fix evaluator gaming",
   prompt: |
     <objective>
-    EVAL GAMING DETECTED: Score jumped from {prev_score} to {score}.
+    EVAL GAMING CHECK: Score jumped from {prev_score} to {score}.
     Check if the LangSmith evaluators are being gamed.
+    If gaming detected, add stricter evaluators using $TOOLS/add_evaluator.py.
     </objective>
+
+    <tools_path>
+    TOOLS={tools_path}
+    EVOLVER_PY={evolver_py_path}
+    </tools_path>
 
     <files_to_read>
     - .evolver.json
     - comparison.json
     - trace_insights.json
+    - evolution_memory.md (if exists)
     </files_to_read>
 )
+```
+
+If the critic added new evaluators, log it:
+```
+Critic added evaluators: {new_evaluators}. Next iteration will use stricter evaluation.
 ```
 
 ### 7. Auto-trigger Architect
