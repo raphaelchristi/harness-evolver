@@ -131,119 +131,7 @@ If critical issues found, ask user whether to continue or fix first via AskUserQ
 
 ### 0.6. Dataset Health Check
 
-Run the dataset health diagnostic:
-
-```bash
-$EVOLVER_PY $TOOLS/dataset_health.py \
-    --config .evolver.json \
-    --production-seed production_seed.json \
-    --output health_report.json 2>/dev/null
-```
-
-Read `health_report.json`. Print summary:
-```bash
-python3 -c "
-import json, os
-if os.path.exists('health_report.json'):
-    r = json.load(open('health_report.json'))
-    print(f'Dataset Health: {r[\"health_score\"]}/10 ({r[\"example_count\"]} examples)')
-    for issue in r.get('issues', []):
-        print(f'  [{issue[\"severity\"]}] {issue[\"message\"]}')
-"
-```
-
-### 0.7. Auto-Correct Dataset Issues
-
-If `health_report.json` has corrections, apply them automatically:
-
-```bash
-CORRECTIONS=$(python3 -c "
-import json, os
-if os.path.exists('health_report.json'):
-    r = json.load(open('health_report.json'))
-    for c in r.get('corrections', []):
-        print(c['action'])
-" 2>/dev/null)
-```
-
-For each correction:
-
-**If `create_splits`**: Run inline Python to assign 70/30 splits:
-```bash
-$EVOLVER_PY -c "
-from langsmith import Client
-import json, random
-client = Client()
-config = json.load(open('.evolver.json'))
-examples = list(client.list_examples(dataset_name=config['dataset']))
-random.shuffle(examples)
-sp = int(len(examples) * 0.7)
-for ex in examples[:sp]:
-    client.update_example(ex.id, split='train')
-for ex in examples[sp:]:
-    client.update_example(ex.id, split='held_out')
-print(f'Assigned splits: {sp} train, {len(examples)-sp} held_out')
-"
-```
-
-**If `generate_hard`**: Spawn testgen agent with hard-mode instruction:
-```
-Agent(
-  subagent_type: "evolver-testgen",
-  description: "Generate hard examples to rebalance dataset",
-  prompt: |
-    <objective>
-    The dataset is skewed toward easy examples. Generate {count} HARD examples
-    that the current agent is likely to fail on.
-    Focus on: edge cases, adversarial inputs, complex multi-step queries,
-    ambiguous questions, and inputs that require deep reasoning.
-    </objective>
-    <files_to_read>
-    - .evolver.json
-    - strategy.md (if exists)
-    - production_seed.json (if exists)
-    </files_to_read>
-)
-```
-
-**If `fill_coverage`**: Spawn testgen agent with coverage-fill instruction:
-```
-Agent(
-  subagent_type: "evolver-testgen",
-  description: "Generate examples for missing categories",
-  prompt: |
-    <objective>
-    The dataset is missing these production categories: {categories}.
-    Generate 5 examples per missing category.
-    Use production_seed.json for real-world patterns in these categories.
-    </objective>
-    <files_to_read>
-    - .evolver.json
-    - production_seed.json (if exists)
-    </files_to_read>
-)
-```
-
-**If `retire_dead`**: Move dead examples to retired split:
-```bash
-$EVOLVER_PY -c "
-from langsmith import Client
-import json
-client = Client()
-report = json.load(open('health_report.json'))
-dead_ids = report.get('dead_examples', {}).get('ids', [])
-config = json.load(open('.evolver.json'))
-examples = {str(e.id): e for e in client.list_examples(dataset_name=config['dataset'])}
-retired = 0
-for eid in dead_ids:
-    if eid in examples:
-        client.update_example(examples[eid].id, split='retired')
-        retired += 1
-print(f'Retired {retired} dead examples')
-"
-```
-
-After corrections, log what was done. Do NOT re-run health check (corrections may need an experiment cycle to show effect).
+Invoke `/evolver:health` to check and auto-correct dataset issues. If health_report.json shows critical issues that couldn't be auto-corrected, ask user whether to proceed via AskUserQuestion.
 
 ### 0.8. Resolve Project Directory
 
@@ -309,25 +197,42 @@ fi
 ```
 
 If `best_results.json` exists, parse it to find failing examples (score < 0.7). Group by metadata or error pattern.
-This failure data feeds into `synthesize_strategy.py` which generates targeted lenses for proposers.
+This failure data feeds into the strategy and lens generation step (1.8a).
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
-### 1.8a. Synthesize Strategy
+### 1.8a. Generate Strategy and Lenses
 
-Generate a targeted strategy document from all available analysis:
+Read the available analysis files:
+- `trace_insights.json` (error clusters, token analysis)
+- `best_results.json` (per-task scores and failures)
+- `evolution_memory.json` / `evolution_memory.md` (cross-iteration insights)
+- `production_seed.json` (real-world traffic patterns, if exists)
 
-```bash
-$EVOLVER_PY $TOOLS/synthesize_strategy.py \
-    --config .evolver.json \
-    --trace-insights trace_insights.json \
-    --best-results best_results.json \
-    --evolution-memory evolution_memory.json \
-    --production-seed production_seed.json \
-    --output strategy.md \
-    --lenses lenses.json 2>/dev/null
+Based on this data, generate two files:
+
+**`strategy.md`** — A concise strategy document with: target files, failure clusters (prioritized), recommended approaches (from evolution memory), approaches to avoid, top failing examples, and production insights.
+
+**`lenses.json`** — Investigation questions for proposers, format:
+```json
+{
+  "generated_at": "ISO timestamp",
+  "lens_count": N,
+  "lenses": [
+    {"id": 1, "question": "...", "source": "failure_cluster|architecture|production|evolution_memory|uniform_failure|open", "severity": "critical|high|medium", "context": {}},
+    ...
+  ]
+}
 ```
 
-The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). The `lenses.json` file contains dynamically generated investigation questions — one per proposer. Each lens directs a proposer's attention to a different aspect of the problem (failure cluster, architecture, production data, evolution memory, or open investigation).
+Lens generation rules:
+- One lens per distinct failure cluster (max 3)
+- One architecture lens if high-severity structural issues exist
+- One production lens if production data shows problems
+- One evolution memory lens if a pattern won 2+ times
+- One persistent failure lens if a pattern recurred 3+ iterations
+- If all examples fail with same error, one "uniform_failure" lens
+- Always include one "open" lens
+- Sort by severity (critical > high > medium), cap at max_proposers from config (default 5)
 
 ### 1.9. Prepare Shared Proposer Context
 
@@ -473,27 +378,7 @@ Then spawn ONE evaluator agent that scores ALL candidates in a single pass. This
 Agent(
   subagent_type: "evolver-evaluator",
   description: "Evaluate all candidates for iteration v{NNN}",
-  prompt: |
-    <experiment>
-    Evaluate the following experiments (one per candidate):
-    {list all experiment names from proposers that committed changes — skip abstained}
-    </experiment>
-
-    <evaluators>
-    Apply these evaluators to each run in each experiment:
-    - {llm_evaluator_list, e.g. "correctness", "conciseness"}
-    </evaluators>
-
-    <context>
-    Agent type: {framework} agent
-    Domain: {description from .evolver.json or entry point context}
-    Entry point: {entry_point}
-
-    For each experiment:
-    1. Read all runs via: langsmith-cli --json runs list --project "{experiment_name}" --fields id,inputs,outputs,error --is-root true --limit 200
-    2. Judge each run's output against the input
-    3. Write scores via: langsmith-cli --json feedback create {run_id} --key {evaluator} --score {0.0|1.0} --comment "{reason}" --source model
-    </context>
+  prompt: "Experiments to evaluate: {comma-separated experiment names from non-abstained proposers}. Evaluators: {llm_evaluator_list}. Framework: {framework}. Entry point: {entry_point}."
 )
 ```
 
@@ -592,45 +477,18 @@ Print: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best} at {best_score})`
 
 ### 6.2. Consolidate Evolution Memory
 
-Spawn the consolidator agent to analyze the iteration and update cross-iteration memory:
+Spawn the consolidator agent (runs in background — doesn't block the next iteration):
 
 ```
 Agent(
   subagent_type: "evolver-consolidator",
   description: "Consolidate evolution memory after iteration v{NNN}",
   run_in_background: true,
-  prompt: |
-    <objective>
-    Consolidate learnings from iteration v{NNN}.
-    Run the consolidation tool and review its output.
-    </objective>
-
-    <tools_path>
-    TOOLS={tools_path}
-    EVOLVER_PY={evolver_py_path}
-    </tools_path>
-
-    <instructions>
-    Run: $EVOLVER_PY $TOOLS/consolidate.py \
-        --config .evolver.json \
-        --comparison-files comparison.json \
-        --output evolution_memory.md \
-        --output-json evolution_memory.json
-
-    Then read the output and verify insights are accurate.
-    </instructions>
-
-    <files_to_read>
-    - .evolver.json
-    - comparison.json
-    - trace_insights.json (if exists)
-    - regression_report.json (if exists)
-    - evolution_memory.md (if exists)
-    </files_to_read>
+  prompt: "Update evolution_memory.md with learnings from this iteration. Read .evolver.json, comparison.json, trace_insights.json, regression_report.json (if exists), and current evolution_memory.md (if exists). Track what worked, what failed, and promote insights that recur across iterations."
 )
 ```
 
-The `evolution_memory.md` file will be included in proposer briefings for subsequent iterations.
+The `evolution_memory.md` file will be available for proposer briefings in subsequent iterations.
 
 ### 6.5. Auto-trigger Active Critic
 
@@ -639,25 +497,8 @@ If score jumped >0.3 from previous iteration OR reached target in <3 iterations:
 ```
 Agent(
   subagent_type: "evolver-critic",
-  description: "Active Critic: detect and fix evaluator gaming",
-  prompt: |
-    <objective>
-    EVAL GAMING CHECK: Score jumped from {prev_score} to {score}.
-    Check if the LangSmith evaluators are being gamed.
-    If gaming detected, add stricter evaluators using $TOOLS/add_evaluator.py.
-    </objective>
-
-    <tools_path>
-    TOOLS={tools_path}
-    EVOLVER_PY={evolver_py_path}
-    </tools_path>
-
-    <files_to_read>
-    - .evolver.json
-    - comparison.json
-    - trace_insights.json
-    - evolution_memory.md (if exists)
-    </files_to_read>
+  description: "Check evaluator gaming after score jump",
+  prompt: "Score jumped from {prev_score} to {score}. Check if LangSmith evaluators are being gamed. Read .evolver.json, comparison.json, trace_insights.json, evolution_memory.md. If gaming detected, add stricter evaluators using $EVOLVER_PY $TOOLS/add_evaluator.py."
 )
 ```
 
@@ -674,55 +515,22 @@ If 3 consecutive iterations within 1% OR score dropped:
 Agent(
   subagent_type: "evolver-architect",
   model: "opus",
-  description: "Architect ULTRAPLAN: deep topology analysis",
-  prompt: |
-    <objective>
-    The evolution loop has stagnated after {iterations} iterations.
-    Scores: {last_3_scores}.
-    Perform deep architectural analysis and recommend structural changes.
-    Use extended thinking — you have more compute budget than normal agents.
-    </objective>
-
-    <tools_path>
-    TOOLS={tools_path}
-    EVOLVER_PY={evolver_py_path}
-    </tools_path>
-
-    <files_to_read>
-    - .evolver.json
-    - trace_insights.json
-    - evolution_memory.md (if exists)
-    - evolution_memory.json (if exists)
-    - strategy.md (if exists)
-    - {entry point and all related source files}
-    </files_to_read>
+  description: "Deep topology analysis after stagnation",
+  prompt: "Evolution stagnated after {iterations} iterations. Scores: {last_3_scores}. Analyze architecture and recommend structural changes. Read .evolver.json, trace_insights.json, evolution_memory.md, strategy.md, and the entry point source files. Use $EVOLVER_PY $TOOLS/analyze_architecture.py for AST analysis if helpful."
 )
 ```
 
 After architect completes, include `architecture.md` in proposer `<files_to_read>` for next iteration.
 
-### 8. Gate Check (Three-Gate Trigger)
+### 8. Gate Check
 
-Before starting the next iteration, run the gate check:
+Read `.evolver.json` history and assess whether to continue:
 
-```bash
-GATE_RESULT=$($EVOLVER_PY $TOOLS/iteration_gate.py --config .evolver.json 2>/dev/null)
-PROCEED=$(echo "$GATE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('proceed', True))")
-```
+- **Score plateau**: If last 3 scores are within 2% of each other, evolution may have converged. Consider triggering architect (Step 7) or stopping.
+- **Target reached**: If `best_score >= target_score`, stop and report success.
+- **Diminishing returns**: If average improvement over last 5 iterations is less than 0.5%, consider stopping.
 
-If `PROCEED` is `False`, check suggestions:
-
-```bash
-SUGGEST=$(echo "$GATE_RESULT" | python3 -c "import sys,json; s=json.load(sys.stdin).get('suggestions',[]); print(s[0] if s else '')")
-```
-
-- If `$SUGGEST` is `architect`: auto-trigger architect agent (Step 7)
-- If `$SUGGEST` is `continue_cautious`: ask user via AskUserQuestion whether to continue
-- Otherwise: stop the loop and report final results
-
-Legacy stop conditions still apply:
-- **Target**: `score >= target_score` → stop
-- **N reached**: all requested iterations done → stop
+If stopping, skip to the final report. If continuing, proceed to next iteration.
 
 ## When Loop Ends — Final Report
 
