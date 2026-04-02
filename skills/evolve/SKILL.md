@@ -332,24 +332,37 @@ Iteration {i}/{N} — 5 candidates evaluated:
   Per-task champion: {champion} (beats winner on {N} tasks)
 ```
 
-### 5.5. Test Suite Growth
+### 5.5. Regression Tracking & Test Suite Growth
 
-If previously-failing examples now pass, add regression examples to the dataset:
+If this is not the first iteration (previous experiment exists), track regressions and auto-add guards:
 
 ```bash
-python3 -c "
-from langsmith import Client
+PREV_EXP=$(python3 -c "
 import json
-
-client = Client()
-config = json.load(open('.evolver.json'))
-
-# Find examples that improved significantly
-# (score went from <0.5 to >0.8 between iterations)
-# Generate variations and add to dataset
-# client.create_examples(dataset_id=config['dataset_id'], examples=[...])
-print('Test suite growth: added N regression examples')
+h = json.load(open('.evolver.json')).get('history', [])
+print(h[-2]['experiment'] if len(h) >= 2 else '')
+")
+if [ -n "$PREV_EXP" ]; then
+    $EVOLVER_PY $TOOLS/regression_tracker.py \
+        --config .evolver.json \
+        --previous-experiment "$PREV_EXP" \
+        --current-experiment "{winner_experiment}" \
+        --add-guards --max-guards 5 \
+        --output regression_report.json 2>/dev/null
+    
+    # Report regressions
+    python3 -c "
+import json, os
+if os.path.exists('regression_report.json'):
+    r = json.load(open('regression_report.json'))
+    if r['regression_count'] > 0:
+        print(f'WARNING: {r[\"regression_count\"]} regressions detected')
+    if r['guards_added'] > 0:
+        print(f'  Added {r[\"guards_added\"]} regression guard examples to dataset')
+    if r['fixed_count'] > 0:
+        print(f'  {r[\"fixed_count\"]} previously-failing examples now pass')
 " 2>/dev/null
+fi
 ```
 
 ### 6. Report
