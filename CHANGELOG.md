@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.8] - 2026-04-02
+
+### Fixed
+
+- **Installer detects marketplace plugins** — Context7 and LangChain Docs installed via `/plugin install` are now detected from `~/.claude/plugins/marketplaces/`, not just `mcpServers` in settings.json. No longer asks to install what's already there.
+
+---
+
 ## [4.2.7] - 2026-04-02
 
 ### Fixed
