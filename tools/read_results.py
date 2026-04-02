@@ -61,7 +61,28 @@ def ensure_langsmith_api_key():
     return False
 
 
-def read_experiment(client, experiment_name):
+def weighted_score(scores, weights=None):
+    """Calculate weighted average of evaluator scores.
+
+    If weights provided, use them. Otherwise flat average.
+    Weights are normalized (don't need to sum to 1).
+    """
+    if not scores:
+        return 0.0
+    if not weights:
+        return sum(scores.values()) / len(scores)
+
+    total_weight = 0
+    weighted_sum = 0
+    for key, val in scores.items():
+        w = weights.get(key, 1.0)
+        weighted_sum += val * w
+        total_weight += w
+
+    return weighted_sum / total_weight if total_weight > 0 else 0.0
+
+
+def read_experiment(client, experiment_name, weights=None):
     """Read results from a single LangSmith experiment."""
     try:
         # List runs for this experiment
@@ -103,13 +124,17 @@ def read_experiment(client, experiment_name):
             # Read feedback/scores from pre-fetched batch
             feedbacks = fb_map.get(str(run.id), [])
             scores = {}
+            feedback_comments = {}
             for fb in feedbacks:
                 if fb.score is not None:
                     scores[fb.key] = fb.score
+                if fb.comment:
+                    feedback_comments[fb.key] = fb.comment
 
             per_example[example_id] = {
-                "score": sum(scores.values()) / len(scores) if scores else 0.0,
+                "score": weighted_score(scores, weights),
                 "scores": scores,
+                "feedback": feedback_comments,
                 "tokens": tokens,
                 "latency_ms": latency_ms,
                 "error": run.error[:200] if run.error else None,
@@ -134,6 +159,50 @@ def read_experiment(client, experiment_name):
 
     except Exception as e:
         return {"experiment": experiment_name, "error": str(e), "combined_score": 0.0}
+
+
+def pareto_front(candidates):
+    """Find Pareto-optimal candidates (not dominated on any evaluator).
+
+    A candidate is dominated if another scores >= on ALL evaluators
+    and strictly > on at least one.
+    """
+    if len(candidates) <= 1:
+        return candidates
+
+    front = []
+    for i, ci in enumerate(candidates):
+        dominated = False
+        ci_scores = ci.get("evaluator_scores", {})
+        if not ci_scores:
+            front.append(ci)
+            continue
+
+        for j, cj in enumerate(candidates):
+            if i == j:
+                continue
+            cj_scores = cj.get("evaluator_scores", {})
+            if not cj_scores:
+                continue
+
+            all_geq = True
+            any_gt = False
+            for key in ci_scores:
+                if key in cj_scores:
+                    if cj_scores[key] < ci_scores[key]:
+                        all_geq = False
+                        break
+                    if cj_scores[key] > ci_scores[key]:
+                        any_gt = True
+
+            if all_geq and any_gt:
+                dominated = True
+                break
+
+        if not dominated:
+            front.append(ci)
+
+    return front if front else candidates[:1]
 
 
 def compare_experiments(results_list):
@@ -173,12 +242,27 @@ def compare_experiments(results_list):
             "task_wins": task_wins[champion_name],
         }
 
+    # Compute per-evaluator averages for Pareto analysis
+    for result in valid:
+        eval_avgs = {}
+        for ex_data in result.get("per_example", {}).values():
+            for ev_key, ev_score in ex_data.get("scores", {}).items():
+                eval_avgs.setdefault(ev_key, []).append(ev_score)
+        result["evaluator_scores"] = {k: sum(v) / len(v) for k, v in eval_avgs.items()}
+
+    front = pareto_front(valid)
+
     return {
         "winner": {
             "experiment": winner["experiment"],
             "score": winner["combined_score"],
         },
         "champion": champion,
+        "pareto_front": [
+            {"experiment": r["experiment"], "score": r["combined_score"],
+             "evaluator_scores": r.get("evaluator_scores", {})}
+            for r in front
+        ],
         "all_candidates": [
             {
                 "experiment": r["experiment"],
@@ -231,12 +315,19 @@ def main():
     args = parser.parse_args()
     ensure_langsmith_api_key()
 
+    # Load evaluator weights from config if available
+    weights = None
+    if os.path.exists(args.config):
+        with open(args.config) as f:
+            cfg = json.load(f)
+        weights = cfg.get("evaluator_weights")
+
     from langsmith import Client
     client = Client()
 
     if args.experiment:
         # Single experiment
-        result = read_experiment(client, args.experiment)
+        result = read_experiment(client, args.experiment, weights=weights)
         if not result:
             print(f"No results found for experiment: {args.experiment}", file=sys.stderr)
             sys.exit(1)
@@ -269,7 +360,7 @@ def main():
 
         for name in experiment_names:
             print(f"Reading experiment: {name}...", file=sys.stderr)
-            result = read_experiment(client, name)
+            result = read_experiment(client, name, weights=weights)
             if result:
                 results_list.append(result)
 
