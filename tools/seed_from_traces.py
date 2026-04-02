@@ -22,6 +22,14 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone
 
+# Secret detection (local import from same directory)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from secret_filter import has_secrets
+except ImportError:
+    def has_secrets(text):
+        return False
+
 
 def extract_input(run):
     """Extract user input from a run's inputs field."""
@@ -118,9 +126,16 @@ def analyze_runs(runs):
     token_counts = []
     feedbacks = {"positive": 0, "negative": 0, "none": 0}
 
+    secrets_filtered = 0
     for run in runs:
         user_input = extract_input(run)
         output = extract_output(run)
+
+        # Skip runs containing secrets (API keys, tokens, passwords)
+        if has_secrets(str(user_input or '')) or has_secrets(str(output or '')):
+            secrets_filtered += 1
+            continue
+
         error = run.get("error")
         tokens = run.get("total_tokens") or 0
         latency_ms = None

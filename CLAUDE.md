@@ -41,6 +41,15 @@ python tools/analyze_architecture.py --harness path/to/agent -o output.json
 # Evolution progress chart (stdlib-only, no langsmith needed)
 python tools/evolution_chart.py --config .evolver.json
 
+# Constraint validation for proposals (stdlib-only, no langsmith needed)
+python tools/constraint_check.py --config .evolver.json --worktree-path /tmp/wt --baseline-path .
+
+# Secret detection in text (stdlib-only, pipe text to stdin)
+echo "text with API keys" | python tools/secret_filter.py
+
+# Mine Claude Code sessions for eval data (stdlib-only)
+python tools/mine_sessions.py --agent-description "my agent" --output mined.json
+
 # Dataset health diagnostic (size, difficulty, coverage, splits)
 python tools/dataset_health.py --config .evolver.json --output health_report.json
 
@@ -78,7 +87,7 @@ Three layers, each in its own directory:
 
 2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `evolver-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red, active — detects + fixes gaming), `evolver-architect` (blue, ULTRAPLAN mode with opus), `evolver-consolidator` (cyan, cross-iteration memory), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
-3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py` and `evolution_chart.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
+3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, and `mine_sessions.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
 Supporting infrastructure:
 - **Plugin manifest** (`.claude-plugin/plugin.json`) — registers as a Claude Code plugin
