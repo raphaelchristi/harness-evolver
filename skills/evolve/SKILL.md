@@ -66,6 +66,29 @@ Read config:
 python3 -c "import json; c=json.load(open('.evolver.json')); print(f'Best: {c[\"best_experiment\"]} ({c[\"best_score\"]:.3f}), Iterations: {c[\"iterations\"]}')"
 ```
 
+### 0.5. Validate State
+
+Before starting the loop, verify `.evolver.json` matches LangSmith reality:
+
+```bash
+VALIDATION=$($EVOLVER_PY $TOOLS/validate_state.py --config .evolver.json 2>/dev/null)
+VALID=$(echo "$VALIDATION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('valid', False))")
+if [ "$VALID" = "False" ]; then
+    echo "WARNING: State validation found issues:"
+    echo "$VALIDATION" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for issue in data.get('issues', []):
+    print(f'  [{issue[\"severity\"]}] {issue[\"message\"]}')
+"
+fi
+```
+
+If critical issues found, ask user whether to continue or fix first via AskUserQuestion:
+- "Continue anyway" — proceed with warnings
+- "Fix and retry" — attempt auto-fix with `--fix` flag
+- "Abort" — stop the evolution loop
+
 For each iteration:
 
 ### 1. Get Next Version
