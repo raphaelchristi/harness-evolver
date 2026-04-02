@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.5] - 2026-04-02
+
+### Fixed
+
+- **BLOCKER: Entry point relative paths in worktrees** — `setup.py` now resolves relative Python interpreter paths (e.g., `../.venv/bin/python`) to absolute paths before saving to `.evolver.json`. Fixes "No such file or directory" when agents run in worktrees where venvs don't exist.
+- **`.evolver.json` missing in worktrees** — new `.worktreeinclude` file ensures `.evolver.json` and `.env` are copied to worktrees despite being gitignored
+- **Orphaned datasets on setup failure** — `setup.py` now wraps dataset creation in try/except and cleans up orphaned datasets if setup fails mid-way
+
+---
+
 ## [4.2.4] - 2026-04-02
 
 ### Fixed

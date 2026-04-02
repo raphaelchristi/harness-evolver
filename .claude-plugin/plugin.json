@@ -1,7 +1,7 @@
 {
   "name": "harness-evolver",
   "description": "LangSmith-native autonomous agent optimization — evolves LLM agent code using multi-agent proposers, LangSmith experiments, and git worktrees",
-  "version": "4.2.4",
+  "version": "4.2.5",
   "author": {
     "name": "Raphael Valdetaro"
   },
