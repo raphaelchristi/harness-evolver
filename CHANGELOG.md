@@ -6,6 +6,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.1.0] - 2026-04-02
+
+### Added
+
+- **Dynamic Lenses** — proposers now receive data-driven investigation questions (lenses) instead of fixed strategy assignments (exploit/explore/crossover/failure-targeted). Lenses are generated dynamically from failure clusters, architecture analysis, production traces, and evolution memory. Based on Dochkina (2026), ["Drop the Hierarchy and Roles"](https://arxiv.org/abs/2603.28990)
+- **Self-Organizing Proposer (v4)** — proposers decide their own approach based on lens investigation. No prescribed strategies, no fixed workflow phases. Each proposer writes a self-described approach in `proposal.md`
+- **Self-Abstention** — proposers can abstain when they assess their contribution as insufficient, saving evaluation tokens. Abstained candidates skip evaluation entirely
+- **Dynamic proposer count** — `synthesize_strategy.py` generates 2-5 lenses based on available data. `max_proposers` field in `.evolver.json` controls the upper bound (default 5)
+- **`--lenses` flag** on `synthesize_strategy.py` — outputs `lenses.json` alongside `strategy.md`
+
+### Changed
+
+- **Experiment naming** — candidates use numeric IDs (`v001-1`, `v001-2`) instead of letter suffixes (`v001a`, `v001b`)
+- **Consolidation tracking** — `consolidate.py` tracks emergent approaches from `proposal.md` instead of mapping fixed labels (`strategy_map` removed)
+- **Reporting format** — iteration reports show self-described approaches and abstention counts
+
+### Removed
+
+- **Fixed strategy system** — `<strategy>` blocks, fixed candidate labels (A-E), per-strategy tool restrictions, and hardcoded 5-proposer count are all removed
+- **`strategy_map`** in `consolidate.py` — no longer maps suffix letters to strategy names
+
+---
+
 ## [4.0.3] - 2026-04-02
 
 ### Added

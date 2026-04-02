@@ -67,8 +67,8 @@ claude
 <td>Proposers modify your actual agent code — not a wrapper. Each candidate works in an isolated git worktree. Winners are merged automatically.</td>
 </tr>
 <tr>
-<td><b>5 Adaptive Proposers</b></td>
-<td>Each iteration spawns 5 parallel agents: exploit, explore, crossover, and 2 failure-targeted. Strategies adapt based on per-task analysis. Quality-diversity selection preserves per-task champions.</td>
+<td><b>Self-Organizing Proposers</b></td>
+<td>Each iteration generates dynamic investigation lenses from failure data, architecture analysis, production traces, and evolution memory. Proposers self-organize their approach — no fixed strategies. They can self-abstain when their contribution would be redundant. Inspired by <a href="https://arxiv.org/abs/2603.28990">Dochkina (2026)</a>.</td>
 </tr>
 <tr>
 <td><b>Agent-Based Evaluation</b></td>
@@ -88,7 +88,7 @@ claude
 </tr>
 <tr>
 <td><b>Evolution Memory</b></td>
-<td>Cross-iteration memory consolidation inspired by Claude Code's autoDream. Tracks which strategies win, which failures recur, and promotes insights after 2+ occurrences.</td>
+<td>Cross-iteration memory consolidation inspired by Claude Code's autoDream. Tracks which approaches win, which failures recur, and promotes insights after 2+ occurrences.</td>
 </tr>
 <tr>
 <td><b>Smart Gating</b></td>
@@ -107,7 +107,7 @@ claude
 | Command | What it does |
 |---|---|
 | `/evolver:setup` | Explore project, configure LangSmith (dataset, evaluators), run baseline |
-| `/evolver:evolve` | Run the optimization loop (5 parallel proposers in worktrees) |
+| `/evolver:evolve` | Run the optimization loop (dynamic self-organizing proposers in worktrees) |
 | `/evolver:status` | Show progress, scores, history |
 | `/evolver:deploy` | Tag, push, clean up temporary files |
 
@@ -117,7 +117,7 @@ claude
 
 | Agent | Role | Color |
 |---|---|---|
-| **Proposer** | Modifies agent code in isolated worktrees based on trace analysis | Green |
+| **Proposer** | Self-organizing — investigates a data-driven lens, decides own approach, may abstain | Green |
 | **Evaluator** | LLM-as-judge — reads outputs via langsmith-cli, scores correctness | Yellow |
 | **Architect** | ULTRAPLAN mode — deep topology analysis with Opus model | Blue |
 | **Critic** | Active — detects gaming AND implements stricter evaluators | Red |
@@ -134,10 +134,10 @@ claude
   +- 0.5  Validate state (skeptical memory — check .evolver.json vs LangSmith)
   +- 1.   Read state (.evolver.json + LangSmith experiments)
   +- 1.5  Gather trace insights (cluster errors, tokens, latency)
-  +- 1.8  Analyze per-task failures (adaptive briefings)
-  +- 1.8a Synthesize strategy document (coordinator synthesis)
+  +- 1.8  Analyze per-task failures
+  +- 1.8a Synthesize strategy document + dynamic lenses (investigation questions)
   +- 1.9  Prepare shared proposer context (KV cache-optimized prefix)
-  +- 2.   Spawn 5 proposers in parallel (each in a git worktree)
+  +- 2.   Spawn N self-organizing proposers in parallel (each in a git worktree)
   +- 3.   Run target for each candidate (code-based evaluators)
   +- 3.5  Spawn evaluator agent (LLM-as-judge via langsmith-cli)
   +- 4.   Compare experiments -> select winner + per-task champion
@@ -165,7 +165,7 @@ Skills (markdown)
   └── /evolver:deploy   → tags and pushes
 
 Agents (markdown)
-  ├── Proposer (x5)     → modifies code in isolated git worktrees
+  ├── Proposer (xN)     → self-organizing, lens-driven, isolated git worktrees
   ├── Evaluator          → LLM-as-judge via langsmith-cli
   ├── Critic             → detects gaming + implements stricter evaluators
   ├── Architect          → ULTRAPLAN deep analysis (opus model)
@@ -182,7 +182,7 @@ Tools (Python + langsmith SDK)
   ├── iteration_gate.py     → three-gate iteration triggers
   ├── regression_tracker.py → tracks regressions, adds guard examples
   ├── consolidate.py        → cross-iteration memory consolidation
-  ├── synthesize_strategy.py→ generates strategy document for proposers
+  ├── synthesize_strategy.py→ generates strategy document + investigation lenses
   ├── add_evaluator.py      → programmatically adds evaluators
   └── adversarial_inject.py → detects memorization, injects adversarial tests
 ```
@@ -217,6 +217,7 @@ LangSmith traces **any** AI framework. The evolver works with all of them:
 ## References
 
 - [Meta-Harness: End-to-End Optimization of Model Harnesses](https://arxiv.org/abs/2603.28052) — Lee et al., 2026
+- [Drop the Hierarchy and Roles: How Self-Organizing LLM Agents Outperform Designed Structures](https://arxiv.org/abs/2603.28990) — Dochkina, 2026
 - [Darwin Godel Machine](https://sakana.ai/dgm/) — Sakana AI
 - [AlphaEvolve](https://deepmind.google/blog/alphaevolve/) — DeepMind
 - [LangSmith Evaluation](https://docs.smith.langchain.com/evaluation) — LangChain
