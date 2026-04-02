@@ -189,6 +189,14 @@ wait  # Wait for all data gathering to complete
 ```
 
 If `best_results.json` exists, parse it to find failing examples (score < 0.7). Group by metadata or error pattern.
+**For each failing example, include the judge's feedback comment** (from the `feedback` field) in the strategy. This gives proposers specific, actionable information about WHY examples fail:
+
+```
+## Failing Examples (with judge feedback)
+- "What is Kotlin?" (score: 0.3) — Judge: "Response was factually correct but missed null safety and Android development use cases"
+- "Calculate 2^32" (score: 0.0) — Judge: "Run failed with timeout error"
+```
+
 This failure data feeds into the strategy and lens generation step (1.8a).
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
@@ -385,17 +393,47 @@ Wait for the evaluator agent to complete before proceeding.
 $EVOLVER_PY $TOOLS/read_results.py \
     --experiments "{comma-separated list of experiment names from non-abstained proposers}" \
     --config .evolver.json \
+    --split held_out \
     --output comparison.json
 ```
 
 Parse `comparison.json`:
-- `comparison.winner` — highest combined score
+- `comparison.winner` — highest combined score **on held-out data** (never seen during optimization)
 - `comparison.champion` — per-task champion (for next iteration's context)
+- `comparison.pareto_front` — non-dominated candidates across evaluators (if >1, report tradeoffs)
 - `comparison.all_candidates` — all scores for reporting
+
+If `comparison.pareto_front` has more than 1 entry, report it:
+```
+Pareto front ({N} non-dominated candidates):
+  v{NNN}-1: {evaluator_scores} (winner by combined score)
+  v{NNN}-3: {evaluator_scores} (different tradeoff)
+```
+
+### 4.5. Constraint Gate
+
+Before merging, validate the winner passes hard constraints:
+
+```bash
+$EVOLVER_PY $TOOLS/constraint_check.py \
+    --config .evolver.json \
+    --worktree-path "{winner_worktree_path}" \
+    --baseline-path "." \
+    --output constraint_result.json
+```
+
+If `all_pass` is false, skip this candidate and try the next-best from `comparison.all_candidates`. If NO candidates pass constraints, log a warning and proceed to next iteration without merging:
+
+```
+WARNING: No candidates passed constraint gates. Skipping merge.
+  growth: {growth_pct}% (limit: 30%)
+  entry_point: {pass/fail}
+  tests: {pass/fail}
+```
 
 ### 5. Merge Winner
 
-If the winner scored higher than the current best:
+If the winner scored higher than the current best AND passed constraint gates:
 
 ```bash
 # Get the winning worktree's branch
@@ -413,6 +451,11 @@ Extract winner metrics for the chart:
 - `per_evaluator` → average each evaluator's scores across per_example from best_results.json
 - `approach` → first line of `## Approach` section from winner's proposal.md
 - `lens` → the `source` field from the winning proposer's lens in lenses.json
+- `code_loc` → count lines of code after merge for growth tracking:
+
+```bash
+CODE_LOC=$(find . -name "*.py" -not -path "./.venv/*" -not -path "./venv/*" -not -path "./__pycache__/*" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+```
 
 ```python
 import json
@@ -431,7 +474,8 @@ c['history'].append({
     'total': {winner_total},
     'per_evaluator': {winner_per_evaluator_dict},
     'approach': '{approach_from_proposal_md}',
-    'lens': '{lens_source}'
+    'lens': '{lens_source}',
+    'code_loc': {code_loc}
 })
 json.dump(c, open('.evolver.json', 'w'), indent=2)
 ```
