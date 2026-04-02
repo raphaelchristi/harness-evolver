@@ -37,15 +37,17 @@ Do NOT copy production inputs verbatim — generate VARIATIONS.
 
 ### Phase 3: Generate Inputs
 
-Generate 30 test inputs as a JSON file:
+Generate 30 test inputs as a JSON file. Each example MUST include an `expected_behavior` rubric — a description of what a correct response should cover (NOT exact expected text):
 
 ```json
 [
-  {"input": "your first test question"},
-  {"input": "your second test question"},
+  {"input": "What is Kotlin?", "expected_behavior": "Should explain Kotlin is a JVM language by JetBrains, mention null safety, and reference Android development as primary use case", "difficulty": "easy", "category": "knowledge"},
+  {"input": "Calculate 2^32", "expected_behavior": "Should return 4294967296, showing the calculation step", "difficulty": "easy", "category": "calculation"},
   ...
 ]
 ```
+
+The `expected_behavior` is a **rubric**, not exact text. The LLM judge uses it to score responses. Write 1-3 specific, verifiable criteria per example.
 
 Distribution:
 - **40% Standard** (12): typical, well-formed inputs

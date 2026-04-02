@@ -85,7 +85,24 @@ For each run, apply the requested evaluators. The evaluators you may be asked to
 #### correctness
 Judge: **Is the output a correct, accurate, and complete response to the input?**
 
-Scoring:
+**Rubric-aware scoring:** Some dataset examples have an `expected_behavior` rubric in their metadata. Before scoring, fetch example metadata:
+
+```bash
+langsmith-cli --json examples list \
+    --dataset "{dataset_name}" \
+    --fields id,metadata \
+    --limit 200 \
+    --output example_metadata.jsonl
+```
+
+Build a map of `reference_example_id → expected_behavior`. When scoring a run whose example has a rubric, evaluate against the rubric criteria specifically.
+
+**With rubric:**
+- `1.0` — Response satisfies all criteria in the rubric
+- `0.5` — Response partially satisfies the rubric (some criteria met, others missing)
+- `0.0` — Response fails to meet the rubric criteria
+
+**Without rubric** (generic scoring):
 - `1.0` — Correct and complete. The response accurately addresses the input.
 - `0.0` — Incorrect, incomplete, or off-topic.
 

@@ -180,9 +180,24 @@ def create_dataset_from_file(client, dataset_name, file_path):
             elif "expected" in item:
                 ex["outputs"] = {"expected": item["expected"]}
 
+            # Include rubric/expected behavior in metadata
+            if "expected_behavior" in item:
+                if "metadata" not in ex:
+                    ex["metadata"] = {}
+                ex["metadata"]["expected_behavior"] = item["expected_behavior"]
+
+            # Include difficulty and category in metadata
+            for field in ("difficulty", "category"):
+                if field in item:
+                    if "metadata" not in ex:
+                        ex["metadata"] = {}
+                    ex["metadata"][field] = item[field]
+
             # Include metadata
-            if "metadata" in item:
+            if "metadata" in item and "metadata" not in ex:
                 ex["metadata"] = item["metadata"]
+            elif "metadata" in item:
+                ex["metadata"].update(item["metadata"])
 
             if "metadata" not in ex:
                 ex["metadata"] = {}
