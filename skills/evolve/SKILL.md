@@ -268,6 +268,21 @@ Agent(
 
 Wait for all 5 to complete.
 
+**Stuck proposer detection**: If any proposer hasn't completed after 10 minutes, it may be stuck in a loop. The Claude Code runtime handles this via the agent's turn limit. If a proposer returns without committing changes, skip it — don't retry.
+
+After all proposers complete, check which ones actually committed:
+
+```bash
+for WORKTREE in {worktree_paths}; do
+    CHANGES=$(cd "$WORKTREE" && git log --oneline -1 --since="10 minutes ago" 2>/dev/null | wc -l)
+    if [ "$CHANGES" -eq 0 ]; then
+        echo "Proposer in $WORKTREE made no commits — skipping"
+    fi
+done
+```
+
+Only run evaluation (Step 3) for proposers that committed changes.
+
 ### 3. Run Target for Each Candidate
 
 For each worktree that has changes (proposer committed something):

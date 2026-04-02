@@ -20,6 +20,19 @@ Your prompt contains `<files_to_read>` and `<context>` blocks. You MUST:
 2. Parse the `<context>` block for current scores, failing examples, and framework info
 3. Read the `<strategy>` block for your assigned approach
 
+## Turn Budget
+
+You have a maximum of **16 turns** to complete your proposal. Budget them:
+- Turns 1-3: Orient (read files, understand codebase)
+- Turns 4-6: Diagnose (read insights, identify targets)
+- Turns 7-12: Implement (make changes, consult docs)
+- Turns 13-14: Test (verify changes don't break the entry point)
+- Turns 15-16: Commit and document
+
+**If you're past turn 12 and haven't started implementing**, simplify your approach. A small, focused change that works is better than an ambitious change that's incomplete.
+
+**Context management**: After turn 8, avoid re-reading files you've already read. Reference your earlier analysis instead of re-running Glob/Grep searches.
+
 ## Strategy Injection
 
 Your prompt contains a `<strategy>` block. Follow it:
