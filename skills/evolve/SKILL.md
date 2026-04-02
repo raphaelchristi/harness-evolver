@@ -151,65 +151,93 @@ If `best_results.json` exists, parse it to find failing examples (score < 0.7). 
 Generate adaptive briefings for Candidates D and E (same logic as v2).
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
+### 1.9. Prepare Shared Proposer Context
+
+Build the shared context that ALL proposers will receive as an identical prefix. This enables KV cache sharing — spawning 5 proposers costs barely more than 1.
+
+```bash
+# Build shared context block (identical for all 5 proposers)
+SHARED_FILES_BLOCK="<files_to_read>
+- .evolver.json
+- strategy.md (if exists)
+- evolution_memory.md (if exists)
+- {entry_point_file}
+</files_to_read>"
+
+SHARED_CONTEXT_BLOCK="<context>
+Best experiment: {best_experiment} (score: {best_score})
+Framework: {framework}
+Entry point: {entry_point}
+Evaluators: {evaluators}
+Iteration: {iteration_number} of {total_iterations}
+Score history: {score_history_summary}
+</context>"
+
+SHARED_OBJECTIVE="<objective>
+Improve the agent code to score higher on the evaluation dataset.
+You are working in an isolated git worktree — modify any file freely.
+</objective>"
+```
+
+**CRITICAL for cache sharing**: The `<objective>`, `<files_to_read>`, and `<context>` blocks MUST be byte-identical across all 5 proposer prompts. Only the `<strategy>` block differs. Place the strategy block LAST in the prompt so the shared prefix is maximized.
+
 ### 2. Spawn 5 Proposers in Parallel
 
-Each proposer runs in a **git worktree** via Claude Code's native `isolation: "worktree"` parameter.
+Each proposer receives the IDENTICAL prefix (objective + files + context) followed by its unique strategy suffix.
 
-**Candidate A (Exploit)** — `run_in_background: true`:
+**All 5 candidates** — `run_in_background: true, isolation: "worktree"`:
 
+The prompt for EACH proposer follows this structure:
 ```
-Agent(
-  subagent_type: "evolver-proposer",
-  description: "Proposer A: exploit best version",
-  isolation: "worktree",
-  run_in_background: true,
-  prompt: |
-    <objective>
-    Improve the agent code to score higher on the evaluation dataset.
-    You are working in an isolated git worktree — modify any file freely.
-    </objective>
+{SHARED_OBJECTIVE}
 
-    <strategy>
-    APPROACH: exploitation
-    Make targeted improvements to the current best version.
-    Focus on the specific failures identified in the results.
-    </strategy>
+{SHARED_FILES_BLOCK}
 
-    <files_to_read>
-    - .evolver.json
-    - trace_insights.json (if exists)
-    - production_seed.json (if exists)
-    - best_results.json (if exists)
-    - evolution_memory.md (if exists)
-    - {entry point file from .evolver.json}
-    </files_to_read>
+{SHARED_CONTEXT_BLOCK}
 
-    <context>
-    Best experiment: {best_experiment} (score: {best_score})
-    Framework: {framework}
-    Entry point: {entry_point}
-    Evaluators: {evaluators}
-    Failing examples: {failing_example_summary}
-    </context>
+<strategy>
+{UNIQUE PER CANDIDATE — see below}
+</strategy>
 
-    <output>
-    1. Modify the code to improve performance
-    2. Commit your changes with a descriptive message
-    3. Write proposal.md explaining what you changed and why
-    </output>
-)
+<output>
+1. Modify the code to improve performance
+2. Commit your changes with a descriptive message
+3. Write proposal.md explaining what you changed and why
+</output>
 ```
 
-**Candidate B (Explorer)** — `run_in_background: true`:
-Same structure but `APPROACH: exploration` — bold, fundamentally different approach.
+**Candidate A strategy block:**
+```
+APPROACH: exploitation
+Make targeted improvements to the current best version.
+Focus on the specific failures identified in the results.
+```
 
-**Candidate C (Crossover)** — `run_in_background: true`:
-Same structure but `APPROACH: crossover` — combine strengths from previous iterations.
-Include git log of recent changes so it can see what was tried.
+**Candidate B strategy block:**
+```
+APPROACH: exploration
+Try a fundamentally different approach. Change algorithms, prompts, routing, architecture.
+Don't be afraid to make big changes — this worktree is disposable.
+```
 
-**Candidates D and E (Failure-Targeted)** — `run_in_background: true`:
-Same structure but `APPROACH: failure-targeted` with specific failing example clusters.
-If ALL_PASSING: D gets `creative`, E gets `efficiency`.
+**Candidate C strategy block:**
+```
+APPROACH: crossover
+Combine strengths from previous iterations. Check git log for what was tried.
+Recent changes: {git_log_last_5}
+```
+
+**Candidate D strategy block:**
+```
+APPROACH: {failure_targeted_or_creative}
+{adaptive_briefing_d}
+```
+
+**Candidate E strategy block:**
+```
+APPROACH: {failure_targeted_or_efficiency}
+{adaptive_briefing_e}
+```
 
 Wait for all 5 to complete.
 
