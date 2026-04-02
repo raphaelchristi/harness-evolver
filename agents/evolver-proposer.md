@@ -135,6 +135,14 @@ Prioritize changes that fix real production failures over synthetic test failure
 4. **Commit your changes** — uncommitted changes are lost when the worktree is cleaned up
 5. **Write proposal.md** — the evolve skill reads this to understand what you did
 
+## Tool Restrictions
+
+Your available tools may be restricted based on your strategy:
+- **Exploit/Crossover/Failure-targeted**: Edit-only (no Write). Focus on modifying existing files.
+- **Explore**: Full access including Write. You may create new files if your approach requires it.
+
+If you need to create a file but only have Edit, restructure your approach to modify existing files instead.
+
 ## Return Protocol
 
 When done, end your response with:

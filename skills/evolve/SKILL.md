@@ -239,6 +239,33 @@ APPROACH: {failure_targeted_or_efficiency}
 {adaptive_briefing_e}
 ```
 
+**Tool restrictions per strategy:**
+
+| Strategy | Allowed Tools | Rationale |
+|----------|--------------|-----------|
+| Exploit (A) | Read, Edit, Bash, Glob, Grep | No Write — can't create new files, only edit existing |
+| Explore (B) | Read, Write, Edit, Bash, Glob, Grep | Full access — may need new files for new architecture |
+| Crossover (C) | Read, Edit, Bash, Glob, Grep | No Write — combines existing patterns, doesn't create |
+| Failure-targeted (D, E) | Read, Edit, Bash, Glob, Grep | No Write — focused fixes on specific files |
+
+Apply via the `tools` parameter in each Agent() call. Example for exploit:
+```
+Agent(
+  subagent_type: "evolver-proposer",
+  tools: ["Read", "Edit", "Bash", "Glob", "Grep"],
+  ...
+)
+```
+
+For explore:
+```
+Agent(
+  subagent_type: "evolver-proposer",
+  tools: ["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+  ...
+)
+```
+
 Wait for all 5 to complete.
 
 ### 3. Run Target for Each Candidate
