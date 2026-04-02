@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.6] - 2026-04-02
+
+### Added
+
+- **`--yes` flag** on installer — non-interactive mode for CI/scripts (`npx harness-evolver@latest --yes`)
+- **API key validation** — installer validates key with real HTTP request before saving
+- **Upgrade detection** — shows "Upgrading X → Y" vs "Fresh install" vs "Reinstalling"
+- **Plugin marketplace note** — final output shows `/plugin install harness-evolver`
+- **`.worktreeinclude` hint** — suggests creating `.worktreeinclude` for worktree support
+- **Never expose API key** — skills instruct agents to never pass `LANGSMITH_API_KEY` inline in Bash commands
+
+### Fixed
+
+- **npm tarball bloat** — `.npmignore` excludes `__pycache__/`, `docs/`, `playground/`, `.claude/`, `CHANGELOG.md`
+
+---
+
 ## [4.2.5] - 2026-04-02
 
 ### Fixed
