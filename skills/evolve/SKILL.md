@@ -175,7 +175,7 @@ fi
 ```
 
 If `best_results.json` exists, parse it to find failing examples (score < 0.7). Group by metadata or error pattern.
-Generate adaptive briefings for Candidates D and E (same logic as v2).
+This failure data feeds into `synthesize_strategy.py` which generates targeted lenses for proposers.
 If no best_results.json (first iteration without baseline), all proposers work from code analysis only — no failure data available.
 
 ### 1.8a. Synthesize Strategy
@@ -189,17 +189,18 @@ $EVOLVER_PY $TOOLS/synthesize_strategy.py \
     --best-results best_results.json \
     --evolution-memory evolution_memory.json \
     --production-seed production_seed.json \
-    --output strategy.md 2>/dev/null
+    --output strategy.md \
+    --lenses lenses.json 2>/dev/null
 ```
 
-The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). It synthesizes trace analysis, evolution memory, and production data into an actionable document. Proposers also receive `production_seed.json` directly for access to raw production traces.
+The `strategy.md` file is included in the proposer `<files_to_read>` block via the shared context (Step 1.9). The `lenses.json` file contains dynamically generated investigation questions — one per proposer. Each lens directs a proposer's attention to a different aspect of the problem (failure cluster, architecture, production data, evolution memory, or open investigation).
 
 ### 1.9. Prepare Shared Proposer Context
 
-Build the shared context that ALL proposers will receive as an identical prefix. This enables KV cache sharing — spawning 5 proposers costs barely more than 1.
+Build the shared context that ALL proposers will receive as an identical prefix. This enables KV cache sharing — spawning N proposers costs barely more than 1.
 
 ```bash
-# Build shared context block (identical for all 5 proposers)
+# Build shared context block (identical for all proposers)
 SHARED_FILES_BLOCK="<files_to_read>
 - .evolver.json
 - strategy.md (if exists)
@@ -223,13 +224,19 @@ You are working in an isolated git worktree — modify any file freely.
 </objective>"
 ```
 
-**CRITICAL for cache sharing**: The `<objective>`, `<files_to_read>`, and `<context>` blocks MUST be byte-identical across all 5 proposer prompts. Only the `<strategy>` block differs. Place the strategy block LAST in the prompt so the shared prefix is maximized.
+**CRITICAL for cache sharing**: The `<objective>`, `<files_to_read>`, and `<context>` blocks MUST be byte-identical across all proposer prompts. Only the `<lens>` block differs. Place the lens block LAST in the prompt so the shared prefix is maximized.
 
-### 2. Spawn 5 Proposers in Parallel
+### 2. Spawn Proposers in Parallel (Dynamic Lenses)
 
-Each proposer receives the IDENTICAL prefix (objective + files + context) followed by its unique strategy suffix.
+Read `lenses.json` to get the list of investigation lenses:
 
-**All 5 candidates** — `run_in_background: true, isolation: "worktree"`:
+```bash
+LENS_COUNT=$(python3 -c "import json; print(json.load(open('lenses.json'))['lens_count'])")
+```
+
+Each proposer receives the IDENTICAL prefix (objective + files + context) followed by its unique lens.
+
+**For each lens** — `run_in_background: true, isolation: "worktree"`:
 
 The prompt for EACH proposer follows this structure:
 ```
@@ -239,66 +246,54 @@ The prompt for EACH proposer follows this structure:
 
 {SHARED_CONTEXT_BLOCK}
 
-<strategy>
-{UNIQUE PER CANDIDATE — see below}
-</strategy>
+<lens>
+Investigation question: {lens.question}
+
+This is your STARTING POINT, not your mandate. Investigate, form your
+own hypothesis, and implement whatever you conclude will help most.
+You may solve something entirely different — that's fine.
+If you cannot add meaningful value, ABSTAIN.
+
+Source: {lens.source}
+</lens>
 
 <output>
-1. Modify the code to improve performance
-2. Commit your changes with a descriptive message
-3. Write proposal.md explaining what you changed and why
+1. Investigate the lens question
+2. Decide your approach (or abstain)
+3. If proceeding: modify code, commit, write proposal.md
+4. proposal.md must include: what you chose to do, why, how it relates to the lens
 </output>
 ```
 
-**Candidate A strategy block:**
+For each lens in `lenses.json`, spawn one proposer agent:
+
 ```
-APPROACH: exploitation
-Make targeted improvements to the current best version.
-Focus on the specific failures identified in the results.
+Agent(
+  subagent_type: "evolver-proposer",
+  description: "Proposer {lens.id}: {lens.source} lens",
+  isolation: "worktree",
+  run_in_background: true,
+  prompt: {SHARED_PREFIX + LENS_BLOCK above, with lens fields filled in}
+)
 ```
 
-**Candidate B strategy block:**
-```
-APPROACH: exploration
-Try a fundamentally different approach. Change algorithms, prompts, routing, architecture.
-Don't be afraid to make big changes — this worktree is disposable.
-```
-
-**Candidate C strategy block:**
-```
-APPROACH: crossover
-Combine strengths from previous iterations. Check git log for what was tried.
-Recent changes: {git_log_last_5}
-```
-
-**Candidate D strategy block:**
-```
-APPROACH: {failure_targeted_or_creative}
-{adaptive_briefing_d}
-```
-
-**Candidate E strategy block:**
-```
-APPROACH: {failure_targeted_or_efficiency}
-{adaptive_briefing_e}
-```
-
-Wait for all 5 to complete.
+Wait for all proposers to complete.
 
 **Stuck proposer detection**: If any proposer hasn't completed after 10 minutes, it may be stuck in a loop. The Claude Code runtime handles this via the agent's turn limit. If a proposer returns without committing changes, skip it — don't retry.
 
-After all proposers complete, check which ones actually committed:
+After all proposers complete, check which ones committed and which abstained:
 
 ```bash
 for WORKTREE in {worktree_paths}; do
-    CHANGES=$(cd "$WORKTREE" && git log --oneline -1 --since="10 minutes ago" 2>/dev/null | wc -l)
-    if [ "$CHANGES" -eq 0 ]; then
+    if [ -f "$WORKTREE/proposal.md" ] && grep -q "## ABSTAIN" "$WORKTREE/proposal.md" 2>/dev/null; then
+        echo "Proposer in $WORKTREE abstained — skipping evaluation"
+    elif [ $(cd "$WORKTREE" && git log --oneline -1 --since="10 minutes ago" 2>/dev/null | wc -l) -eq 0 ]; then
         echo "Proposer in $WORKTREE made no commits — skipping"
     fi
 done
 ```
 
-Only run evaluation (Step 3) for proposers that committed changes.
+Only run evaluation (Step 3) for proposers that committed changes (not abstained, not stuck).
 
 ### 3. Run Target for Each Candidate
 
@@ -308,7 +303,7 @@ For each worktree that has changes (proposer committed something):
 $EVOLVER_PY $TOOLS/run_eval.py \
     --config .evolver.json \
     --worktree-path {worktree_path} \
-    --experiment-prefix v{NNN}{suffix} \
+    --experiment-prefix v{NNN}-{lens_id} \
     --timeout 120
 ```
 
@@ -339,11 +334,7 @@ Agent(
   prompt: |
     <experiment>
     Evaluate the following experiments (one per candidate):
-    - {experiment_name_a}
-    - {experiment_name_b}
-    - {experiment_name_c}
-    - {experiment_name_d}
-    - {experiment_name_e}
+    {list all experiment names from proposers that committed changes — skip abstained}
     </experiment>
 
     <evaluators>
@@ -370,14 +361,14 @@ Wait for the evaluator agent to complete before proceeding.
 
 ```bash
 $EVOLVER_PY $TOOLS/read_results.py \
-    --experiments "v{NNN}a,v{NNN}b,v{NNN}c,v{NNN}d,v{NNN}e" \
+    --experiments "{comma-separated list of experiment names from non-abstained proposers}" \
     --config .evolver.json \
     --output comparison.json
 ```
 
 Parse `comparison.json`:
 - `comparison.winner` — highest combined score
-- `comparison.champion` — per-task champion (for next crossover)
+- `comparison.champion` — per-task champion (for next iteration's context)
 - `comparison.all_candidates` — all scores for reporting
 
 ### 5. Merge Winner
@@ -389,7 +380,7 @@ If the winner scored higher than the current best:
 WINNER_BRANCH={winning_worktree_branch}
 
 # Merge into main
-git merge $WINNER_BRANCH --no-edit -m "evolve: merge v{NNN}{suffix} (score: {score})"
+git merge $WINNER_BRANCH --no-edit -m "evolve: merge v{NNN}-{lens_id} (score: {score})"
 ```
 
 Update `.evolver.json`:
@@ -409,14 +400,14 @@ json.dump(c, open('.evolver.json', 'w'), indent=2)
 
 Report ALL candidates:
 ```
-Iteration {i}/{N} — 5 candidates evaluated:
-  v{NNN}a (exploit):     {score_a} — {summary}
-  v{NNN}b (explore):     {score_b} — {summary}
-  v{NNN}c (crossover):   {score_c} — {summary}
-  v{NNN}d ({strategy}):  {score_d} — {summary}
-  v{NNN}e ({strategy}):  {score_e} — {summary}
+Iteration {i}/{N} — {lens_count} lenses, {evaluated_count} candidates evaluated ({abstained_count} abstained):
+  {For each proposer, read proposal.md and extract the Approach field}
+  v{NNN}-1 ({approach from proposal.md}):  {score} — {summary}
+  v{NNN}-2 ({approach from proposal.md}):  {score} — {summary}
+  v{NNN}-3 (ABSTAINED):                    --    — {reason from proposal.md}
+  ...
 
-  Winner: v{NNN}{suffix} ({score}) — merged into main
+  Winner: v{NNN}-{id} ({score}) — merged into main
   Per-task champion: {champion} (beats winner on {N} tasks)
 ```
 
