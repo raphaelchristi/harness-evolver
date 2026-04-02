@@ -358,10 +358,25 @@ def main():
         experiment_names = [e.strip() for e in args.experiments.split(",")]
         results_list = []
 
+        # Load split filter if requested
+        split_example_ids = None
+        if args.split:
+            with open(args.config) as f:
+                cfg_for_split = json.load(f)
+            split_example_ids = set()
+            for ex in client.list_examples(dataset_name=cfg_for_split["dataset"], splits=[args.split]):
+                split_example_ids.add(str(ex.id))
+
         for name in experiment_names:
             print(f"Reading experiment: {name}...", file=sys.stderr)
             result = read_experiment(client, name, weights=weights)
             if result:
+                # Apply split filter to each experiment
+                if split_example_ids is not None and "per_example" in result:
+                    result["per_example"] = {k: v for k, v in result["per_example"].items() if k in split_example_ids}
+                    all_scores = [v["score"] for v in result["per_example"].values()]
+                    result["combined_score"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
+                    result["num_examples"] = len(result["per_example"])
                 results_list.append(result)
 
         if not results_list:

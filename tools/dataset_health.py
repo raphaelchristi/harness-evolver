@@ -15,6 +15,14 @@ import os
 import sys
 from datetime import datetime, timezone
 
+# Secret detection (local import from same directory)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from secret_filter import has_secrets
+except ImportError:
+    def has_secrets(text):
+        return False
+
 
 def ensure_langsmith_api_key():
     """Load API key from langsmith-cli credentials if not in env."""
@@ -344,9 +352,31 @@ def main():
                     except Exception:
                         pass
 
+    # Check for secrets in dataset examples
+    secrets_check = {"checked": True, "flagged_count": 0, "flagged_ids": [], "clean": True}
+    for ex in examples:
+        text = str(getattr(ex, 'inputs', '') or '') + str(getattr(ex, 'outputs', '') or '')
+        if has_secrets(text):
+            secrets_check["flagged_count"] += 1
+            secrets_check["flagged_ids"].append(str(ex.id))
+            secrets_check["clean"] = False
+    secrets_check["flagged_ids"] = secrets_check["flagged_ids"][:10]  # Cap at 10
+
     # Compute health score and build report
     health_score = compute_health_score(size_info, difficulty, dead, coverage, splits)
     issues, corrections = build_issues_and_corrections(size_info, difficulty, dead, coverage, splits)
+
+    # Add secret issues
+    if not secrets_check["clean"]:
+        issues.append({
+            "severity": "critical",
+            "message": f"{secrets_check['flagged_count']} example(s) contain potential secrets (API keys, tokens)",
+        })
+        corrections.append({
+            "action": "remove_secrets",
+            "description": f"Remove or redact {secrets_check['flagged_count']} examples with detected secrets",
+            "example_ids": secrets_check["flagged_ids"],
+        })
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -357,6 +387,7 @@ def main():
         "dead_examples": dead,
         "coverage": coverage,
         "splits": splits,
+        "secrets": secrets_check,
         "issues": issues,
         "corrections": corrections,
     }

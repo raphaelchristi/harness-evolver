@@ -563,6 +563,7 @@ def main():
             "project_dir": project_dir,
             "entry_point": entry_point,
             "evaluators": evaluator_keys,
+            "evaluator_weights": None,
             "optimization_goals": goals,
             "production_project": args.production_project,
             "baseline_experiment": baseline_experiment,

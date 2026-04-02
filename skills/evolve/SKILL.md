@@ -381,7 +381,7 @@ Then spawn ONE evaluator agent that scores ALL candidates in a single pass. This
 Agent(
   subagent_type: "evolver-evaluator",
   description: "Evaluate all candidates for iteration v{NNN}",
-  prompt: "Experiments to evaluate: {comma-separated experiment names from non-abstained proposers}. Evaluators: {llm_evaluator_list}. Framework: {framework}. Entry point: {entry_point}."
+  prompt: "Experiments to evaluate: {comma-separated experiment names from non-abstained proposers}. Evaluators: {llm_evaluator_list}. Framework: {framework}. Entry point: {entry_point}. Dataset: {dataset_name}. NOTE: Some examples have expected_behavior rubrics in their metadata — fetch example metadata and use rubrics for scoring when available."
 )
 ```
 
