@@ -42,16 +42,22 @@ $EVOLVER_PY $TOOLS/add_evaluator.py \
     --evaluator answer_not_question \
     --type code
 
-# Add evaluator that checks for hallucination markers
+# Add evaluator that checks for fabricated references/citations
 $EVOLVER_PY $TOOLS/add_evaluator.py \
     --config .evolver.json \
-    --evaluator no_hallucination_markers \
+    --evaluator no_fabricated_references \
     --type code
 
 # Add evaluator that checks minimum response quality
 $EVOLVER_PY $TOOLS/add_evaluator.py \
     --config .evolver.json \
     --evaluator min_length \
+    --type code
+
+# Add evaluator that checks for filler padding
+$EVOLVER_PY $TOOLS/add_evaluator.py \
+    --config .evolver.json \
+    --evaluator no_empty_filler \
     --type code
 ```
 

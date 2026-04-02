@@ -159,6 +159,36 @@ def main():
                     "message": f"Last history entry ({last['experiment']}) differs from best_experiment ({config.get('best_experiment')})",
                 })
 
+    # Auto-fix divergences if --fix flag is set
+    if args.fix:
+        fixed = []
+        for issue in all_issues:
+            if issue.get("field") == "dataset_id" and issue.get("severity") == "warning":
+                try:
+                    dataset = client.read_dataset(dataset_name=config["dataset"])
+                    config["dataset_id"] = str(dataset.id)
+                    with open(args.config, "w") as f:
+                        json.dump(config, f, indent=2)
+                    fixed.append(f"Fixed dataset_id: updated to {dataset.id}")
+                    issue["severity"] = "fixed"
+                except Exception:
+                    pass
+            elif issue.get("field") == "history" and issue.get("severity") == "warning":
+                history = config.get("history", [])
+                if history:
+                    best_in_history = max(history, key=lambda h: h.get("score", 0))
+                    config["best_experiment"] = best_in_history["experiment"]
+                    config["best_score"] = best_in_history["score"]
+                    with open(args.config, "w") as f:
+                        json.dump(config, f, indent=2)
+                    fixed.append(f"Fixed best_experiment: set to {best_in_history['experiment']}")
+                    issue["severity"] = "fixed"
+        if fixed:
+            print(f"Auto-fixed {len(fixed)} issues:", file=sys.stderr)
+            for f_msg in fixed:
+                print(f"  {f_msg}", file=sys.stderr)
+
+    all_issues = [i for i in all_issues if i.get("severity") != "fixed"]
     critical = [i for i in all_issues if i.get("severity") == "critical"]
     result = {
         "valid": len(critical) == 0,

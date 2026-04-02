@@ -70,7 +70,7 @@ Three layers, each in its own directory:
 
 1. **Skills** (`skills/*/SKILL.md`) — Claude Code slash commands that orchestrate the workflow. Each skill is a markdown file with frontmatter (`name`, `description`, `allowed-tools`). The four skills are `setup`, `evolve`, `status`, `deploy`.
 
-2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Five agent types: `evolver-proposer` (green, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red), `evolver-architect` (blue), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
+2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `evolver-proposer` (green, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red, active — detects + fixes gaming), `evolver-architect` (blue, ULTRAPLAN mode with opus), `evolver-consolidator` (cyan, cross-iteration memory), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
 3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `seed_from_traces.py` and `analyze_architecture.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, and `add_evaluator.py` are new v4.0 tools. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 

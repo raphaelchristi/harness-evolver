@@ -26,10 +26,16 @@ Use `$EVOLVER_PY` instead of `python3` for ALL tool invocations.
 ## Parse Arguments
 
 - `--iterations N` (default: from interactive question or 5)
+- `--no-interactive` — skip all AskUserQuestion prompts, use defaults (iterations=5, target=none, mode=interactive). Required for cron/background scheduled runs.
 
 ## Pre-Loop: Interactive Configuration
 
-If no `--iterations` argument was provided, ask the user:
+If `--no-interactive` is set, skip all questions and use defaults:
+- Iterations: value from `--iterations` or 5
+- Target: value from `.evolver.json` `target_score` if set, otherwise no limit
+- Mode: interactive (the cron itself handles scheduling)
+
+Otherwise, if no `--iterations` argument was provided, ask the user:
 
 ```json
 {
@@ -114,7 +120,7 @@ Ask for schedule via AskUserQuestion:
 Then create a cron trigger:
 ```
 Use CronCreate tool to schedule:
-  - command: "/evolver:evolve --iterations 1"
+  - command: "/evolver:evolve --iterations 1 --no-interactive"
   - schedule: {selected_cron}
   - description: "Harness Evolver: scheduled optimization iteration"
 ```
@@ -508,14 +514,42 @@ Print: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best} at {best_score})`
 
 ### 6.2. Consolidate Evolution Memory
 
-Run the consolidation tool to update cross-iteration memory:
+Spawn the consolidator agent to analyze the iteration and update cross-iteration memory:
 
-```bash
-$EVOLVER_PY $TOOLS/consolidate.py \
-    --config .evolver.json \
-    --comparison-files comparison.json \
-    --output evolution_memory.md \
-    --output-json evolution_memory.json 2>/dev/null
+```
+Agent(
+  subagent_type: "evolver-consolidator",
+  description: "Consolidate evolution memory after iteration v{NNN}",
+  run_in_background: true,
+  prompt: |
+    <objective>
+    Consolidate learnings from iteration v{NNN}.
+    Run the consolidation tool and review its output.
+    </objective>
+
+    <tools_path>
+    TOOLS={tools_path}
+    EVOLVER_PY={evolver_py_path}
+    </tools_path>
+
+    <instructions>
+    Run: $EVOLVER_PY $TOOLS/consolidate.py \
+        --config .evolver.json \
+        --comparison-files comparison.json \
+        --output evolution_memory.md \
+        --output-json evolution_memory.json
+
+    Then read the output and verify insights are accurate.
+    </instructions>
+
+    <files_to_read>
+    - .evolver.json
+    - comparison.json
+    - trace_insights.json (if exists)
+    - regression_report.json (if exists)
+    - evolution_memory.md (if exists)
+    </files_to_read>
+)
 ```
 
 The `evolution_memory.md` file will be included in proposer briefings for subsequent iterations.

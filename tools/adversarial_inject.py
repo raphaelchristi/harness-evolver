@@ -95,7 +95,14 @@ def detect_memorization(client, experiment_name, dataset_name):
 
 
 def generate_adversarial_inputs(client, dataset_name, num_inputs=5):
-    """Generate adversarial variations of existing examples."""
+    """Generate adversarial variations of existing examples.
+
+    Creates multiple variation types to test generalization:
+    - negation: inverts the question to test if the agent distinguishes
+    - constraint: adds a constraint that changes the expected answer
+    - ambiguous: makes the input ambiguous to test robustness
+    - partial: provides incomplete input to test graceful handling
+    """
     examples = list(client.list_examples(dataset_name=dataset_name, limit=100))
     if not examples:
         return []
@@ -103,16 +110,35 @@ def generate_adversarial_inputs(client, dataset_name, num_inputs=5):
     adversarial = []
     sampled = random.sample(examples, min(num_inputs, len(examples)))
 
+    variation_types = [
+        ("negation", "What is NOT the case: {input}"),
+        ("constraint", "{input} Answer in exactly one sentence."),
+        ("ambiguous", "Someone asked something like: {input}"),
+        ("partial", "{partial_input}"),
+    ]
+
     for example in sampled:
         input_data = example.inputs or {}
         input_text = str(input_data.get("input", input_data))
 
+        # Pick a variation type (rotate through them)
+        idx = sampled.index(example) % len(variation_types)
+        vtype, template = variation_types[idx]
+
+        if vtype == "partial":
+            # Use first half of the input
+            words = input_text.split()
+            partial = " ".join(words[:max(len(words) // 2, 3)])
+            varied_input = template.format(partial_input=partial)
+        else:
+            varied_input = template.format(input=input_text)
+
         adversarial.append({
-            "inputs": {"input": f"[REPHRASE] {input_text}"},
+            "inputs": {"input": varied_input},
             "metadata": {
                 "source": "adversarial",
                 "original_example_id": str(example.id),
-                "variation_type": "rephrase",
+                "variation_type": vtype,
             },
         })
 
