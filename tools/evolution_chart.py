@@ -101,7 +101,9 @@ def render_score_table(history, scores, c):
     lines = []
     lines.append(f'  {c.B}SCORE PROGRESSION{c.RST}')
     lines.append(f'  {c.D}{"─" * W}{c.RST}')
-    lines.append(f'  {c.D}{"Version":<10}{"Score":>6}{"Δ":>8}{"vs Base":>9}{"Pass":>7}{"Err":>5}{"Tokens":>8}{"Latency":>9}{c.RST}')
+    has_loc = any(h.get('code_loc') for h in history)
+    loc_hdr = f'{"LOC":>6}' if has_loc else ''
+    lines.append(f'  {c.D}{"Version":<10}{"Score":>6}{"Δ":>8}{"vs Base":>9}{"Pass":>7}{"Err":>5}{"Tokens":>8}{"Latency":>9}{loc_hdr}{c.RST}')
     lines.append(f'  {c.D}{"─" * W}{c.RST}')
 
     for i, h in enumerate(history):
@@ -140,7 +142,19 @@ def render_score_table(history, scores, c):
         tok_str = fmt_tokens(tokens)
         lat_str = f'{latency}ms' if latency else '—'
 
-        lines.append(f'  {v:<10}{s_str:>6}  {d_str}  {p_str} {pass_str:>5}  {e_str:>3}  {tok_str:>6}  {lat_str:>6}  {icon}')
+        loc_str = ''
+        if has_loc:
+            loc = h.get('code_loc')
+            if loc:
+                base_loc = history[0].get('code_loc', 0)
+                if base_loc and loc > base_loc * 1.3:
+                    loc_str = f' {c.R}{loc}{c.RST}⚠'
+                else:
+                    loc_str = f' {loc:>5}'
+            else:
+                loc_str = '     —'
+
+        lines.append(f'  {v:<10}{s_str:>6}  {d_str}  {p_str} {pass_str:>5}  {e_str:>3}  {tok_str:>6}  {lat_str:>6}{loc_str}  {icon}')
 
     return '\n'.join(lines)
 
