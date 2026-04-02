@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.2.9] - 2026-04-02
+
+### Fixed
+
+- **MCP detection in per-project configs** — `claude mcp add` saves servers under `projects[path].mcpServers` in `.claude.json`, not top-level. Installer now searches both locations via `hasMcpServer()` helper. Fixes LangChain Docs MCP not being detected after install.
+
+---
+
 ## [4.2.8] - 2026-04-02
 
 ### Fixed
