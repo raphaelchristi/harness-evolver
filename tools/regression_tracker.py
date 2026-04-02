@@ -61,9 +61,14 @@ def get_per_example_scores(client, experiment_name):
     scores = {}
     try:
         runs = list(client.list_runs(project_name=experiment_name, is_root=True, limit=200))
+        all_run_ids = [run.id for run in runs]
+        all_feedbacks = list(client.list_feedback(run_ids=all_run_ids))
+        fb_map = {}
+        for fb in all_feedbacks:
+            fb_map.setdefault(str(fb.run_id), []).append(fb)
         for run in runs:
             example_id = str(run.reference_example_id or run.id)
-            feedbacks = list(client.list_feedback(run_ids=[run.id]))
+            feedbacks = fb_map.get(str(run.id), [])
             fb_scores = {}
             for fb in feedbacks:
                 if fb.score is not None:

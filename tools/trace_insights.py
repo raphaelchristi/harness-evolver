@@ -335,10 +335,16 @@ def fetch_scores_from_experiment(experiment_name):
             limit=200,
         ))
 
+        all_run_ids = [run.id for run in runs]
+        all_feedbacks = list(client.list_feedback(run_ids=all_run_ids))
+        fb_map = {}
+        for fb in all_feedbacks:
+            fb_map.setdefault(str(fb.run_id), []).append(fb)
+
         per_task = {}
         for run in runs:
             example_id = str(run.reference_example_id or run.id)
-            feedbacks = list(client.list_feedback(run_ids=[run.id]))
+            feedbacks = fb_map.get(str(run.id), [])
             scores = [fb.score for fb in feedbacks if fb.score is not None]
             avg_score = sum(scores) / len(scores) if scores else 0.0
             per_task[example_id] = {"score": avg_score}
