@@ -1,0 +1,50 @@
+[
+  {
+    "id": "company-overview",
+    "text": "NovaTech Solutions is a B2B SaaS company founded in 2019 in Austin, Texas. They provide AI-powered customer support automation. The company has 150 employees and serves over 2,000 business clients globally."
+  },
+  {
+    "id": "product-atlas",
+    "text": "Atlas is NovaTech's flagship product. It's an AI agent that handles tier-1 customer support tickets automatically. Atlas uses natural language understanding to classify tickets, generate responses, and escalate complex issues to human agents. It supports 12 languages and integrates with Zendesk, Salesforce, and Intercom."
+  },
+  {
+    "id": "product-beacon",
+    "text": "Beacon is NovaTech's analytics dashboard. It provides real-time metrics on support ticket volume, resolution time, customer satisfaction scores (CSAT), and agent performance. Beacon includes anomaly detection that alerts managers when metrics deviate from baselines."
+  },
+  {
+    "id": "pricing",
+    "text": "NovaTech offers three pricing tiers: Starter ($49/month per agent, up to 1,000 tickets), Professional ($149/month per agent, up to 10,000 tickets with analytics), and Enterprise (custom pricing, unlimited tickets, dedicated support, SLA guarantees). All plans include a 14-day free trial."
+  },
+  {
+    "id": "tech-stack",
+    "text": "NovaTech's infrastructure runs on AWS. Atlas uses a fine-tuned LLM hosted on SageMaker for ticket classification and response generation. The backend is built with Python (FastAPI), the frontend with React and TypeScript. Data is stored in PostgreSQL with Redis caching. The system processes an average of 500,000 tickets per day across all clients."
+  },
+  {
+    "id": "security",
+    "text": "NovaTech is SOC 2 Type II certified and GDPR compliant. All data is encrypted at rest (AES-256) and in transit (TLS 1.3). Customer data is isolated per tenant. The company undergoes annual penetration testing by a third-party firm. They do not use customer data to train their models."
+  },
+  {
+    "id": "team",
+    "text": "NovaTech was co-founded by CEO Maria Chen (ex-Google, ML researcher) and CTO James Park (ex-Stripe, infrastructure). The VP of Engineering is Sarah Kim who previously led the Zendesk API team. The company raised a $35M Series B in 2024 led by Sequoia Capital."
+  },
+  {
+    "id": "roadmap",
+    "text": "NovaTech's 2026 roadmap includes: voice support for Atlas (Q2), proactive ticket prevention using predictive analytics (Q3), and a marketplace for third-party integrations (Q4). They are also exploring on-premise deployment options for enterprise clients with strict data residency requirements."
+  },
+  {
+    "id": "competitors",
+    "text": "NovaTech's main competitors are Zendesk AI, Intercom Fin, and Freshdesk Freddy AI. NovaTech differentiates through higher accuracy on technical support tickets (92% vs industry average of 78%), multi-language support, and lower pricing for mid-market companies."
+  },
+  {
+    "id": "case-study",
+    "text": "CloudBase, a cloud hosting provider with 50,000 customers, deployed Atlas in 2024. Results after 6 months: 65% reduction in tier-1 ticket volume, average response time dropped from 4 hours to 30 seconds, CSAT improved from 3.8 to 4.5 out of 5. CloudBase saved $1.2M annually in support staffing costs."
+  },
+  {
+    "id": "api",
+    "text": "NovaTech provides a REST API for Atlas integration. Endpoints include POST /tickets for submission, GET /tickets/{id} for status, POST /tickets/{id}/escalate for human handoff, and GET /analytics/summary for metrics. Rate limits are 100 requests/second for Professional and 1000/second for Enterprise. Authentication uses API keys with optional OAuth 2.0."
+  },
+  {
+    "id": "support-policy",
+    "text": "NovaTech offers email support for all plans (24-hour response time), live chat for Professional and Enterprise (1-hour response during business hours), and dedicated account manager plus phone support for Enterprise (15-minute response SLA). Critical issues (system outages) have a 1-hour response SLA across all plans."
+  }
+]
