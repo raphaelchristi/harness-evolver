@@ -175,7 +175,7 @@ If a production project is configured, also gather production insights:
 PROD=$(python3 -c "import json; c=json.load(open('.evolver.json')); print(c.get('production_project',''))")
 if [ -n "$PROD" ] && [ ! -f "production_seed.json" ]; then
     $EVOLVER_PY $TOOLS/seed_from_traces.py \
-        --project "$PROD" --use-sdk \
+        --project "$PROD" \
         --output-md production_seed.md \
         --output-json production_seed.json \
         --limit 100 2>/dev/null
