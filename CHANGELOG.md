@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.8.1] - 2026-04-03
+
+### Fixed
+
+- **`top_failing` in summary now populated** — Threshold changed from `< 0.5` to `<= 0.5` so examples with combined score 0.5 (e.g., has_output=1.0 + correctness=0.0) are included. Added `output_preview` (80 chars) to each entry. Summary now provides actionable context: input + output + feedback for top 3 failures (~800 bytes vs 27KB full).
+
+---
+
 ## [4.8.0] - 2026-04-03
 
 Four context engineering improvements inspired by [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering).
