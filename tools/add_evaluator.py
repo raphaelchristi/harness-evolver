@@ -14,14 +14,8 @@ import json
 import os
 import sys
 
-
-def write_config_atomic(path, config):
-    """Write config JSON atomically (temp file + rename)."""
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import write_config_atomic
 
 
 CODE_EVALUATOR_TEMPLATES = {

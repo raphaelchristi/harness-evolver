@@ -25,74 +25,14 @@ Requires: pip install langsmith
 import argparse
 import json
 import os
-import platform
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 
-
-# Track where the API key was loaded from
-key_source = None
-
-
-def ensure_langsmith_api_key():
-    """Load LANGSMITH_API_KEY from env, project .env, or global credentials.
-
-    Priority: env var > project .env (CWD or --config dir) > global credentials.
-    Project .env takes precedence over global credentials because the project-local
-    key is more likely to be correct and up-to-date.
-    """
-    global key_source
-    if os.environ.get("LANGSMITH_API_KEY"):
-        key_source = "environment"
-        return True
-
-    # Check .env in CWD and in --config directory FIRST (project-local > global)
-    env_candidates = [".env"]
-    for i, arg in enumerate(sys.argv):
-        if arg == "--config" and i + 1 < len(sys.argv):
-            cfg_dir = os.path.dirname(os.path.abspath(sys.argv[i + 1]))
-            env_candidates.append(os.path.join(cfg_dir, ".env"))
-        elif arg.startswith("--config="):
-            cfg_dir = os.path.dirname(os.path.abspath(arg.split("=", 1)[1]))
-            env_candidates.append(os.path.join(cfg_dir, ".env"))
-    for env_path in env_candidates:
-        if os.path.exists(env_path):
-            try:
-                with open(env_path) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
-                            key = line.split("=", 1)[1].strip().strip("'\"")
-                            if key:
-                                os.environ["LANGSMITH_API_KEY"] = key
-                                key_source = f".env file ({env_path})"
-                                return True
-            except OSError:
-                pass
-
-    # Fallback: global langsmith-cli credentials file
-    if platform.system() == "Darwin":
-        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
-    else:
-        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
-
-    if os.path.exists(creds_path):
-        try:
-            with open(creds_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LANGSMITH_API_KEY="):
-                        key = line.split("=", 1)[1].strip()
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            key_source = "credentials file"
-                            return True
-        except OSError:
-            pass
-
-    return False
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _common
+from _common import ensure_langsmith_api_key
 
 
 def check_dependencies():
@@ -449,11 +389,11 @@ def main():
     # Verify connection
     try:
         client.list_datasets(limit=1)
-        print(f"LangSmith connection verified (key from {key_source}).")
+        print(f"LangSmith connection verified (key from {_common.key_source}).")
     except Exception as e:
-        if key_source in ("credentials file", ".env file"):
-            print(f"ERROR: API key loaded from {key_source} is invalid or lacks permissions.", file=sys.stderr)
-            print(f"The key was loaded from the {key_source} but LangSmith rejected it.", file=sys.stderr)
+        if _common.key_source in ("credentials file", ".env file"):
+            print(f"ERROR: API key loaded from {_common.key_source} is invalid or lacks permissions.", file=sys.stderr)
+            print(f"The key was loaded from the {_common.key_source} but LangSmith rejected it.", file=sys.stderr)
             print(f"Fix: export LANGSMITH_API_KEY=lsv2_pt_... (with a valid key)", file=sys.stderr)
         else:
             print(f"Failed to connect to LangSmith: {e}", file=sys.stderr)

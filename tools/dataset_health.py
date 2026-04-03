@@ -15,36 +15,14 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# Secret detection (local import from same directory)
+# Shared imports from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import ensure_langsmith_api_key
 try:
     from secret_filter import has_secrets
 except ImportError:
     def has_secrets(text):
         return False
-
-
-def ensure_langsmith_api_key():
-    """Load API key from langsmith-cli credentials if not in env."""
-    if os.environ.get("LANGSMITH_API_KEY"):
-        return True
-    import platform
-    if platform.system() == "Darwin":
-        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
-    else:
-        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
-    if os.path.exists(creds_path):
-        try:
-            with open(creds_path) as f:
-                for line in f:
-                    if line.strip().startswith("api_key"):
-                        key = line.split("=", 1)[1].strip().strip("'\"")
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            return True
-        except OSError:
-            pass
-    return False
 
 
 def load_json_safe(path):
