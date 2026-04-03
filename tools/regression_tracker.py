@@ -22,26 +22,15 @@ import sys
 
 
 def ensure_langsmith_api_key():
-    """Load LANGSMITH_API_KEY from credentials file or .env if not in env."""
+    """Load LANGSMITH_API_KEY from env, project .env, or global credentials.
+
+    Priority: env var > project .env (CWD or --config dir) > global credentials.
+    Project .env takes precedence over global credentials because the project-local
+    key is more likely to be correct and up-to-date.
+    """
     if os.environ.get("LANGSMITH_API_KEY"):
         return True
-    if platform.system() == "Darwin":
-        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
-    else:
-        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
-    if os.path.exists(creds_path):
-        try:
-            with open(creds_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LANGSMITH_API_KEY="):
-                        key = line.split("=", 1)[1].strip()
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            return True
-        except OSError:
-            pass
-    # Check .env in CWD and in --config directory (CWD may differ from project)
+    # Check .env in CWD and in --config directory FIRST (project-local > global)
     env_candidates = [".env"]
     for i, arg in enumerate(sys.argv):
         if arg == "--config" and i + 1 < len(sys.argv):
@@ -63,6 +52,23 @@ def ensure_langsmith_api_key():
                                 return True
             except OSError:
                 pass
+    # Fallback: global langsmith-cli credentials file
+    if platform.system() == "Darwin":
+        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
+    else:
+        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
+    if os.path.exists(creds_path):
+        try:
+            with open(creds_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            return True
+        except OSError:
+            pass
     return False
 
 

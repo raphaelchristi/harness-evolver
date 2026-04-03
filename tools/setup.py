@@ -37,38 +37,18 @@ key_source = None
 
 
 def ensure_langsmith_api_key():
-    """Load LANGSMITH_API_KEY from credentials file if not in env.
+    """Load LANGSMITH_API_KEY from env, project .env, or global credentials.
 
-    The installer saves the key to the langsmith-cli credentials file,
-    but the SDK only reads the env var. This bridges the gap.
+    Priority: env var > project .env (CWD or --config dir) > global credentials.
+    Project .env takes precedence over global credentials because the project-local
+    key is more likely to be correct and up-to-date.
     """
     global key_source
     if os.environ.get("LANGSMITH_API_KEY"):
         key_source = "environment"
         return True
 
-    # Platform-specific credentials path (matches langsmith-cli)
-    if platform.system() == "Darwin":
-        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
-    else:
-        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
-
-    if os.path.exists(creds_path):
-        try:
-            with open(creds_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LANGSMITH_API_KEY="):
-                        key = line.split("=", 1)[1].strip()
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            key_source = "credentials file"
-                            return True
-        except OSError:
-            pass
-
-    # Also check .env in current directory
-    # Check .env in CWD and in --config directory (CWD may differ from project)
+    # Check .env in CWD and in --config directory FIRST (project-local > global)
     env_candidates = [".env"]
     for i, arg in enumerate(sys.argv):
         if arg == "--config" and i + 1 < len(sys.argv):
@@ -91,6 +71,26 @@ def ensure_langsmith_api_key():
                                 return True
             except OSError:
                 pass
+
+    # Fallback: global langsmith-cli credentials file
+    if platform.system() == "Darwin":
+        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
+    else:
+        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
+
+    if os.path.exists(creds_path):
+        try:
+            with open(creds_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("LANGSMITH_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        if key:
+                            os.environ["LANGSMITH_API_KEY"] = key
+                            key_source = "credentials file"
+                            return True
+        except OSError:
+            pass
 
     return False
 
