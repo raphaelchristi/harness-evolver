@@ -257,3 +257,4 @@ Next: run /harness:evolve to start optimizing.
   Do NOT use `~/.evolver/venv/bin/python` as the entry_point — that's for evolver tools only. Using it pollutes the evolver venv with agent dependencies.
 - If LangSmith connection fails, check API key and network. The `ensure_langsmith_api_key()` function validates key format and rejects dummy/test keys with a warning.
 - **Eval concurrency** defaults to 3 (runs 3 examples in parallel). If the agent can't handle parallel execution (writes to shared files, uses a fixed port, holds a DB lock), set `eval_concurrency: 1` in `.evolver.json` after setup.
+- **Companion plugin**: For full proposer observability, recommend installing `langsmith-tracing` from `langchain-ai/langsmith-claude-code-plugins`. Each proposer's file reads, edits, and commits become visible in LangSmith.

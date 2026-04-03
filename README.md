@@ -133,6 +133,19 @@ LangSmith traces any AI framework: LangChain/LangGraph (auto), OpenAI/Anthropic 
 
 ---
 
+## Companion: LangSmith Tracing
+
+For full observability into what each proposer does during evolution (every file read, edit, and commit), install the [LangSmith tracing plugin](https://github.com/langchain-ai/langsmith-claude-code-plugins):
+
+```
+/plugin marketplace add langchain-ai/langsmith-claude-code-plugins
+/plugin install langsmith-tracing@langsmith-claude-code-plugins
+```
+
+With both plugins installed, the evolution loop traces to LangSmith as a hierarchy: iteration → proposers → tool calls.
+
+---
+
 ## References
 
 - [Meta-Harness: End-to-End Optimization of Model Harnesses](https://arxiv.org/abs/2603.28052) — Lee et al., 2026
