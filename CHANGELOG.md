@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.5.2] - 2026-04-03
+
+Fixes from second round of real-world testing (arag project REPORT.md).
+
+### Fixed
+
+- **`constraint_check.py` uses project venv for pytest** — Detects `.venv/bin/python` or extracts Python path from `entry_point` config instead of using system `python3`. Fixes false test failures when pytest is only in the venv.
+- **`add_evaluator.py` race condition** — Re-reads `.evolver.json` immediately before writing to pick up concurrent changes from the main loop. Prevents critic agent from overwriting `best_score`, `iterations`, and `history` fields.
+- **`evolution_chart.py` "? examples"** — Searches all history entries for `total` field, not just baseline. Fixes display when baseline was created before enriched history (v4.4.0+).
+
+---
+
 ## [4.5.1] - 2026-04-02
 
 Fixes the 4 highest-frequency bugs from real-world evolution runs (3 independent REPORT.md files).
