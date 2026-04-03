@@ -152,8 +152,9 @@ def main():
         except Exception:
             train_example_ids = None  # API failed — fail closed, don't risk held_out contamination
 
-        if train_example_ids is None:
-            print("  WARNING: Could not determine train split — skipping auto-guard to protect held_out", file=sys.stderr)
+        if train_example_ids is None or len(train_example_ids) == 0:
+            reason = "API failed" if train_example_ids is None else "train split empty or missing"
+            print(f"  WARNING: {reason} — skipping auto-guard to protect held_out", file=sys.stderr)
             failing = []
         else:
             failing = [
