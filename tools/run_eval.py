@@ -150,6 +150,7 @@ def main():
     parser.add_argument("--concurrency", type=int, default=None, help="Max concurrent evaluations (default: from config or 1)")
     parser.add_argument("--no-canary", action="store_true", help="Skip canary preflight check")
     parser.add_argument("--preflight-only", action="store_true", help="Run preflight checks only (API key, config, canary) then exit")
+    parser.add_argument("--sample", type=int, default=None, help="Evaluate a random sample of N examples instead of all")
     args = parser.parse_args()
 
     # Auto-copy config files to worktree if missing (untracked files aren't in worktrees)
@@ -173,6 +174,17 @@ def main():
 
     from langsmith import Client
     client = Client()
+
+    # Sample mode: evaluate subset of dataset (used by light mode)
+    sampled_examples = None
+    if args.sample:
+        import random
+        all_examples = list(client.list_examples(dataset_name=config["dataset"], limit=500))
+        if args.sample < len(all_examples):
+            sampled_examples = random.sample(all_examples, args.sample)
+            print(f"  Sampling {args.sample}/{len(all_examples)} examples", file=sys.stderr)
+        else:
+            print(f"  Sample {args.sample} >= dataset size {len(all_examples)}, using all", file=sys.stderr)
 
     target = make_target(config["entry_point"], args.worktree_path)
     evaluators = load_evaluators(config["evaluators"])
@@ -234,9 +246,10 @@ def main():
         print(f"  Pending LLM evaluators (agent): {llm_evaluators}")
 
     try:
+        eval_data = sampled_examples if sampled_examples else config["dataset"]
         results = client.evaluate(
             target,
-            data=config["dataset"],
+            data=eval_data,
             evaluators=evaluators,
             experiment_prefix=args.experiment_prefix,
             max_concurrency=concurrency,
