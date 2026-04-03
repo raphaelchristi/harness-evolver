@@ -519,7 +519,7 @@ def main():
             # Fail hard if requested split has zero examples
             if not split_example_ids:
                 print(f"ERROR: Split '{args.split}' has 0 examples in dataset '{cfg_for_split['dataset']}'.", file=sys.stderr)
-                print(f"Run /evolver:health to create train/held_out splits before comparing.", file=sys.stderr)
+                print(f"Run /harness:health to create train/held_out splits before comparing.", file=sys.stderr)
                 sys.exit(1)
 
         for name in experiment_names:

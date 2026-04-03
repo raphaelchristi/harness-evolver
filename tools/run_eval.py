@@ -4,7 +4,7 @@
 Wraps client.evaluate() — runs the user's agent against the dataset
 with code-based evaluators only (has_output, token_efficiency).
 LLM-as-judge scoring (correctness, conciseness) is handled post-hoc
-by the evolver-evaluator agent via langsmith-cli.
+by the harness-evaluator agent via langsmith-cli.
 
 Usage:
     python3 run_eval.py \
@@ -116,7 +116,7 @@ def load_evaluators(evaluator_keys):
     """Load code-based evaluators only.
 
     LLM-as-judge evaluators (correctness, conciseness) are handled
-    post-hoc by the evolver-evaluator agent via langsmith-cli.
+    post-hoc by the harness-evaluator agent via langsmith-cli.
     """
     evaluators = []
 

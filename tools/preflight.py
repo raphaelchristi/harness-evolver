@@ -40,10 +40,22 @@ def resolve_python():
     return sys.executable
 
 
+def _is_valid_key(k):
+    """Reject dummy/test keys and obviously invalid ones."""
+    if not k or len(k) < 30:
+        return False
+    if k.startswith("lsv2_pt_test") or k == "your-api-key-here":
+        return False
+    return True
+
+
 def check_api_key(config_path):
-    """Check if LANGSMITH_API_KEY can be resolved."""
-    if os.environ.get("LANGSMITH_API_KEY"):
-        return {"pass": True, "source": "environment variable"}
+    """Check if LANGSMITH_API_KEY can be resolved and is valid."""
+    env_key = os.environ.get("LANGSMITH_API_KEY")
+    if env_key:
+        if _is_valid_key(env_key):
+            return {"pass": True, "source": "environment variable"}
+        return {"pass": False, "source": "environment variable", "error": f"Key looks invalid (too short or test key)"}
 
     # Check .env in config directory
     config_dir = os.path.dirname(os.path.abspath(config_path))
@@ -55,8 +67,10 @@ def check_api_key(config_path):
                         line = line.strip()
                         if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
                             key = line.split("=", 1)[1].strip().strip("'\"")
-                            if key:
+                            if key and _is_valid_key(key):
                                 return {"pass": True, "source": f".env ({env_path})"}
+                            elif key:
+                                return {"pass": False, "source": f".env ({env_path})", "error": "Key looks invalid (too short or test key)"}
             except OSError:
                 pass
 
@@ -71,7 +85,10 @@ def check_api_key(config_path):
             with open(creds) as f:
                 for line in f:
                     if line.strip().startswith("LANGSMITH_API_KEY="):
-                        return {"pass": True, "source": f"credentials ({creds})"}
+                        key = line.strip().split("=", 1)[1].strip()
+                        if _is_valid_key(key):
+                            return {"pass": True, "source": f"credentials ({creds})"}
+                        return {"pass": False, "source": f"credentials ({creds})", "error": f"Key looks invalid (dummy/test key?)"}
         except OSError:
             pass
 
@@ -217,7 +234,7 @@ def main():
                 splits = health.get("splits", {})
                 has_held_out = splits.get("has_held_out", False) if splits else False
                 if not has_held_out:
-                    critical.append({"severity": "critical", "message": "No held_out split — run /evolver:health to create train/held_out splits"})
+                    critical.append({"severity": "critical", "message": "No held_out split — run /harness:health to create train/held_out splits"})
 
                 checks["health"] = {
                     "pass": len(critical) == 0,

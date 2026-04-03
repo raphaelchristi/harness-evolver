@@ -211,7 +211,7 @@ def get_evaluators(goals, evaluator_names=None):
 
     Returns only code-based evaluators. LLM-as-judge evaluators
     (correctness, conciseness) are handled post-hoc by the
-    evolver-evaluator agent via langsmith-cli.
+    harness-evaluator agent via langsmith-cli.
     """
     evaluators = []
     evaluator_keys = []
@@ -470,7 +470,7 @@ def main():
                 print(f"  Baseline has_output score: {baseline_score:.3f}")
                 print(f"  Experiment: {baseline_experiment}")
                 if llm_evaluators:
-                    print(f"  Note: LLM scoring pending — evaluator agent will run during /evolver:evolve")
+                    print(f"  Note: LLM scoring pending — evaluator agent will run during /harness:evolve")
             except Exception as e:
                 print(f"  Baseline evaluation failed: {e}", file=sys.stderr)
                 print("  Continuing with score 0.0")
@@ -479,9 +479,20 @@ def main():
         else:
             print("Skipping baseline (--skip-baseline)")
 
+        # Warn if no project venv found and entry_point uses evolver venv
+        entry_point = args.entry_point
+        evolver_venv = os.path.expanduser("~/.evolver/venv")
+        has_project_venv = any(os.path.isdir(os.path.join(".", d)) for d in [".venv", "venv"])
+        if not has_project_venv:
+            print("\n  WARNING: No Python venv found in project (.venv/ or venv/).", file=sys.stderr)
+            print("  Create one first: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt", file=sys.stderr)
+        if evolver_venv in entry_point:
+            print(f"\n  WARNING: Entry point uses evolver venv ({evolver_venv}).", file=sys.stderr)
+            print("  The evolver venv is for tools only, not your agent.", file=sys.stderr)
+            print("  Use your project's .venv/bin/python instead.", file=sys.stderr)
+
         # Resolve Python interpreter in entry_point to absolute path
         # This ensures the entry point works in worktrees where venvs don't exist
-        entry_point = args.entry_point
         parts = entry_point.split()
         if parts:
             python_path = parts[0]
@@ -544,7 +555,7 @@ def main():
         print(f"  Evaluators: {evaluator_keys}")
         if baseline_experiment:
             print(f"  Baseline: {baseline_score:.3f}")
-        print(f"\nNext: run /evolver:evolve")
+        print(f"\nNext: run /harness:evolve")
 
     except Exception as e:
         # Cleanup orphaned dataset if setup fails after dataset creation
