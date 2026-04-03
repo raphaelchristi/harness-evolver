@@ -1,26 +1,26 @@
 {
-  "schema_version": "1.0",
+  "name": "harness-evolver-marketplace",
+  "owner": {
+    "name": "Raphael Valdetaro"
+  },
+  "metadata": {
+    "description": "LangSmith-native autonomous agent optimization plugin",
+    "version": "6.1.0"
+  },
   "plugins": [
     {
       "name": "harness-evolver",
-      "description": "LangSmith-native autonomous agent optimization — evolves LLM agent code using multi-agent proposers, LangSmith experiments, and git worktrees",
+      "source": "./",
+      "description": "Evolves LLM agent code using multi-agent proposers, LangSmith experiments, and git worktrees",
       "version": "6.1.0",
-      "skills": [
-        "skills/setup",
-        "skills/evolve",
-        "skills/health",
-        "skills/status",
-        "skills/deploy"
-      ],
-      "agents": [
-        "agents/harness-proposer.md",
-        "agents/harness-evaluator.md",
-        "agents/harness-critic.md",
-        "agents/harness-architect.md",
-        "agents/harness-consolidator.md",
-        "agents/harness-testgen.md"
-      ],
-      "hooks": "hooks/hooks.json"
+      "author": {
+        "name": "Raphael Valdetaro"
+      },
+      "homepage": "https://github.com/raphaelchristi/harness-evolver",
+      "repository": "https://github.com/raphaelchristi/harness-evolver",
+      "license": "MIT",
+      "keywords": ["langsmith", "optimization", "evolution", "llm", "agent"],
+      "category": "development"
     }
   ]
 }
