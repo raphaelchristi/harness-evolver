@@ -31,16 +31,19 @@ Read `comparison.json`, `trace_insights.json`, `regression_report.json`, and any
 - What approaches were tried and failed
 - What regressions occurred
 
-### Phase 3: Consolidate
-Merge new signals with existing memory:
-- Update recurrence counts for repeated patterns
-- Resolve contradictions (newer information wins)
-- Promote insights seen 2+ times to "Key Insights"
-- Demote insights that haven't recurred
+### Phase 3: Consolidate (Anchored Iterative Summarization)
+
+**CRITICAL: Never re-summarize promoted insights.** Promoted insights (rec >= 3) are immutable anchors. Only add new data around them.
+
+- **Promoted insights (rec >= 3)**: Copy verbatim from prior memory. Do NOT rephrase or re-summarize. These are stable knowledge.
+- **Rising insights (rec 1-2)**: Update recurrence count. If confirmed again, promote.
+- **New observations**: Extract from comparison.json and proposal.md. Use LITERAL text from proposal.md's `## Approach` and `## Expected Impact` sections — do not paraphrase. Paraphrasing loses fidelity (telephone game effect).
+- **Contradictions**: Newer information wins. Mark old insight as superseded, don't delete.
 
 ### Phase 4: Prune
 - Cap at 20 insights max
-- Remove insights with 0 recurrence after 3 iterations
+- **Garbage collection**: Remove observations that haven't recurred in 5+ iterations
+- Promoted insights are never pruned (they're proven patterns)
 - Keep the markdown under 2KB
 
 ## Constraints

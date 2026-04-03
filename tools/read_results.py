@@ -291,6 +291,56 @@ def compare_experiments(results_list):
     }
 
 
+def format_summary(results):
+    """Compact summary — key metrics only, no per-example data. ~200 tokens vs ~5K."""
+    r = results
+    num = r.get("num_examples", 0)
+    score = r.get("combined_score", 0)
+    errors = r.get("error_count", 0)
+
+    # Aggregate per-evaluator scores
+    eval_avgs = {}
+    for ex_data in r.get("per_example", {}).values():
+        for k, v in ex_data.get("scores", {}).items():
+            eval_avgs.setdefault(k, []).append(v)
+    eval_summary = {k: round(sum(v) / len(v), 3) for k, v in eval_avgs.items()}
+
+    # Identify failure pattern
+    failing = [ex for ex in r.get("per_example", {}).values() if ex.get("score", 0) < 0.5]
+    failure_pattern = "none"
+    if failing:
+        # Check if failures share a common error
+        error_msgs = [ex.get("error", "") or "" for ex in failing if ex.get("error")]
+        if error_msgs and len(set(e[:50] for e in error_msgs)) == 1:
+            failure_pattern = f"uniform: {error_msgs[0][:80]}"
+        else:
+            failure_pattern = f"{len(failing)}/{num} failing"
+
+    # Top failing inputs (max 3)
+    top_failing = []
+    for eid, data in sorted(r.get("per_example", {}).items(), key=lambda x: x[1].get("score", 0))[:3]:
+        if data.get("score", 0) < 0.5:
+            fb = data.get("feedback", {})
+            fb_text = next(iter(fb.values()), "") if fb else ""
+            top_failing.append({
+                "input": data.get("input_preview", "")[:80],
+                "score": data["score"],
+                "feedback": fb_text[:100],
+            })
+
+    return {
+        "experiment": r.get("experiment"),
+        "combined_score": score,
+        "num_examples": num,
+        "error_count": errors,
+        "per_evaluator": eval_summary,
+        "failure_pattern": failure_pattern,
+        "top_failing": top_failing,
+        "tokens": r.get("total_tokens", 0),
+        "avg_latency_ms": r.get("avg_latency_ms", 0),
+    }
+
+
 def format_markdown(results):
     """Format experiment results as markdown for agents."""
     lines = [f"# Experiment Results: {results['experiment']}", ""]
@@ -325,7 +375,7 @@ def main():
     parser.add_argument("--experiment", default=None, help="Single experiment to read")
     parser.add_argument("--config", default=".evolver.json", help="Path to .evolver.json")
     parser.add_argument("--output", default=None, help="Output JSON path")
-    parser.add_argument("--format", default="json", choices=["json", "markdown"], help="Output format")
+    parser.add_argument("--format", default="json", choices=["json", "markdown", "summary"], help="Output format (summary = compact ~200 tokens)")
     parser.add_argument("--split", default=None, help="Filter by dataset split (e.g., 'train')")
     args = parser.parse_args()
     ensure_langsmith_api_key()
@@ -358,7 +408,9 @@ def main():
             result["combined_score"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
             result["num_examples"] = len(result["per_example"])
 
-        if args.format == "markdown":
+        if args.format == "summary":
+            output = json.dumps(format_summary(result), indent=2, default=str)
+        elif args.format == "markdown":
             output = format_markdown(result)
         else:
             output = json.dumps(result, indent=2, default=str)

@@ -150,11 +150,13 @@ langsmith-cli --json feedback list --run-id "{any_run_id}" --key correctness
 
 ## Rules
 
-1. **Be a fair judge** — evaluate based on the criteria, not your preferences
-2. **Brief comments** — keep feedback comments under 200 characters
-3. **Binary scoring for correctness** — use 1.0 or 0.0, not partial scores (unless instructed otherwise)
-4. **Score EVERY run** — don't skip any, even failed ones
-5. **Domain awareness** — use the `<context>` block to understand what constitutes a "correct" answer in this domain
+1. **Justification BEFORE score** — for each run, first write your reasoning about what's correct/incorrect, THEN assign the score. This ordering improves reliability by 15-25% vs score-first. Think through the evaluation, then commit to a number.
+2. **Be a fair judge** — evaluate based on the criteria, not your preferences
+3. **Brief comments** — keep feedback comments under 200 characters (the justification is for your reasoning process; the comment is the concise summary)
+4. **Binary scoring for correctness** — use 1.0 or 0.0, not partial scores (unless rubric says otherwise)
+5. **Score EVERY run** — don't skip any, even failed ones
+6. **Domain awareness** — use the `<context>` block to understand what constitutes a "correct" answer in this domain
+7. **No position bias** — if evaluating multiple experiments, don't let the order you evaluate them affect scores. Each run is judged independently against the criteria.
 
 ## Return Protocol
 

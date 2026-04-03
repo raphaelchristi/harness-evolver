@@ -383,6 +383,7 @@ def main():
     parser.add_argument("--from-project", default=None, help="LangSmith project name (v3 mode)")
     parser.add_argument("--from-experiment", default=None, help="LangSmith experiment name (v3 mode)")
     parser.add_argument("--output", required=True, help="Output path for trace_insights.json")
+    parser.add_argument("--format", default="full", choices=["full", "summary"], help="Output format (summary = compact ~200 tokens)")
     args = parser.parse_args()
 
     # v3 mode: fetch directly from LangSmith
@@ -468,6 +469,16 @@ def main():
 
     # Remove None values at top level
     insights = {k: v for k, v in insights.items() if v is not None}
+
+    # Summary mode: compact output (~200 tokens vs ~5K)
+    if args.format == "summary":
+        insights = {
+            "summary": insights.get("summary", ""),
+            "top_issues": insights.get("top_issues", [])[:3],
+            "hypotheses": [h.get("hypothesis", h) if isinstance(h, dict) else h for h in insights.get("hypotheses", [])[:3]],
+            "failing_count": (insights.get("score_cross_ref") or {}).get("failing_count", 0),
+            "error_cluster_count": len(insights.get("error_clusters", [])),
+        }
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w") as f:

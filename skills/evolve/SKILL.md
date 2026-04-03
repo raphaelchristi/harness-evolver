@@ -253,7 +253,15 @@ Read the available analysis files:
 
 Based on this data, generate two files:
 
-**`strategy.md`** — A concise strategy document with: target files, failure clusters (prioritized), recommended approaches (from evolution memory), approaches to avoid, top failing examples, and production insights.
+**`strategy.md`** — A concise strategy document. **CRITICAL: only include data from the CURRENT iteration's analysis. Do not carry over stale info from prior strategy.md files — stale context is an active distractor that degrades proposer performance.** Contents:
+- Target files (from current trace analysis)
+- Failure clusters from the LATEST experiment only (not historical)
+- Top 3 insights from evolution_memory.md (only promoted insights with rec >= 2, not all observations)
+- Approaches to avoid (only still-relevant ones)
+- Top 3 failing examples with judge feedback
+- Production insights (if new data exists)
+
+**Keep strategy.md under 1500 tokens.** Longer strategies dilute proposer attention. Full data stays in trace_insights.json and best_results.json for proposers to read on demand.
 
 **`lenses.json`** — Investigation questions for proposers, format:
 ```json
