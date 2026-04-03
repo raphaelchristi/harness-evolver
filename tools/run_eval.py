@@ -244,11 +244,15 @@ def main():
 
         experiment_name = results.experiment_name
 
-        # Calculate mean score from code-based evaluators only
-        # langsmith>=0.7.x returns dicts, older versions return dataclasses
+        # Calculate mean score + detect rate limits as we iterate
         scores = []
         per_example = {}
+        rate_limit_count = 0
+        total_processed = 0
+        aborted_early = False
+
         for result in results:
+            total_processed += 1
             example_scores = []
 
             # Handle both dict and object results (SDK version compat)
@@ -260,6 +264,9 @@ def main():
                     eval_list = getattr(eval_results, "results", []) or []
                 example_obj = result.get("example")
                 example_id = str(example_obj.get("id", "unknown") if isinstance(example_obj, dict) else getattr(example_obj, "id", "unknown"))
+                # Check run outputs for rate-limit signals
+                run_obj = result.get("run", {})
+                outputs = run_obj.get("outputs", {}) if isinstance(run_obj, dict) else {}
             else:
                 eval_results = getattr(result, "evaluation_results", None)
                 if isinstance(eval_results, dict):
@@ -270,6 +277,21 @@ def main():
                     eval_list = []
                 example_obj = getattr(result, "example", None)
                 example_id = str(getattr(example_obj, "id", "unknown") if example_obj else "unknown")
+                run_obj = getattr(result, "run", None)
+                outputs = getattr(run_obj, "outputs", {}) if run_obj else {}
+
+            # Detect rate-limit in this run's output
+            if outputs and isinstance(outputs, dict):
+                error_text = str(outputs.get("error", "")).lower()
+                output_text = str(outputs.get("output", "")).lower()
+                if "429" in error_text or "rate" in error_text or "resource_exhausted" in error_text or "429" in output_text:
+                    rate_limit_count += 1
+
+            # Early abort: after 5+ runs, if >50% are rate-limited, stop burning quota
+            if total_processed >= 5 and rate_limit_count / total_processed > 0.5:
+                print(f"\n  ABORTING: {rate_limit_count}/{total_processed} runs hit rate limits ({rate_limit_count/total_processed:.0%}). Stopping early to save quota.", file=sys.stderr)
+                aborted_early = True
+                break
 
             for er in eval_list:
                 score_val = er.get("score") if isinstance(er, dict) else getattr(er, "score", None)
@@ -283,24 +305,8 @@ def main():
             }
 
         mean_score = sum(scores) / len(scores) if scores else 0.0
-
-        # Detect rate-limit-dominated runs (>30% of examples have 429/rate limit errors)
-        rate_limit_count = 0
-        for result in results:
-            if isinstance(result, dict):
-                run_obj = result.get("run", result)
-                outputs = run_obj.get("outputs", {}) if isinstance(run_obj, dict) else getattr(run_obj, "outputs", {})
-            else:
-                outputs = getattr(result, "run", result)
-                outputs = getattr(outputs, "outputs", {}) if not isinstance(outputs, dict) else outputs
-            if outputs and isinstance(outputs, dict):
-                error_text = str(outputs.get("error", "")).lower()
-                output_text = str(outputs.get("output", "")).lower()
-                if "429" in error_text or "rate" in error_text or "429" in output_text or "resource_exhausted" in error_text:
-                    rate_limit_count += 1
-
         num_examples = len(per_example)
-        rate_limited = num_examples > 0 and (rate_limit_count / num_examples) > 0.3
+        rate_limited = num_examples > 0 and (rate_limit_count / max(total_processed, 1)) > 0.3
 
         output = {
             "experiment": experiment_name,
@@ -312,6 +318,8 @@ def main():
             "pending_llm_evaluators": llm_evaluators,
             "rate_limited": rate_limited,
             "rate_limit_count": rate_limit_count,
+            "aborted_early": aborted_early,
+            "total_processed": total_processed,
         }
 
         print(json.dumps(output))
