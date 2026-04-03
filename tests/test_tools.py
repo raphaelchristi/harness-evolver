@@ -103,6 +103,7 @@ TOOLS_WITH_HELP = [
     "iteration_gate.py",
     "mine_sessions.py",
     "preflight.py",
+    "promote_learnings.py",
     "read_results.py",
     "regression_tracker.py",
     "run_eval.py",
@@ -372,6 +373,57 @@ def test_archive():
         archive_dir = os.path.join(os.path.dirname(config_path), "evolution_archive")
         if os.path.isdir(archive_dir):
             shutil.rmtree(archive_dir)
+
+
+# ─── Test: promote_learnings.py ───
+
+def test_promote_learnings_help():
+    """promote_learnings.py accepts --help."""
+    code, stdout, stderr = run_tool("promote_learnings.py", ["--help"])
+    assert code == 0
+    assert "--threshold" in stdout
+    assert "--dry-run" in stdout
+
+
+def test_promote_learnings_no_memory():
+    """promote_learnings.py handles missing evolution_memory.md gracefully."""
+    code, stdout, stderr = run_tool("promote_learnings.py", [
+        "--memory", "/tmp/nonexistent_memory.md",
+        "--dry-run",
+    ])
+    assert code == 0
+    result = json.loads(stdout)
+    assert result["promoted"] == 0
+
+
+def test_promote_learnings_parse():
+    """promote_learnings.py parses evolution_memory.md and filters by threshold."""
+    # Create mock evolution_memory.md
+    memory_content = """# Evolution Memory
+
+## Key Insights
+
+1. **Always validate input JSON before processing** [rec:7]
+2. **Use streaming for large responses** [rec:3]
+- Don't retry on 401 errors [rec:5]
+- Cache embeddings locally [rec:2]
+"""
+    fd, memory_path = tempfile.mkstemp(suffix=".md", prefix="memory_test_")
+    with os.fdopen(fd, "w") as f:
+        f.write(memory_content)
+    try:
+        code, stdout, stderr = run_tool("promote_learnings.py", [
+            "--memory", memory_path,
+            "--threshold", "5",
+            "--dry-run",
+        ])
+        assert code == 0, f"exit {code}: {stderr[:200]}"
+        result = json.loads(stdout)
+        assert result["promoted"] == 2  # rec:7 and rec:5
+        assert result["total_insights"] == 4
+        assert "Always validate input JSON" in result["insights"][0]
+    finally:
+        os.unlink(memory_path)
 
 
 # ─── Runner ───

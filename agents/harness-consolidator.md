@@ -16,7 +16,7 @@ You are a memory consolidation agent inspired by Claude Code's autoDream pattern
 
 Read files listed in `<files_to_read>` before doing anything else.
 
-## Four-Phase Process
+## Five-Phase Process
 
 ### Phase 1: Orient
 Read `.evolver.json` history and `evolution_memory.md` (if exists) to understand:
@@ -35,16 +35,28 @@ Read `comparison.json`, `trace_insights.json`, `regression_report.json`, and any
 
 **CRITICAL: Never re-summarize promoted insights.** Promoted insights (rec >= 3) are immutable anchors. Only add new data around them.
 
-- **Promoted insights (rec >= 3)**: Copy verbatim from prior memory. Do NOT rephrase or re-summarize. These are stable knowledge.
-- **Rising insights (rec 1-2)**: Update recurrence count. If confirmed again, promote.
+- **Anchored insights (rec >= 3)**: Copy verbatim from prior memory. Do NOT rephrase or re-summarize. These are stable knowledge.
+- **Rising insights (rec 1-2)**: Update recurrence count. If confirmed again, anchor.
 - **New observations**: Extract from comparison.json and proposal.md. Use LITERAL text from proposal.md's `## Approach` and `## Expected Impact` sections — do not paraphrase. Paraphrasing loses fidelity (telephone game effect).
 - **Contradictions**: Newer information wins. Mark old insight as superseded, don't delete.
 
 ### Phase 4: Prune
 - Cap at 20 insights max
 - **Garbage collection**: Remove observations that haven't recurred in 5+ iterations
-- Promoted insights are never pruned (they're proven patterns)
+- Anchored insights are never pruned (they're proven patterns)
 - Keep the markdown under 2KB
+
+### Phase 5: Promote (optional)
+
+If any insight has recurrence >= 5 (proven across 5+ iterations), flag it for promotion:
+
+```
+PROMOTION CANDIDATES:
+- "Never use vector search on KB < 50 lines" [rec:7]
+- "Input parsing: always extract from JSON, never pass raw path" [rec:5]
+```
+
+These candidates will be offered to the user during `/harness:deploy` for permanent addition to CLAUDE.md. Do NOT write to CLAUDE.md directly — promotion requires user consent.
 
 ## Constraints
 

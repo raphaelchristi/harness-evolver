@@ -43,6 +43,8 @@ Full feature list for Harness Evolver. For the quick overview, see [README.md](.
 | **Evolution Archive** | Persistent history of ALL candidates (winners + losers) — diffs, proposals, scores. Proposers grep archive for cross-iteration causal reasoning. |
 | **Evolution Memory** | Anchored iterative summarization — promoted insights are immutable anchors. Garbage collection removes stale observations. |
 | **ULTRAPLAN Architect** | Auto-triggers on stagnation. Opus model for deep architectural analysis. Recommends topology changes. |
+| **Compound Learning** | Proven evolution insights (rec >= 5) auto-promoted from `evolution_memory.md` to project CLAUDE.md via `/harness:deploy`. Learnings persist beyond sessions — each evolution permanently improves the project. Inspired by [Compound Engineering](https://github.com/EveryInc/compound-engineering-plugin) and [Self-Improving Agent](https://github.com/pskoett/pskoett-ai-skills). |
+| **Score Certification** | `/harness:certify` runs evaluation 3x and reports mean ± std. STABLE (std < 0.05), MARGINAL (0.05-0.10), UNSTABLE (>= 0.10). Verifies LLM-as-judge consistency before deploying. Inspired by [PluginEval Monte Carlo](https://github.com/wshobson/agents). |
 | **Production Traces** | Auto-discovers LangSmith production projects. Real user inputs for test generation. Can also mine Claude Code session history. |
 
 ## Operations
