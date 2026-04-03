@@ -10,6 +10,11 @@ Finalize the evolution results. In v3, the best code is already in the main bran
 
 ## What To Do
 
+```bash
+TOOLS="${EVOLVER_TOOLS:-$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")}"
+EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HOME/.evolver/venv/bin/python" || echo "python3")}"
+```
+
 ### 1. Show Results
 
 ```bash
@@ -42,7 +47,8 @@ git log --oneline --since="$(python3 -c "import json; print(json.load(open('.evo
     "options": [
       {"label": "Tag and push", "description": "Create a git tag with the score and push to remote"},
       {"label": "Just review", "description": "Show the full diff of all changes made during evolution"},
-      {"label": "Clean up only", "description": "Remove temporary files (trace_insights.json, etc.) but don't push"}
+      {"label": "Clean up only", "description": "Remove temporary files (trace_insights.json, etc.) but don't push"},
+      {"label": "Promote learnings", "description": "Add proven evolution insights to CLAUDE.md (permanent knowledge)"}
     ]
   }]
 }
@@ -67,6 +73,13 @@ git diff HEAD~{iterations} HEAD
 ```bash
 rm -f trace_insights.json best_results.json comparison.json production_seed.md production_seed.json
 ```
+
+**If "Promote learnings"**:
+```bash
+$EVOLVER_PY $TOOLS/promote_learnings.py --memory evolution_memory.md --target CLAUDE.md --threshold 5 --dry-run
+```
+
+Show the dry-run output. If the user approves, run without `--dry-run`.
 
 ### 4. Report
 

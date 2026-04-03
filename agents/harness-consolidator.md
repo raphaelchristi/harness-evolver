@@ -46,6 +46,18 @@ Read `comparison.json`, `trace_insights.json`, `regression_report.json`, and any
 - Promoted insights are never pruned (they're proven patterns)
 - Keep the markdown under 2KB
 
+### Phase 5: Promote (optional)
+
+If any insight has recurrence >= 5 (proven across 5+ iterations), flag it for promotion:
+
+```
+PROMOTION CANDIDATES:
+- "Never use vector search on KB < 50 lines" [rec:7]
+- "Input parsing: always extract from JSON, never pass raw path" [rec:5]
+```
+
+These candidates will be offered to the user during `/harness:deploy` for permanent addition to CLAUDE.md. Do NOT write to CLAUDE.md directly — promotion requires user consent.
+
 ## Constraints
 
 - **Read-only**: Do not modify agent code, only produce `evolution_memory.md` and `evolution_memory.json`
