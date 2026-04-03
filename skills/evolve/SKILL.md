@@ -79,12 +79,22 @@ Read `project_dir` from config. If non-empty, all worktree paths include it: `{w
 
 ## The Loop (per iteration)
 
-### 0. Read State
+### 0. Read State + Start Iteration Trace
 
 ```bash
 BEST=$(python3 -c "import json; b=json.load(open('.evolver.json')).get('best_experiment'); print(b if b else '')")
 PROJECT_DIR=$(python3 -c "import json; print(json.load(open('.evolver.json')).get('project_dir', ''))")
+ITER_START=$(date +%s)
 ```
+
+**Start iteration trace** (logs to LangSmith for observability):
+```bash
+ITER_TRACE=$($EVOLVER_PY $TOOLS/log_iteration.py --config .evolver.json --action start --version v{NNN} 2>/dev/null)
+ITER_RUN_ID=$(echo "$ITER_TRACE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('run_id',''))" 2>/dev/null)
+ITER_DOTTED_ORDER=$(echo "$ITER_TRACE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('dotted_order',''))" 2>/dev/null)
+```
+
+If log_iteration.py fails (no LangSmith, no key), the loop continues — tracing is optional.
 
 If `$BEST` is empty (no baseline ran), skip data gathering — proposers work from code analysis only.
 
@@ -119,9 +129,11 @@ Waves: `MODES[MODE]["waves"]` (light=1 single wave, balanced/heavy=2 two-wave).
 
 Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST. Include `evolution_archive/` in `<files_to_read>` so proposers can grep prior candidates.
 
-**IMPORTANT**: After each proposer worktree is created, copy untracked files BEFORE the agent starts reading. Always use **absolute paths** (relative paths fail when Bash CWD differs from project root):
+**IMPORTANT**: After each proposer worktree is created, copy untracked files and set trace nesting. Always use **absolute paths**:
 ```bash
 SRC="$(pwd)"
+# If langsmith-tracing companion is installed, proposer traces nest under iteration:
+[ -n "$ITER_DOTTED_ORDER" ] && export CC_LANGSMITH_PARENT_DOTTED_ORDER="$ITER_DOTTED_ORDER"
 # For each worktree (after Agent creates it, before agent reads files):
 cp "$SRC/.evolver.json" "$WT_PROJECT/.evolver.json"
 [ -f "$SRC/.env" ] && cp "$SRC/.env" "$WT_PROJECT/.env"
@@ -263,6 +275,15 @@ $EVOLVER_PY $TOOLS/regression_tracker.py --config .evolver.json --previous-exper
 ```
 
 **Report**: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best_score})`
+
+**End iteration trace**:
+```bash
+ITER_DURATION=$(( $(date +%s) - ITER_START ))
+$EVOLVER_PY $TOOLS/log_iteration.py --config .evolver.json --action end \
+    --run-id "$ITER_RUN_ID" --score {winner_score} --merged {true|false} \
+    --approach "{approach}" --lens "{lens}" --candidates {num_evaluated} \
+    --duration $ITER_DURATION 2>/dev/null
+```
 
 **Consolidate** (background):
 ```
