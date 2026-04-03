@@ -143,7 +143,22 @@ def main():
     if args.auto_guard_failures:
         failing = [eid for eid, data in curr_scores.items() if data["score"] < 0.5]
         hard_added = 0
+
+        # Deduplicate: check which example_ids already have hard_failure guards
+        existing_guards = set()
+        try:
+            for ex in client.list_examples(dataset_id=config["dataset_id"], limit=500):
+                meta = getattr(ex, "metadata", None) or {}
+                if meta.get("source") == "hard_failure":
+                    orig_id = meta.get("original_example_id", "")
+                    if orig_id:
+                        existing_guards.add(orig_id)
+        except Exception:
+            pass
+
         for eid in failing[:3]:
+            if eid in existing_guards:
+                continue  # Already guarded from a prior iteration
             try:
                 input_text = curr_scores[eid].get("input", "")
                 input_data = json.loads(input_text) if input_text.startswith("{") else {"input": input_text}

@@ -263,7 +263,7 @@ def compare_experiments(results_list):
     }
 
 
-def pairwise_compare(client, exp_a, exp_b, evaluator_key="correctness"):
+def pairwise_compare(client, exp_a, exp_b, evaluator_key="correctness", split_ids=None):
     """Head-to-head comparison of two experiments on shared examples.
 
     For each example present in both experiments, compares the per-example
@@ -299,8 +299,10 @@ def pairwise_compare(client, exp_a, exp_b, evaluator_key="correctness"):
     scores_a = _build_example_scores(runs_a)
     scores_b = _build_example_scores(runs_b)
 
-    # Only compare shared examples
+    # Only compare shared examples, filtered by split if provided
     shared = set(scores_a.keys()) & set(scores_b.keys())
+    if split_ids is not None:
+        shared = shared & split_ids
 
     a_wins = 0
     b_wins = 0
@@ -451,7 +453,19 @@ def main():
         if len(parts) >= 3:
             evaluator_key = parts[2].strip()
 
-        result = pairwise_compare(client, exp_a, exp_b, evaluator_key=evaluator_key)
+        # Apply split filter to pairwise comparison (same as multi-experiment)
+        split_ids = None
+        if args.split and os.path.exists(args.config):
+            with open(args.config) as f:
+                cfg_pw = json.load(f)
+            split_ids = set()
+            for ex in client.list_examples(dataset_name=cfg_pw["dataset"], splits=[args.split]):
+                split_ids.add(str(ex.id))
+            if not split_ids:
+                print(f"ERROR: Split '{args.split}' has 0 examples.", file=sys.stderr)
+                sys.exit(1)
+
+        result = pairwise_compare(client, exp_a, exp_b, evaluator_key=evaluator_key, split_ids=split_ids)
         output = json.dumps(result, indent=2, default=str)
         if args.output:
             with open(args.output, "w") as f:

@@ -121,6 +121,7 @@ for WT in {worktree_paths_with_commits}; do
     [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WT/$PROJECT_DIR"
     cp .evolver.json "$WT_PROJECT/.evolver.json" 2>/dev/null
     [ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
+    [ -d evolution_archive ] && cp -r evolution_archive "$WT_PROJECT/evolution_archive" 2>/dev/null
     $EVOLVER_PY $TOOLS/run_eval.py --config "$WT_PROJECT/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
 done
 wait  # CRITICAL: wait for ALL evals before judge
@@ -145,9 +146,9 @@ $EVOLVER_PY $TOOLS/read_results.py --experiments "{names}" --config .evolver.jso
 
 Winner = highest score on held-out data. Report Pareto front and diversity grid if multiple non-dominated candidates.
 
-If top 2 candidates are within 5% of each other, run pairwise comparison to confirm:
+If top 2 candidates are within 5% of each other, run pairwise comparison on held-out data to confirm:
 ```bash
-$EVOLVER_PY $TOOLS/read_results.py --pairwise "{winner},{runner_up}" --config .evolver.json
+$EVOLVER_PY $TOOLS/read_results.py --pairwise "{winner},{runner_up}" --config .evolver.json --split held_out
 ```
 If pairwise disagrees with independent scoring, flag for user review.
 
