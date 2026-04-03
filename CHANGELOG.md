@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.1.0] - 2026-04-03
+
+Fixes from first real multi-iteration evolution run (agno-deepknowledge: 0.575 → 0.950).
+
+### Fixed
+
+- **Config preserved across merges** — `git merge` from worktrees was silently overwriting `.evolver.json` with the stale copy from the worktree. Now: backup config → merge → restore → update. Root cause of `.evolver.json` showing `iterations: 0` after 3 successful merges.
+- **Rate-limited runs excluded from scores** — Evaluator agent skips 429/rate-limited runs entirely (no feedback written). `read_results.py` also filters rate-limited runs from `combined_score`. Score 4/4 correct (excluding rate-limited) instead of 4/10 = 0.4.
+- **Remaining `/evolver:` references** — Last stale reference in `setup.py` output message renamed to `/harness:`.
+- **Installer namespace** — `bin/install.js` output messages use `/harness:` namespace.
+
+---
+
 ## [6.0.2] - 2026-04-03
 
 ### Fixed
