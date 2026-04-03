@@ -80,7 +80,30 @@ def check_entry_point(worktree_path, entry_point):
     return {"pass": True, "reason": "entry point exists and has valid syntax"}
 
 
-def check_tests(worktree_path):
+def find_project_python(worktree_path, config=None):
+    """Find the project's Python interpreter (venv > entry_point > system).
+
+    Checks for venv in the worktree, then extracts from entry_point config,
+    then falls back to system python3.
+    """
+    # Check for venv in worktree
+    for venv_dir in [".venv", "venv"]:
+        venv_python = os.path.join(worktree_path, venv_dir, "bin", "python")
+        if os.path.isfile(venv_python):
+            return venv_python
+
+    # Extract from entry_point in config
+    if config:
+        entry = config.get("entry_point", "")
+        for part in entry.split():
+            if part.endswith("/python") or part.endswith("/python3"):
+                if os.path.isfile(part):
+                    return part
+
+    return "python3"
+
+
+def check_tests(worktree_path, config=None):
     """Run test suite if it exists. Returns pass if no tests found."""
     test_dirs = ["tests", "test"]
     has_tests = False
@@ -95,9 +118,11 @@ def check_tests(worktree_path):
     if not has_tests:
         return {"pass": True, "reason": "no test suite found (skipped)", "skipped": True}
 
+    python = find_project_python(worktree_path, config)
+
     try:
         result = subprocess.run(
-            ["python3", "-m", "pytest", "-q", "--tb=no"],
+            [python, "-m", "pytest", "-q", "--tb=no"],
             capture_output=True, text=True,
             cwd=worktree_path, timeout=120,
         )
@@ -135,7 +160,7 @@ def main():
             args.max_growth,
         ),
         "entry_point": check_entry_point(args.worktree_path, ep_for_check),
-        "tests": check_tests(args.worktree_path),
+        "tests": check_tests(args.worktree_path, config),
     }
 
     all_pass = all(r["pass"] for r in results.values())

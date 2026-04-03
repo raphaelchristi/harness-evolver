@@ -39,26 +39,39 @@ CODE_EVALUATOR_TEMPLATES = {
 
 
 def add_evaluator(config_path, evaluator_name, eval_type, pattern=None):
-    """Add evaluator to config."""
+    """Add evaluator to config using partial update to avoid race conditions.
+
+    Re-reads the config immediately before writing to minimize the window
+    where concurrent updates (e.g., main loop updating best_score) could
+    be lost. Only modifies 'evaluators' and 'code_evaluators' fields.
+    """
+    # First read to check if evaluator already exists
+    with open(config_path) as f:
+        config = json.load(f)
+
+    if evaluator_name in config.get("evaluators", []):
+        print(f"Evaluator '{evaluator_name}' already exists", file=sys.stderr)
+        return False
+
+    # Prepare what we need to add
+    new_code_eval = None
+    if eval_type == "code" and pattern:
+        new_code_eval = {"pattern": pattern, "type": "regex"}
+    elif eval_type == "code" and evaluator_name in CODE_EVALUATOR_TEMPLATES:
+        new_code_eval = CODE_EVALUATOR_TEMPLATES[evaluator_name]
+
+    # Re-read config right before write to pick up concurrent changes
     with open(config_path) as f:
         config = json.load(f)
 
     evaluators = config.get("evaluators", [])
-
-    if evaluator_name in evaluators:
-        print(f"Evaluator '{evaluator_name}' already exists", file=sys.stderr)
-        return False
-
-    evaluators.append(evaluator_name)
+    if evaluator_name not in evaluators:
+        evaluators.append(evaluator_name)
     config["evaluators"] = evaluators
 
-    if eval_type == "code" and pattern:
+    if new_code_eval:
         code_evals = config.get("code_evaluators", {})
-        code_evals[evaluator_name] = {"pattern": pattern, "type": "regex"}
-        config["code_evaluators"] = code_evals
-    elif eval_type == "code" and evaluator_name in CODE_EVALUATOR_TEMPLATES:
-        code_evals = config.get("code_evaluators", {})
-        code_evals[evaluator_name] = CODE_EVALUATOR_TEMPLATES[evaluator_name]
+        code_evals[evaluator_name] = new_code_eval
         config["code_evaluators"] = code_evals
 
     with open(config_path, "w") as f:
@@ -77,12 +90,16 @@ def main():
     args = parser.parse_args()
 
     if args.remove:
+        # Re-read right before write to avoid race conditions
         with open(args.config) as f:
             config = json.load(f)
         evaluators = config.get("evaluators", [])
         if args.evaluator in evaluators:
             evaluators.remove(args.evaluator)
             config["evaluators"] = evaluators
+            code_evals = config.get("code_evaluators", {})
+            code_evals.pop(args.evaluator, None)
+            config["code_evaluators"] = code_evals
             with open(args.config, "w") as f:
                 json.dump(config, f, indent=2)
             print(f"Removed evaluator: {args.evaluator}")

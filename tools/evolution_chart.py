@@ -73,7 +73,16 @@ def render_header(config, history, scores, c):
     project = config.get('project', 'unknown')
     dataset = config.get('dataset', 'unknown')
     evals = config.get('evaluators', [])
-    total = history[0].get('total', config.get('num_examples', '?'))
+    # Find example count from multiple sources
+    total = history[0].get('total')
+    if not total:
+        # Check any history entry that has it
+        for h in history:
+            if h.get('total'):
+                total = h['total']
+                break
+    if not total:
+        total = config.get('num_examples', '?')
     base_score = scores[0]
     best_score = max(scores)
     iters = len(history) - 1
