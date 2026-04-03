@@ -235,22 +235,24 @@ If constraints fail, try next-best. If none pass, skip merge.
 
 If winner beats current best AND passes efficiency gate:
 
-1. **Save config before merge** (merge will overwrite with worktree's stale copy):
 ```bash
-cp .evolver.json .evolver.json.bak
-```
+# 1. Backup config (merge will overwrite with worktree's stale copy)
+$EVOLVER_PY $TOOLS/update_config.py --config .evolver.json --action backup
 
-2. **Merge the winner**:
-```bash
+# 2. Merge
 git merge {winner_branch} --no-edit -m "evolve: merge v{NNN} (score: {score})"
-```
 
-3. **Restore config and update** (the merge brought the worktree's old .evolver.json — restore ours):
-```bash
-cp .evolver.json.bak .evolver.json
-```
+# 3. Restore config (merge brought stale copy)
+$EVOLVER_PY $TOOLS/update_config.py --config .evolver.json --action restore
 
-4. **Update config** with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc).
+# 4. Update config with enriched history (one command, no inline Python)
+$EVOLVER_PY $TOOLS/update_config.py --config .evolver.json --action update \
+    --winner-experiment "{winner}" --winner-score {score} \
+    --approach "{approach}" --lens "{lens}" \
+    --tokens {tokens} --latency-ms {latency} --error-count {errors} \
+    --passing {passing} --total {total} \
+    --per-evaluator '{json_dict}' --code-loc {loc}
+```
 
 5. **Git-tag** for rollback:
 
@@ -299,6 +301,11 @@ If multiple proposers suggest the same evaluator, prioritize it. **Do NOT add ev
 **Auto-trigger critic** if score jumped >0.3 or hit target in <3 iterations.
 
 **Auto-trigger architect** (opus model) if 3 consecutive iterations within 1% or score dropped.
+
+**Cleanup worktrees** (free disk space after eval):
+```bash
+$EVOLVER_PY $TOOLS/cleanup_worktrees.py --dir "$(pwd)"
+```
 
 ### 7. Gate Check
 
