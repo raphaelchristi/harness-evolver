@@ -9,6 +9,7 @@ Full feature list for Harness Evolver. For the quick overview, see [README.md](.
 | **LangSmith-Native** | No custom eval scripts or task files. Uses LangSmith Datasets for test inputs, Experiments for results, and an agent-based LLM-as-judge for scoring via langsmith-cli. No external API keys needed. Everything is visible in the LangSmith UI. |
 | **Real Code Evolution** | Proposers modify your actual agent code — not a wrapper. Each candidate works in an isolated git worktree. Winners are merged automatically. Config files (.evolver.json, .env, evolution_archive/) are auto-propagated to worktrees. |
 | **Self-Organizing Proposers** | Two-wave spawning: critical lenses run first, then medium/open lenses see wave 1 results (+14% quality). Dynamic investigation lenses from failure data, architecture analysis, production traces, evolution memory, and archive branching (revisit losing candidates). Proposers self-organize, self-abstain, and can fork from any ancestor. |
+| **Evolution Modes** | Three intensity levels: `light` (20 examples, 2 proposers, sample eval, ~2 min/iter), `balanced` (30 examples, 3 proposers, full train, ~8 min/iter), `heavy` (50 examples, 5 proposers, full dataset, ~25 min/iter). Selected at setup, switchable at evolve start. |
 | **Background Mode** | Run all iterations in background while you continue working. Get notified on completion or significant improvements. |
 
 ## Evaluation

@@ -309,6 +309,14 @@ def test_pareto_front():
         sys.path.pop(0)
 
 
+# ─── Test: run_eval.py --sample flag ───
+
+def test_run_eval_sample_flag():
+    """run_eval.py accepts --sample flag."""
+    code, stdout, stderr = run_tool("run_eval.py", ["--help"])
+    assert "--sample" in stdout, "--sample flag not in help output"
+
+
 # ─── Test: archive.py ───
 
 def test_archive():

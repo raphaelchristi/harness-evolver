@@ -26,6 +26,7 @@ python tools/setup.py --project-name my-agent --entry-point "python main.py" --f
 # Run evaluation for a candidate in a worktree (canary preflight runs 1 example first)
 python tools/run_eval.py --config .evolver.json --worktree-path /tmp/wt --experiment-prefix v001a
 # Default concurrency is 3. Use --concurrency 1 for agents that can't run in parallel (shared files, fixed ports, etc)
+# Use --sample 10 to evaluate a random subset (used by light mode)
 # Use --no-canary to skip preflight check
 
 # Compare experiment results
@@ -136,6 +137,7 @@ Run `/dev:validate` before any release. Run `/dev:dry-run` after changing Python
 - State is split: `.evolver.json` (local config with best score, iteration count, history) + LangSmith (datasets, experiments, feedback)
 - The evaluator agent IS the LLM judge — no external LLM API keys needed, no openevals dependency
 - Proposers write `proposal.md` explaining their changes alongside code modifications
+- Evolution modes: `light` (20 examples, 2 proposers, ~2 min/iter), `balanced` (30, 3, ~8 min), `heavy` (50, 5, ~25 min). Set in `.evolver.json` `mode` field or via `--mode` flag.
 - Entry points support three input placeholders: `{input}` (JSON file path), `{input_text}` (extracted plain text, shell-escaped), `{input_json}` (inline JSON string). Use `{input_text}` for agents that take `--query "text"` or positional text arguments.
 - `run_eval.py` runs a canary (1 example preflight) before full evaluation to catch broken agents early. Disable with `--no-canary`.
 - `read_results.py` outputs both single-experiment and multi-experiment comparison modes (controlled by `--experiment` vs `--experiments`)
