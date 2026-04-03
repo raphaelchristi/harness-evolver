@@ -23,8 +23,9 @@ All Python tools live in `tools/` and require the langsmith SDK. They auto-load 
 # Setup — creates dataset, evaluators, baseline, writes .evolver.json
 python tools/setup.py --project-name my-agent --entry-point "python main.py" --framework langgraph --goals accuracy
 
-# Run evaluation for a candidate in a worktree
+# Run evaluation for a candidate in a worktree (canary preflight runs 1 example first)
 python tools/run_eval.py --config .evolver.json --worktree-path /tmp/wt --experiment-prefix v001a
+# Use --no-canary to skip preflight check
 
 # Compare experiment results
 python tools/read_results.py --experiments v001a,v001b --config .evolver.json --output comparison.json
@@ -127,6 +128,8 @@ Run `/dev:validate` before any release. Run `/dev:dry-run` after changing Python
 - State is split: `.evolver.json` (local config with best score, iteration count, history) + LangSmith (datasets, experiments, feedback)
 - The evaluator agent IS the LLM judge — no external LLM API keys needed, no openevals dependency
 - Proposers write `proposal.md` explaining their changes alongside code modifications
+- Entry points support three input placeholders: `{input}` (JSON file path), `{input_text}` (extracted plain text, shell-escaped), `{input_json}` (inline JSON string). Use `{input_text}` for agents that take `--query "text"` or positional text arguments.
+- `run_eval.py` runs a canary (1 example preflight) before full evaluation to catch broken agents early. Disable with `--no-canary`.
 - `read_results.py` outputs both single-experiment and multi-experiment comparison modes (controlled by `--experiment` vs `--experiments`)
 - `trace_insights.py` supports two modes: SDK mode (`--from-experiment`) and legacy file mode (`--langsmith-runs` + `--scores`)
 - The installer (`bin/install.js`) handles both plugin and npx distribution paths
