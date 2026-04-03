@@ -69,7 +69,7 @@ claude
 </tr>
 <tr>
 <td><b>Self-Organizing Proposers</b></td>
-<td>Each iteration generates dynamic investigation lenses from failure data, architecture analysis, production traces, and evolution memory. Proposers self-organize their approach — no fixed strategies. They can self-abstain when their contribution would be redundant. Inspired by <a href="https://arxiv.org/abs/2603.28990">Dochkina (2026)</a>.</td>
+<td>Two-wave spawning: critical lenses run first, then medium/open lenses see wave 1 results (+14% quality). Dynamic investigation lenses from failure data, architecture analysis, production traces, evolution memory, and archive branching (revisit losing candidates). Proposers self-organize, self-abstain, and can fork from any ancestor — not just the current best. Inspired by <a href="https://arxiv.org/abs/2603.28990">Dochkina (2026)</a> and <a href="https://sakana.ai/dgm/">Darwin Godel Machine</a>.</td>
 </tr>
 <tr>
 <td><b>Rubric-Based Evaluation</b></td>
@@ -85,7 +85,7 @@ claude
 </tr>
 <tr>
 <td><b>Agent-Based Evaluation</b></td>
-<td>The evaluator agent reasons through justification BEFORE assigning scores (15-25% reliability improvement). Reads experiment outputs via langsmith-cli, judges correctness using rubrics when available, writes scores back. Judge feedback surfaced to proposers for targeted mutations. Position bias mitigation built-in.</td>
+<td>The evaluator agent reasons through justification BEFORE assigning scores (15-25% reliability improvement). Reads experiment outputs via langsmith-cli, judges correctness using rubrics when available, writes scores back. Judge feedback surfaced to proposers for targeted mutations. Position bias mitigation built-in. Few-shot self-improvement from human corrections via LangSmith annotation feedback. Pairwise head-to-head comparison when top candidates are within 5%.</td>
 </tr>
 <tr>
 <td><b>Canary Preflight</b></td>
@@ -167,15 +167,17 @@ claude
   +- 1.   Read state (.evolver.json + LangSmith experiments)
   +- 1.5  Gather trace insights + judge feedback (cluster errors, tokens, latency)
   +- 1.8  Analyze per-task failures with judge comments (train split only)
-  +- 1.8a Claude generates strategy.md + lenses.json from analysis data
+  +- 1.8a Claude generates strategy.md + lenses.json (incl. archive_branch lens)
   +- 1.9  Prepare shared proposer context (KV cache-optimized prefix)
-  +- 2.   Spawn N self-organizing proposers in parallel (each in a git worktree)
-  +- 3.   Copy .evolver.json + .env to worktrees, run canary, evaluate candidates
-  +- 3.5  Spawn evaluator agent (rubric-aware LLM-as-judge via langsmith-cli)
-  +- 4.   Compare experiments on held-out split -> winner + Pareto front
+  +- 2.   Wave 1: spawn critical/high proposers in parallel worktrees
+  +- 2.5  Wave 2: medium/open proposers see wave 1 results before starting
+  +- 3.   Copy config to worktrees, run canary, evaluate candidates
+  +- 3.5  Spawn evaluator agent (rubric-aware, few-shot calibrated LLM-as-judge)
+  +- 4.   Compare on held-out split -> winner + Pareto front + pairwise if close
   +- 4.5  Constraint gate — reject candidates that break size/tests/entry-point
   +- 5.   Merge winning worktree into main branch
-  +- 5.5  Regression tracking (auto-add guard examples to dataset)
+  +- 5.5  Archive ALL candidates (winners + losers) to evolution_archive/
+  +- 5.6  Regression tracking + auto-guard failures
   +- 6.   Report results + evolution chart
   +- 6.2  Consolidator agent updates evolution memory (runs in background)
   +- 6.5  Auto-trigger Active Critic (detect + fix evaluator gaming)
@@ -218,7 +220,8 @@ Tools (Python)
   ├── mine_sessions.py      → extracts eval data from Claude Code history (stdlib-only)
   ├── dataset_health.py     → dataset quality diagnostic + secret scanning
   ├── validate_state.py     → validates config vs LangSmith state
-  ├── regression_tracker.py → tracks regressions, adds guard examples
+  ├── regression_tracker.py → tracks regressions, auto-adds failure guards
+  ├── archive.py            → persistent candidate history (diffs, proposals, scores)
   ├── add_evaluator.py      → programmatically adds evaluators
   └── adversarial_inject.py → detects memorization, injects adversarial tests
 ```

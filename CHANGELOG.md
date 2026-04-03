@@ -6,6 +6,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [5.1.0] - 2026-04-03
+
+Seven improvements from deep analysis of the 9 README references.
+
+### Added
+
+- **Full history archive** — New `tools/archive.py` (stdlib-only) saves ALL candidates (winners + losers) — diffs, proposals, scores — to `evolution_archive/` after each iteration. Proposers can grep prior approaches for cross-iteration causal reasoning. Meta-Harness ablation shows 2x performance with full trace access vs summaries-only.
+- **Pairwise evaluation** — `read_results.py --pairwise "exp_a,exp_b"` compares candidates head-to-head by per-example win count. Triggered when top 2 are within 5%. More reliable than independent scoring for subjective quality.
+- **Archive branching** — New `archive_branch` lens type lets proposers fork from non-winning ancestors. Prevents premature convergence by preserving diverse stepping stones (Darwin Godel Machine, AlphaEvolve).
+- **Wave-based proposers** — Proposers split into 2 waves: critical/high lenses run first, medium/open see wave 1 results before starting. Research shows +14% quality when agents observe prior outputs (Self-Organizing LLM Agents, Dochkina 2026).
+- **Failure-to-regression-gate** — `regression_tracker.py --auto-guard-failures` adds currently-failing examples as "known hard" guards to the dataset. Every fix becomes a permanent regression test.
+- **Few-shot evaluator self-improvement** — Evaluator agent loads human corrections from LangSmith (feedback with `source: "human"`) as calibration examples. Scoring accuracy improves over time without code changes.
+- **MAP-Elites diversity grid** — `read_results.py` comparison output includes `diversity_grid` — best candidate per approach category. Preserves approach diversity even when one approach dominates in score.
+
+---
+
+## [5.0.3] - 2026-04-03
+
+### Fixed
+
+- **Baseline path no longer duplicated** — For subdirectory projects, `--baseline-path` stays `.` (CWD is already the project dir). Previously doubled the path and zeroed baseline LOC.
+- **Output extraction uses `or` chain** — `{"output": "", "answer": "ok"}` correctly returns `"ok"`. Fixed `dict.get()` fallback semantics.
+
+---
+
+## [5.0.2] - 2026-04-03
+
+### Fixed
+
+- **Canary accepts `answer` key** — Agents returning `{"answer": ...}` now pass canary. Same contract as evaluators.
+- **Constraint gate resolves `project_dir`** — Worktree and baseline paths scoped to subdirectory.
+- **Removed `--passWithNoTests`** — Jest-specific flag that broke other test runners.
+
+---
+
 ## [5.0.1] - 2026-04-03
 
 Fixes 6 findings from two Codex (GPT-5.4) cross-model reviews — the first time a different model reviewed this codebase.
