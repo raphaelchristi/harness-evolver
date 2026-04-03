@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.8.0] - 2026-04-03
+
+Four context engineering improvements inspired by [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering).
+
+### Added
+
+- **Justification-before-score** — Evaluator agent now reasons through correctness BEFORE assigning a score. Improves LLM-as-judge reliability 15-25%. Added position bias warning to prevent order-dependent scoring.
+- **`--format summary`** — `read_results.py` and `trace_insights.py` support compact output (~200 tokens vs ~5K). Returns aggregated metrics, failure pattern, and top 3 failing inputs instead of full per-example data. Reduces context bloat for strategy generation.
+- **Strategy.md filtering** — Evolve skill now instructs: current iteration data only, top 3 promoted insights from memory, 1500 token cap. Stale data from prior iterations is an active distractor per context degradation research.
+- **Anchored iterative summarization** — Consolidator agent treats promoted insights (rec >= 3) as immutable anchors that are never re-summarized. New observations use literal text from proposal.md sections. Garbage collection removes observations not recurring in 5+ iterations.
+
+---
+
 ## [4.7.0] - 2026-04-03
 
 Three improvements targeting the agent's 9+/10 criteria.
