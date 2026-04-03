@@ -23,9 +23,41 @@ EVOLVER_PY="${EVOLVER_PY:-$([ -f "$HOME/.evolver/venv/bin/python" ] && echo "$HO
 ## Arguments
 
 - `--iterations N` (default: ask or 5)
+- `--mode light|balanced|heavy` — override mode from config
 - `--no-interactive` — skip prompts, use defaults (for cron/background runs)
 
-If interactive, ask iterations (3/5/10), target score (0.8/0.9/0.95/none), and mode (interactive/background).
+If interactive, ask iterations (3/5/10), target score (0.8/0.9/0.95/none), and execution mode (interactive/background).
+
+## Mode Parameters
+
+```
+MODES = {
+  "light":    {"proposers": 2, "waves": 1, "concurrency": 5, "timeout": 60, "sample": 10, "analysis": "summary", "pairwise": False, "archive": "winner"},
+  "balanced": {"proposers": 3, "waves": 2, "concurrency": 3, "timeout": 120, "sample": None, "analysis": "summary", "pairwise": "if_close", "archive": "all"},
+  "heavy":    {"proposers": 5, "waves": 2, "concurrency": 3, "timeout": 300, "sample": None, "analysis": "full", "pairwise": True, "archive": "all"},
+}
+```
+
+Read mode from config, allow `--mode` override:
+```bash
+MODE=$(python3 -c "import json; print(json.load(open('.evolver.json')).get('mode', 'balanced'))")
+```
+
+If not `--no-interactive`, confirm or switch:
+```json
+{
+  "question": "Mode: {MODE}. Continue?",
+  "header": "Mode",
+  "options": [
+    {"label": "Yes, continue with {MODE}"},
+    {"label": "Switch to light (~2 min/iter)"},
+    {"label": "Switch to balanced (~8 min/iter)"},
+    {"label": "Switch to heavy (~25 min/iter)"}
+  ]
+}
+```
+
+If changed, update config and re-read MODE.
 
 ## Pre-Loop
 
@@ -58,15 +90,16 @@ If `$BEST` is empty (no baseline ran), skip data gathering — proposers work fr
 
 ### 1. Gather Data (parallel)
 
+Analysis format depends on mode (`MODES[MODE]["analysis"]`):
+
 ```bash
 if [ -n "$BEST" ]; then
-    $EVOLVER_PY $TOOLS/trace_insights.py --from-experiment "$BEST" --format summary --output trace_insights.json &
-    $EVOLVER_PY $TOOLS/read_results.py --experiment "$BEST" --config .evolver.json --split train --format summary --output best_results.json &
+    ANALYSIS_FMT=$(python3 -c "m={'light':'summary','balanced':'summary','heavy':'full'}; print(m.get('$MODE','summary'))")
+    $EVOLVER_PY $TOOLS/trace_insights.py --from-experiment "$BEST" --format $ANALYSIS_FMT --output trace_insights.json &
+    $EVOLVER_PY $TOOLS/read_results.py --experiment "$BEST" --config .evolver.json --split train --format $ANALYSIS_FMT --output best_results.json &
     wait
 fi
 ```
-
-Use `--format summary` to keep context compact (~200 tokens vs ~5K). Full data stays on disk for proposers to read on demand.
 
 ### 2. Generate Strategy + Lenses
 
@@ -79,7 +112,10 @@ From trace_insights.json, best_results.json, evolution_memory.md, production_see
 - If `evolution_archive/` has 3+ iterations, one `archive_branch` lens that suggests revisiting a losing candidate's approach
 - Sort by severity, cap at 5 lenses
 
-### 3. Spawn Proposers (two-wave, parallel worktrees)
+### 3. Spawn Proposers (mode-dependent)
+
+Proposer count: `MODES[MODE]["proposers"]` (light=2, balanced=3, heavy=5). Cap lenses at this number.
+Waves: `MODES[MODE]["waves"]` (light=1 single wave, balanced/heavy=2 two-wave).
 
 Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST. Include `evolution_archive/` in `<files_to_read>` so proposers can grep prior candidates.
 
@@ -123,14 +159,17 @@ If only 1-2 lenses total, run as single wave.
 
 ### 4. Evaluate Candidates
 
-Run evaluations. `run_eval.py` auto-copies `.evolver.json` + `.env` to worktrees if missing (no manual `cp` needed). Resolve `project_dir` for subdirectory projects:
+Run evaluations with mode parameters. `run_eval.py` auto-copies config files to worktrees:
 
 ```bash
+CONCURRENCY=$(python3 -c "m={'light':5,'balanced':3,'heavy':3}; print(m.get('$MODE',3))")
+TIMEOUT=$(python3 -c "m={'light':60,'balanced':120,'heavy':300}; print(m.get('$MODE',120))")
+SAMPLE=$(python3 -c "m={'light':'10','balanced':'','heavy':''}; s=m.get('$MODE',''); print(f'--sample {s}' if s else '')")
+
 for WT in {worktree_paths_with_commits}; do
     WT_PROJECT="$WT"
     [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WT/$PROJECT_DIR"
-    $EVOLVER_PY $TOOLS/run_eval.py --config "$(pwd)/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
-    # Default concurrency is 3. Use --concurrency 1 for agents needing sequential execution.
+    $EVOLVER_PY $TOOLS/run_eval.py --config "$(pwd)/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} --concurrency $CONCURRENCY --timeout $TIMEOUT $SAMPLE &
 done
 wait  # CRITICAL: wait for ALL evals before judge
 ```
@@ -162,7 +201,7 @@ $EVOLVER_PY $TOOLS/read_results.py --experiments "{names}" --config .evolver.jso
 
 Winner = highest score on held-out data. Report Pareto front and diversity grid if multiple non-dominated candidates.
 
-If top 2 candidates are within 5% of each other, run pairwise comparison on held-out data to confirm:
+Pairwise comparison (mode-dependent: light=never, balanced=if top 2 within 5%, heavy=always):
 ```bash
 $EVOLVER_PY $TOOLS/read_results.py --pairwise "{winner},{runner_up}" --config .evolver.json --split held_out
 ```
@@ -192,7 +231,7 @@ Note: uses `evo-iter-` prefix to avoid conflicts with `/evolver:deploy` tags.
 
 ### 6. Post-Iteration
 
-**Archive ALL candidates** (winners and losers) for future proposer reference:
+**Archive candidates** (light=winner only, balanced/heavy=all) for future proposer reference:
 ```bash
 for CANDIDATE in {all_worktree_paths}; do
     $EVOLVER_PY $TOOLS/archive.py --config .evolver.json --version v{NNN}-{id} --experiment "{exp}" --worktree-path "$CANDIDATE" --score {score} --approach "{approach}" --lens "{lens}" $([ "{exp}" = "{winner}" ] && echo "--won")
