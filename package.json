@@ -1,6 +1,6 @@
 {
   "name": "harness-evolver",
-  "version": "5.2.0",
+  "version": "5.2.1",
   "description": "LangSmith-native autonomous agent optimization for Claude Code",
   "author": "Raphael Valdetaro",
   "license": "MIT",
