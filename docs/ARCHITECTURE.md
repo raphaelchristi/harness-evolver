@@ -104,12 +104,14 @@ flowchart TD
         Analyze --> Strategy --> Propose --> Eval --> Select --> PostIter
     end
 
-    subgraph Gate["7. Gate"]
+    subgraph Gate["7. Gate (multi-objective)"]
         Check{"Continue?"}
         Plateau["Score plateau?"]
         Target["Target reached?"]
         Diminish["Diminishing returns?"]
-        Check --> Plateau & Target & Diminish
+        Cost["Cost regression?<br/><i>tokens 2x+, score &lt;2%</i>"]
+        Latency["Latency regression?<br/><i>latency 50%+, score &lt;5%</i>"]
+        Check --> Plateau & Target & Diminish & Cost & Latency
     end
 
     PostIter --> Gate

@@ -6,6 +6,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [5.2.0] - 2026-04-03
+
+Three improvements from new 2026 references (A-Evolve, MCE, SICA).
+
+### Added
+
+- **Multi-objective gate check** — Gate now assesses cost (tokens) and latency regressions alongside score. If tokens increased >2x while score improved <2%, or latency increased >50% with <5% score gain, flags as inefficient with user prompt. Inspired by SICA's composite utility function (accuracy + time + cost).
+- **Proactive evaluator evolution** — Proposers can suggest new evaluators or rubrics in `proposal.md` (`## Suggested Evaluators` section). The evolve loop surfaces suggestions and passes them to critic/architect for implementation. Shifts evaluator evolution from reactive (critic-only) to proactive (proposer + critic). Inspired by ReVeal's "verification as optimization target."
+- **Git-tagged iterations** — Each merge creates `evolver-v{NNN}` tag for instant rollback via `git revert`. Inspired by A-Evolve's git-tagged mutations.
+
+### Changed
+
+- 3 new references in README: A-Evolve (Amazon), Meta Context Engineering (Peking University), EvoAgentX (Glasgow).
+
+---
+
+## [5.1.4] - 2026-04-03
+
+### Fixed
+
+- **Auto-guard fails closed on empty train split** — Empty `train_example_ids` now treated same as API failure: skip auto-guard + warning.
+
+---
+
+## [5.1.3] - 2026-04-03
+
+### Fixed
+
+- **Auto-guard fails closed when train split unknown** — API failure → skip auto-guard entirely instead of guarding all failures.
+
+---
+
+## [5.1.2] - 2026-04-03
+
+### Fixed
+
+- **CRITICAL: Auto-guard only from train split** — Held_out failures no longer contaminate train.
+- **Guards work with dict inputs** — `run.inputs` stored as original dict, not `str()` repr.
+- **Archive copied before proposer spawn** — Worktree propagation moved to step 3.
+
+---
+
+## [5.1.1] - 2026-04-03
+
+### Fixed
+
+- **Pairwise honors held-out split** — `--split` filtering applied in pairwise comparison.
+- **`evolution_archive/` in worktrees** — Added to `.worktreeinclude` + copied before proposers.
+- **Auto-guard deduplication** — Checks existing `hard_failure` guards before inserting.
+
+---
+
 ## [5.1.0] - 2026-04-03
 
 Seven improvements from deep analysis of the 9 README references.
