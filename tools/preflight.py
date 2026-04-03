@@ -122,6 +122,10 @@ def check_config_schema(config):
         if ew is not None and not isinstance(ew, dict):
             issues.append(f"evaluator_weights must be a dict or null, got {type(ew).__name__}")
 
+    mode = config.get("mode")
+    if mode is not None and mode not in ("light", "balanced", "heavy"):
+        issues.append(f"mode must be light/balanced/heavy, got '{mode}'")
+
     return {"pass": len(issues) == 0, "issues": issues}
 
 

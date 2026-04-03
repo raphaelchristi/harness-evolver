@@ -367,6 +367,7 @@ def main():
     parser.add_argument("--dataset-name", default=None, help="Explicit dataset name (skip auto-versioning)")
     parser.add_argument("--evaluators", default=None, help="Comma-separated evaluator names")
     parser.add_argument("--skip-baseline", action="store_true", help="Skip baseline evaluation")
+    parser.add_argument("--mode", choices=["light", "balanced", "heavy"], default="balanced", help="Evolution mode")
     parser.add_argument("--output", default=".evolver.json", help="Output config path")
     args = parser.parse_args()
 
@@ -514,6 +515,7 @@ def main():
             "entry_point": entry_point,
             "evaluators": evaluator_keys,
             "evaluator_weights": {"has_output": 0},  # has_output tracked but excluded from combined (inflates scores)
+            "mode": args.mode,
             "optimization_goals": goals,
             "production_project": args.production_project,
             "baseline_experiment": baseline_experiment,
