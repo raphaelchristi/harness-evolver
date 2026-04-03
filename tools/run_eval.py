@@ -284,18 +284,40 @@ def main():
 
         mean_score = sum(scores) / len(scores) if scores else 0.0
 
+        # Detect rate-limit-dominated runs (>30% of examples have 429/rate limit errors)
+        rate_limit_count = 0
+        for result in results:
+            if isinstance(result, dict):
+                run_obj = result.get("run", result)
+                outputs = run_obj.get("outputs", {}) if isinstance(run_obj, dict) else getattr(run_obj, "outputs", {})
+            else:
+                outputs = getattr(result, "run", result)
+                outputs = getattr(outputs, "outputs", {}) if not isinstance(outputs, dict) else outputs
+            if outputs and isinstance(outputs, dict):
+                error_text = str(outputs.get("error", "")).lower()
+                output_text = str(outputs.get("output", "")).lower()
+                if "429" in error_text or "rate" in error_text or "429" in output_text or "resource_exhausted" in error_text:
+                    rate_limit_count += 1
+
+        num_examples = len(per_example)
+        rate_limited = num_examples > 0 and (rate_limit_count / num_examples) > 0.3
+
         output = {
             "experiment": experiment_name,
             "prefix": args.experiment_prefix,
             "combined_score": mean_score,
-            "num_examples": len(per_example),
+            "num_examples": num_examples,
             "num_scores": len(scores),
             "per_example": per_example,
             "pending_llm_evaluators": llm_evaluators,
+            "rate_limited": rate_limited,
+            "rate_limit_count": rate_limit_count,
         }
 
         print(json.dumps(output))
-        print(f"\nTarget runs complete: {len(per_example)} examples")
+        if rate_limited:
+            print(f"\n  WARNING: {rate_limit_count}/{num_examples} runs hit rate limits ({rate_limit_count/num_examples:.0%}). Score may be unreliable.", file=sys.stderr)
+        print(f"\nTarget runs complete: {num_examples} examples")
         if llm_evaluators:
             print(f"Awaiting evaluator agent for: {llm_evaluators}")
 

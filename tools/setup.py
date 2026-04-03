@@ -513,7 +513,7 @@ def main():
             "project_dir": project_dir,
             "entry_point": entry_point,
             "evaluators": evaluator_keys,
-            "evaluator_weights": None,
+            "evaluator_weights": {"has_output": 0},  # has_output tracked but excluded from combined (inflates scores)
             "optimization_goals": goals,
             "production_project": args.production_project,
             "baseline_experiment": baseline_experiment,
