@@ -131,7 +131,7 @@ Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache
 
 **IMPORTANT**: After each proposer worktree is created, copy untracked files and set trace nesting. Always use **absolute paths**:
 ```bash
-SRC="$(git rev-parse --show-toplevel)"
+SRC="$(dirname "$(git rev-parse --git-common-dir)")"
 [ -n "$PROJECT_DIR" ] && SRC="$SRC/$PROJECT_DIR"
 # If langsmith-tracing companion is installed, proposer traces nest under iteration:
 [ -n "$ITER_DOTTED_ORDER" ] && export CC_LANGSMITH_PARENT_DOTTED_ORDER="$ITER_DOTTED_ORDER"
@@ -187,7 +187,7 @@ done
 wait  # CRITICAL: wait for ALL evals before judge
 ```
 
-Note: `$SRC` is set via `git rev-parse --show-toplevel` at the start of each iteration — always resolves to the git root regardless of CWD drift.
+Note: `$SRC` is set via `git rev-parse --git-common-dir` — resolves to the main repo root even when CWD is inside a worktree (`--show-toplevel` returns the worktree root, which is wrong).
 
 **Auto-spawn LLM-as-judge** — check if LLM evaluators are configured and automatically spawn the evaluator agent. Do NOT leave this as a manual step for the user:
 
