@@ -6,6 +6,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.0.2] - 2026-04-03
+
+### Fixed
+
+- **Preflight rejects dummy API keys** — `check_api_key()` validates key format (30+ chars, no `lsv2_pt_test*`). Dummy key in credentials file no longer passes [1/5] silently.
+- **Setup warns about missing project venv** — `setup.py` detects no `.venv/` and warns. Also warns if entry_point uses `~/.evolver/venv` (tools-only).
+- **Remaining `/evolver:` → `/harness:` in Python tools** — 4 tools and installer had stale namespace references.
+
+---
+
+## [6.0.1] - 2026-04-03
+
+### Fixed
+
+- **API key validation in `_common.py`** — `ensure_langsmith_api_key()` rejects keys shorter than 30 chars or starting with `lsv2_pt_test`. Prints warning and tries next source.
+- **Setup skill warns about missing project venv** — Documented in gotchas section.
+
+---
+
+## [6.0.0] - 2026-04-03
+
+### Changed (Breaking)
+
+- **Namespace rename: `/evolver:*` → `/harness:*`** — All 5 slash commands renamed (setup, evolve, health, status, deploy).
+- **Agent names: `evolver-*` → `harness-*`** — All 6 agents renamed (proposer, evaluator, critic, architect, consolidator, testgen). Agent files renamed accordingly.
+- `.evolver.json` config filename unchanged (backward compatible).
+
+---
+
+## [5.4.0] - 2026-04-03
+
+### Added
+
+- **Evolution modes** — Three intensity levels: `light` (20 examples, 2 proposers, ~2 min/iter), `balanced` (30, 3, ~8 min), `heavy` (50, 5, ~25 min). Selected at setup via AskUserQuestion, switchable at evolve start. Override with `--mode`.
+- **`--sample N` in `run_eval.py`** — Evaluate a random subset of N examples (used by light mode).
+- **Mode in `.evolver.json`** — `"mode": "balanced"` field with preflight validation.
+- **Dynamic testgen count** — TestGen agent receives example count from mode (20/30/50).
+
+---
+
 ## [5.3.2] - 2026-04-03
 
 ### Fixed
