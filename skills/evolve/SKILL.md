@@ -137,16 +137,22 @@ wait  # CRITICAL: wait for ALL evals before judge
 
 Note: always pass `--config` with **absolute path** (`$(pwd)/.evolver.json`). The Bash tool's CWD may differ from the project root, causing relative paths to fail silently.
 
-Then spawn evaluator agent for LLM-as-judge (if configured):
+**Auto-spawn LLM-as-judge** — check if LLM evaluators are configured and automatically spawn the evaluator agent. Do NOT leave this as a manual step for the user:
+
+```bash
+LLM_EVALS=$(python3 -c "import json; c=json.load(open('.evolver.json')); llm=[k for k in c['evaluators'] if k in ('correctness','conciseness')]; print(','.join(llm) if llm else '')")
+```
+
+If `LLM_EVALS` is non-empty, spawn the evaluator agent immediately after evals complete:
 
 ```
 Agent(
   subagent_type: "evolver-evaluator",
-  prompt: "Experiments: {names}. Evaluators: {list}. Dataset: {name}. Use rubrics from example metadata when available."
+  prompt: "Experiments: {names}. Evaluators: {LLM_EVALS}. Dataset: {dataset_name}. Use rubrics from example metadata when available."
 )
 ```
 
-Wait for evaluator to complete before comparing.
+Wait for evaluator to complete before comparing. This is NOT optional — the combined score is meaningless without LLM-judge scores.
 
 ### 5. Compare + Constraint Gate + Merge
 
