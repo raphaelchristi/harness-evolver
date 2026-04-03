@@ -311,6 +311,22 @@ def test_pareto_front():
 
 # ─── Test: run_eval.py --sample flag ───
 
+def test_update_config_help():
+    """update_config.py accepts --help."""
+    code, stdout, stderr = run_tool("update_config.py", ["--help"])
+    assert code == 0
+    assert "--winner-experiment" in stdout
+    assert "--action" in stdout
+
+
+def test_cleanup_worktrees_help():
+    """cleanup_worktrees.py accepts --help."""
+    code, stdout, stderr = run_tool("cleanup_worktrees.py", ["--help"])
+    assert code == 0
+    assert "--dry-run" in stdout
+    assert "--keep" in stdout
+
+
 def test_log_iteration_help():
     """log_iteration.py accepts --help."""
     code, stdout, stderr = run_tool("log_iteration.py", ["--help"])

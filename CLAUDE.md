@@ -55,6 +55,15 @@ python tools/archive.py --config .evolver.json --list
 python tools/log_iteration.py --config .evolver.json --action start --version v001
 python tools/log_iteration.py --config .evolver.json --action end --run-id <id> --score 0.85 --merged true
 
+# Update config after merge (handles backup/restore/update atomically)
+python tools/update_config.py --config .evolver.json --action backup
+python tools/update_config.py --config .evolver.json --action restore
+python tools/update_config.py --config .evolver.json --action update --winner-experiment v001-abc --winner-score 0.85
+
+# Clean up orphan worktrees after eval
+python tools/cleanup_worktrees.py --dry-run
+python tools/cleanup_worktrees.py
+
 # Constraint validation for proposals (stdlib-only, no langsmith needed)
 python tools/constraint_check.py --config .evolver.json --worktree-path /tmp/wt --baseline-path .
 
