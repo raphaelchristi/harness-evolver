@@ -85,7 +85,7 @@ claude
 </tr>
 <tr>
 <td><b>Agent-Based Evaluation</b></td>
-<td>The evaluator agent reads experiment outputs via langsmith-cli, judges correctness using rubrics when available, and writes scores back. Judge feedback (textual comments explaining WHY scores were given) is surfaced to proposers for targeted mutations.</td>
+<td>The evaluator agent reasons through justification BEFORE assigning scores (15-25% reliability improvement). Reads experiment outputs via langsmith-cli, judges correctness using rubrics when available, writes scores back. Judge feedback surfaced to proposers for targeted mutations. Position bias mitigation built-in.</td>
 </tr>
 <tr>
 <td><b>Canary Preflight</b></td>
@@ -113,11 +113,11 @@ claude
 </tr>
 <tr>
 <td><b>Evolution Memory</b></td>
-<td>Cross-iteration memory consolidation inspired by Claude Code's autoDream. Tracks which approaches win, which failures recur, and promotes insights after 2+ occurrences.</td>
+<td>Anchored iterative summarization — promoted insights (rec >= 3) are immutable anchors never re-summarized. New observations use literal text from proposals. Garbage collection removes stale observations. Inspired by Claude Code's autoDream and <a href="https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering">Context Engineering</a> research.</td>
 </tr>
 <tr>
 <td><b>Dataset Health</b></td>
-<td>Pre-flight dataset quality check: size adequacy, difficulty distribution, dead example detection, production coverage analysis, train/held-out splits, and secret scanning. Auto-corrects issues before evolution starts.</td>
+<td>Integrated preflight runs 5 checks in one pass: API key, config schema, LangSmith state, dataset health (size, difficulty, splits, secrets), and entry point canary. Reports all issues at once.</td>
 </tr>
 <tr>
 <td><b>Smart Gating</b></td>
@@ -276,6 +276,7 @@ LangSmith traces **any** AI framework. The evolver works with all of them:
 - [Meta-Harness: End-to-End Optimization of Model Harnesses](https://arxiv.org/abs/2603.28052) — Lee et al., 2026
 - [Drop the Hierarchy and Roles: How Self-Organizing LLM Agents Outperform Designed Structures](https://arxiv.org/abs/2603.28990) — Dochkina, 2026
 - [Hermes Agent Self-Evolution](https://github.com/NousResearch/hermes-agent-self-evolution) — NousResearch (rubric-based eval, constraint gates)
+- [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering) — Koylan (justification-before-score, observation masking, anchored summarization)
 - [Darwin Godel Machine](https://sakana.ai/dgm/) — Sakana AI
 - [AlphaEvolve](https://deepmind.google/blog/alphaevolve/) — DeepMind
 - [LangSmith Evaluation](https://docs.smith.langchain.com/evaluation) — LangChain
