@@ -76,11 +76,14 @@ From trace_insights.json, best_results.json, evolution_memory.md, production_see
 
 **lenses.json** — Investigation questions for proposers:
 - One per failure cluster (max 3), one architecture, one production, one evolution_memory, one open
+- If `evolution_archive/` has 3+ iterations, one `archive_branch` lens that suggests revisiting a losing candidate's approach
 - Sort by severity, cap at 5 lenses
 
-### 3. Spawn Proposers (parallel worktrees)
+### 3. Spawn Proposers (two-wave, parallel worktrees)
 
-Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST.
+Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST. Include `evolution_archive/` in `<files_to_read>` so proposers can grep prior candidates.
+
+**Wave 1** — critical + high severity lenses, run independently in parallel:
 
 ```
 Agent(
@@ -91,7 +94,22 @@ Agent(
 )
 ```
 
-Report each completion as it happens: `Proposer N ({lens}) completed — committed/abstained. Progress: 2/4`.
+Wait for wave 1 to complete. Report each completion as it happens.
+
+**Wave 2** — medium + open lenses, see wave 1 results before starting:
+
+Add to the shared context for wave 2 proposers:
+```
+<prior_proposals>
+Wave 1 proposers completed:
+- Proposer {id} ({lens}): {approach from proposal.md} — {committed/abstained}
+...
+</prior_proposals>
+```
+
+Wave 2 proposers see what wave 1 tried and can build on it, avoid duplication, or take complementary approaches. Research shows +14% quality when agents observe prior outputs.
+
+If only 1-2 lenses total, run as single wave.
 
 ### 4. Evaluate Candidates
 
@@ -125,7 +143,13 @@ Wait for evaluator to complete before comparing.
 $EVOLVER_PY $TOOLS/read_results.py --experiments "{names}" --config .evolver.json --split held_out --output comparison.json
 ```
 
-Winner = highest score on held-out data. Report Pareto front if multiple non-dominated candidates.
+Winner = highest score on held-out data. Report Pareto front and diversity grid if multiple non-dominated candidates.
+
+If top 2 candidates are within 5% of each other, run pairwise comparison to confirm:
+```bash
+$EVOLVER_PY $TOOLS/read_results.py --pairwise "{winner},{runner_up}" --config .evolver.json
+```
+If pairwise disagrees with independent scoring, flag for user review.
 
 Resolve `project_dir` for constraint worktree path. Baseline stays `.` because CWD is already the project directory:
 ```bash
@@ -140,9 +164,16 @@ If winner beats current best: `git merge`, update `.evolver.json` with enriched 
 
 ### 6. Post-Iteration
 
+**Archive ALL candidates** (winners and losers) for future proposer reference:
+```bash
+for CANDIDATE in {all_worktree_paths}; do
+    $EVOLVER_PY $TOOLS/archive.py --config .evolver.json --version v{NNN}-{id} --experiment "{exp}" --worktree-path "$CANDIDATE" --score {score} --approach "{approach}" --lens "{lens}" $([ "{exp}" = "{winner}" ] && echo "--won")
+done
+```
+
 **Regression tracking** (if not first iteration):
 ```bash
-$EVOLVER_PY $TOOLS/regression_tracker.py --config .evolver.json --previous-experiment "$PREV" --current-experiment "$WINNER" --add-guards --max-guards 5
+$EVOLVER_PY $TOOLS/regression_tracker.py --config .evolver.json --previous-experiment "$PREV" --current-experiment "$WINNER" --add-guards --auto-guard-failures --max-guards 5
 ```
 
 **Report**: `Iteration {i}/{N}: v{NNN} scored {score} (best: {best_score})`

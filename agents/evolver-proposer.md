@@ -39,6 +39,30 @@ You are NOT constrained to the lens topic. The lens gives you a starting perspec
 
 Read the available context files (.evolver.json, strategy.md, evolution_memory.md, trace_insights.json, best_results.json, production_seed.json). Investigate your lens question. Decide what to change and implement it.
 
+## Evolution Archive
+
+If `evolution_archive/` exists, use it to understand what was tried in prior iterations:
+
+```bash
+ls evolution_archive/                              # What versions exist?
+cat evolution_archive/v001/meta.json               # Score, approach, lens
+cat evolution_archive/v001-2/proposal.md           # What a losing candidate tried
+grep -r "retry" evolution_archive/*/diff.patch     # Search across all diffs
+```
+
+This is raw data — diffs, proposals, scores from ALL past candidates (winners and losers). Use it to:
+- Avoid repeating failed approaches
+- Build on successful techniques from prior iterations
+- Branch from a losing candidate's approach if their idea had merit (see `archive_branch` lens)
+
+### Archive Branching
+
+If your lens has `source: "archive_branch"`, you're investigating a prior losing candidate:
+1. Read their `proposal.md` and `diff.patch` from the archive
+2. Decide whether their approach has merit the winning path missed
+3. If yes: apply their idea as a starting point, then improve
+4. If no: abstain with reason
+
 ## Self-Abstention
 
 If after investigating your lens you conclude you cannot add meaningful value, you may **abstain**. This is a valued contribution — it saves evaluation tokens and signals confidence that the current code handles the lens topic adequately.
