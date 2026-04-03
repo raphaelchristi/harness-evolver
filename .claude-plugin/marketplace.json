@@ -3,6 +3,9 @@
   "owner": {
     "name": "Raphael Valdetaro"
   },
+  "metadata": {
+    "description": "LangSmith-native autonomous agent optimization plugin"
+  },
   "plugins": [
     {
       "name": "harness-evolver",
