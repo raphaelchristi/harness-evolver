@@ -218,6 +218,26 @@ def compare_experiments(results_list):
 
     front = pareto_front(valid)
 
+    # MAP-Elites diversity grid: map each lens/candidate to its best score.
+    # Extract lens category from experiment name suffix (e.g., "v001-2-abc123" → "lens-2").
+    diversity_grid = {}
+    for result in results_list:
+        exp_name = result.get("experiment", "")
+        parts = exp_name.split("-")
+        # Heuristic: if there are at least 3 parts, the second-to-last numeric segment is the lens index
+        lens_label = exp_name  # fallback to full name
+        for i, part in enumerate(parts):
+            if i > 0 and part.isdigit():
+                lens_label = f"lens-{part}"
+                break
+        score = result.get("combined_score", 0)
+        if lens_label not in diversity_grid or score > diversity_grid[lens_label]["score"]:
+            diversity_grid[lens_label] = {
+                "lens": lens_label,
+                "experiment": exp_name,
+                "score": score,
+            }
+
     return {
         "winner": {
             "experiment": winner["experiment"],
@@ -239,6 +259,81 @@ def compare_experiments(results_list):
             }
             for r in results_list
         ],
+        "diversity_grid": list(diversity_grid.values()),
+    }
+
+
+def pairwise_compare(client, exp_a, exp_b, evaluator_key="correctness"):
+    """Head-to-head comparison of two experiments on shared examples.
+
+    For each example present in both experiments, compares the per-example
+    score on the given evaluator key and counts wins for A vs B.
+
+    Returns:
+        dict with winner ("A", "B", or "tie"), consistency flag, win counts,
+        margin, and experiment names.
+    """
+    runs_a = list(client.list_runs(project_name=exp_a, is_root=True, limit=100))
+    runs_b = list(client.list_runs(project_name=exp_b, is_root=True, limit=100))
+
+    # Build example_id → run mapping for each experiment
+    def _build_example_scores(runs):
+        run_ids = [r.id for r in runs]
+        if not run_ids:
+            return {}
+        feedbacks = list(client.list_feedback(run_ids=run_ids))
+        fb_map = {}
+        for fb in feedbacks:
+            fb_map.setdefault(str(fb.run_id), []).append(fb)
+
+        scores = {}
+        for run in runs:
+            example_id = str(run.reference_example_id or run.id)
+            run_feedbacks = fb_map.get(str(run.id), [])
+            for fb in run_feedbacks:
+                if fb.key == evaluator_key and fb.score is not None:
+                    scores[example_id] = fb.score
+                    break
+        return scores
+
+    scores_a = _build_example_scores(runs_a)
+    scores_b = _build_example_scores(runs_b)
+
+    # Only compare shared examples
+    shared = set(scores_a.keys()) & set(scores_b.keys())
+
+    a_wins = 0
+    b_wins = 0
+    for eid in shared:
+        sa = scores_a[eid]
+        sb = scores_b[eid]
+        if sa > sb:
+            a_wins += 1
+        elif sb > sa:
+            b_wins += 1
+
+    total = a_wins + b_wins
+    if total == 0:
+        winner = "tie"
+        margin = 0.0
+    elif a_wins > b_wins:
+        winner = "A"
+        margin = (a_wins - b_wins) / total
+    elif b_wins > a_wins:
+        winner = "B"
+        margin = (b_wins - a_wins) / total
+    else:
+        winner = "tie"
+        margin = 0.0
+
+    return {
+        "winner": winner,
+        "consistent": margin > 0.20,
+        "a_wins": a_wins,
+        "b_wins": b_wins,
+        "margin": round(margin, 4),
+        "experiment_a": exp_a,
+        "experiment_b": exp_b,
     }
 
 
@@ -330,6 +425,7 @@ def main():
     parser.add_argument("--output", default=None, help="Output JSON path")
     parser.add_argument("--format", default="json", choices=["json", "markdown", "summary"], help="Output format (summary = compact ~200 tokens)")
     parser.add_argument("--split", default=None, help="Filter by dataset split (e.g., 'train')")
+    parser.add_argument("--pairwise", default=None, help="Pairwise comparison: 'exp_a,exp_b' (optionally append :evaluator_key)")
     args = parser.parse_args()
     ensure_langsmith_api_key()
 
@@ -343,7 +439,26 @@ def main():
     from langsmith import Client
     client = Client()
 
-    if args.experiment:
+    if args.pairwise:
+        # Pairwise head-to-head comparison
+        parts = args.pairwise.split(",")
+        if len(parts) < 2:
+            print("--pairwise requires 'exp_a,exp_b'", file=sys.stderr)
+            sys.exit(1)
+        exp_a = parts[0].strip()
+        exp_b = parts[1].strip()
+        evaluator_key = "correctness"
+        if len(parts) >= 3:
+            evaluator_key = parts[2].strip()
+
+        result = pairwise_compare(client, exp_a, exp_b, evaluator_key=evaluator_key)
+        output = json.dumps(result, indent=2, default=str)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(output)
+        print(output)
+
+    elif args.experiment:
         # Single experiment
         result = read_experiment(client, args.experiment, weights=weights)
         if not result:
