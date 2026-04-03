@@ -221,7 +221,26 @@ If constraints fail, try next-best. If none pass, skip merge.
 - If latency increased >50% AND score improved <5%: reject this candidate, try next-best
 - In interactive mode: ask user to override if desired. In background mode: auto-reject.
 
-If winner beats current best AND passes efficiency gate: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc). Then git-tag for rollback:
+If winner beats current best AND passes efficiency gate:
+
+1. **Save config before merge** (merge will overwrite with worktree's stale copy):
+```bash
+cp .evolver.json .evolver.json.bak
+```
+
+2. **Merge the winner**:
+```bash
+git merge {winner_branch} --no-edit -m "evolve: merge v{NNN} (score: {score})"
+```
+
+3. **Restore config and update** (the merge brought the worktree's old .evolver.json — restore ours):
+```bash
+cp .evolver.json.bak .evolver.json
+```
+
+4. **Update config** with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc).
+
+5. **Git-tag** for rollback:
 
 ```bash
 git tag "evo-iter-v{NNN}" -m "harness: v{NNN} score={score}"
