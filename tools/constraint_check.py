@@ -175,7 +175,7 @@ def check_tests(worktree_path, config=None):
     if has_js_tests and not has_py_tests:
         try:
             result = subprocess.run(
-                ["npm", "test", "--", "--passWithNoTests"],
+                ["npm", "test"],
                 capture_output=True, text=True,
                 cwd=worktree_path, timeout=120,
             )

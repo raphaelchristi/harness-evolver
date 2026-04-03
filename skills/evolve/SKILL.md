@@ -127,8 +127,12 @@ $EVOLVER_PY $TOOLS/read_results.py --experiments "{names}" --config .evolver.jso
 
 Winner = highest score on held-out data. Report Pareto front if multiple non-dominated candidates.
 
+Resolve `project_dir` for constraint paths (same as eval step):
 ```bash
-$EVOLVER_PY $TOOLS/constraint_check.py --config .evolver.json --worktree-path "{winner_wt}" --baseline-path "."
+WINNER_PROJECT="{winner_wt}"
+BASELINE_PROJECT="."
+[ -n "$PROJECT_DIR" ] && WINNER_PROJECT="{winner_wt}/$PROJECT_DIR" && BASELINE_PROJECT="./$PROJECT_DIR"
+$EVOLVER_PY $TOOLS/constraint_check.py --config .evolver.json --worktree-path "$WINNER_PROJECT" --baseline-path "$BASELINE_PROJECT"
 ```
 
 If constraints fail, try next-best. If none pass, skip merge.

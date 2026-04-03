@@ -188,7 +188,8 @@ def main():
             canary_examples = list(client.list_examples(dataset_name=config["dataset"], limit=1))
             if canary_examples:
                 canary_result = target(canary_examples[0].inputs)
-                canary_output = canary_result.get("output", "")
+                # Accept both "output" and "answer" keys (same contract as has_output evaluator)
+                canary_output = canary_result.get("output", canary_result.get("answer", ""))
                 canary_error = canary_result.get("error", "")
                 # Fail on empty output regardless of error — an agent that exits
                 # cleanly with no output is still broken (Codex review finding)
