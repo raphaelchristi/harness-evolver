@@ -11,68 +11,10 @@ Usage:
 import argparse
 import json
 import os
-import platform
 import sys
 
-
-def write_config_atomic(path, config):
-    """Write config JSON atomically (temp file + rename)."""
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
-
-
-def ensure_langsmith_api_key():
-    """Load LANGSMITH_API_KEY from env, project .env, or global credentials.
-
-    Priority: env var > project .env (CWD or --config dir) > global credentials.
-    Project .env takes precedence over global credentials because the project-local
-    key is more likely to be correct and up-to-date.
-    """
-    if os.environ.get("LANGSMITH_API_KEY"):
-        return True
-    # Check .env in CWD and in --config directory FIRST (project-local > global)
-    env_candidates = [".env"]
-    for i, arg in enumerate(sys.argv):
-        if arg == "--config" and i + 1 < len(sys.argv):
-            cfg_dir = os.path.dirname(os.path.abspath(sys.argv[i + 1]))
-            env_candidates.append(os.path.join(cfg_dir, ".env"))
-        elif arg.startswith("--config="):
-            cfg_dir = os.path.dirname(os.path.abspath(arg.split("=", 1)[1]))
-            env_candidates.append(os.path.join(cfg_dir, ".env"))
-    for env_path in env_candidates:
-        if os.path.exists(env_path):
-            try:
-                with open(env_path) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
-                            key = line.split("=", 1)[1].strip().strip("'\"")
-                            if key:
-                                os.environ["LANGSMITH_API_KEY"] = key
-                                return True
-            except OSError:
-                pass
-    # Fallback: global langsmith-cli credentials file
-    if platform.system() == "Darwin":
-        creds_path = os.path.expanduser("~/Library/Application Support/langsmith-cli/credentials")
-    else:
-        creds_path = os.path.expanduser("~/.config/langsmith-cli/credentials")
-    if os.path.exists(creds_path):
-        try:
-            with open(creds_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LANGSMITH_API_KEY="):
-                        key = line.split("=", 1)[1].strip()
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            return True
-        except OSError:
-            pass
-    return False
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import ensure_langsmith_api_key, write_config_atomic
 
 
 def validate_config_schema(config):
