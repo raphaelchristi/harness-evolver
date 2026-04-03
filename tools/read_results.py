@@ -324,8 +324,9 @@ def format_summary(results):
             fb_text = next(iter(fb.values()), "") if fb else ""
             top_failing.append({
                 "input": data.get("input_preview", "")[:80],
+                "output": data.get("output_preview", "")[:80],
                 "score": data["score"],
-                "feedback": fb_text[:100],
+                "feedback": fb_text[:120],
             })
 
     return {
