@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [5.0.0] - 2026-04-03
+
+Major refactoring release addressing the "road to 10/10" feedback.
+
+### Added
+
+- **Integration tests** — `tests/test_tools.py` with 11 smoke tests covering all tools: syntax validation, --help flags, evolution_chart rendering, secret detection, constraint checking, session mining, format_summary, weighted_score, pareto_front. Run with `python3 tests/test_tools.py`.
+- **`tools/_common.py`** — Shared module eliminating 7x code duplication. Contains `ensure_langsmith_api_key()`, `write_config_atomic()`, `load_config()`. All tools import from `_common` instead of maintaining local copies. key_source tracking preserved for setup.py.
+
+### Changed
+
+- **Evolve skill: 672 → 148 lines (78% reduction)** — Principles instead of procedures. Removed inline Python, verbose bash blocks, JSON examples. Each step condensed to: what to do + which tool + key flags. Skill fits in ~400 context tokens instead of ~1800.
+
+### Removed
+
+- Duplicated `ensure_langsmith_api_key()` from 7 tool files (315 lines removed)
+- Duplicated `write_config_atomic()` from 2 tool files
+- Procedural bash scripts from evolve skill (replaced with tool invocations)
+
+---
+
 ## [4.8.2] - 2026-04-03
 
 ### Fixed
