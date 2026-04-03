@@ -396,6 +396,36 @@ def test_promote_learnings_no_memory():
     assert result["promoted"] == 0
 
 
+def test_promote_learnings_parse():
+    """promote_learnings.py parses evolution_memory.md and filters by threshold."""
+    # Create mock evolution_memory.md
+    memory_content = """# Evolution Memory
+
+## Key Insights
+
+1. **Always validate input JSON before processing** [rec:7]
+2. **Use streaming for large responses** [rec:3]
+- Don't retry on 401 errors [rec:5]
+- Cache embeddings locally [rec:2]
+"""
+    fd, memory_path = tempfile.mkstemp(suffix=".md", prefix="memory_test_")
+    with os.fdopen(fd, "w") as f:
+        f.write(memory_content)
+    try:
+        code, stdout, stderr = run_tool("promote_learnings.py", [
+            "--memory", memory_path,
+            "--threshold", "5",
+            "--dry-run",
+        ])
+        assert code == 0, f"exit {code}: {stderr[:200]}"
+        result = json.loads(stdout)
+        assert result["promoted"] == 2  # rec:7 and rec:5
+        assert result["total_insights"] == 4
+        assert "Always validate input JSON" in result["insights"][0]
+    finally:
+        os.unlink(memory_path)
+
+
 # ─── Runner ───
 
 if __name__ == "__main__":

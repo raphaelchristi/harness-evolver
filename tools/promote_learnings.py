@@ -37,10 +37,17 @@ def parse_evolution_memory(memory_path):
     # Parse "Key Insights" section — format: "N. **text** [rec:N]"
     # Also handles: "N. text [rec:N]" and "- text [rec:N]"
     pattern = r'(?:^[\d]+\.\s+|\-\s+)\*{0,2}(.+?)\*{0,2}\s+\[rec:(\d+)\]'
-    for match in re.finditer(pattern, content, re.MULTILINE):
-        text = match.group(1).strip()
-        rec = int(match.group(2))
-        insights.append({"text": text, "recurrence": rec})
+    # LLM consolidator output may also use "(seen Nx)" format
+    pattern2 = r'(?:^[\d]+\.\s+|\-\s+)\*{0,2}(.+?)\*{0,2}\s+\(seen\s+(\d+)x\)'
+
+    seen_texts = set()
+    for pat in (pattern, pattern2):
+        for match in re.finditer(pat, content, re.MULTILINE):
+            text = match.group(1).strip()
+            rec = int(match.group(2))
+            if text not in seen_texts:
+                seen_texts.add(text)
+                insights.append({"text": text, "recurrence": rec})
 
     return insights
 
@@ -57,7 +64,7 @@ def format_as_claude_rules(insights, project_name=""):
         "Rules learned from automated evolution (promoted from evolution_memory.md):",
         "",
     ]
-    for i, insight in enumerate(insights, 1):
+    for insight in insights:
         lines.append(f"- {insight['text']}")
 
     lines.append("")
@@ -67,8 +74,8 @@ def format_as_claude_rules(insights, project_name=""):
 def append_to_claude_md(target_path, rules_text, dry_run=False):
     """Append rules to CLAUDE.md. Creates file if it doesn't exist."""
     if dry_run:
-        print("DRY RUN — would append to", target_path)
-        print(rules_text)
+        print("DRY RUN — would append to", target_path, file=sys.stderr)
+        print(rules_text, file=sys.stderr)
         return True
 
     # Check if rules already exist (prevent duplicates)
