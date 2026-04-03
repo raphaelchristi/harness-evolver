@@ -6,6 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.3.0] - 2026-04-03
+
+Five improvements from the testing agent's verdict on agno-deepknowledge run.
+
+### Added
+
+- **`tools/update_config.py`** — Atomic config update replacing inline Python. Three actions: `backup` (before merge), `restore` (after merge overwrites), `update` (increments iterations, updates best_score, appends enriched history). Eliminates the #1 bug from real-world runs (config overwritten by merge).
+- **`tools/cleanup_worktrees.py`** — Removes orphan worktrees from `.claude/worktrees/` after eval. Supports `--dry-run` and `--keep`. Prevents 6+ worktree accumulation per session.
+- **`--retry-on-rate-limit` in `run_eval.py`** — When rate-limited, waits 60s and suggests re-run instead of just aborting.
+- **Rubric pinning** — Evaluator agent includes rubric text in feedback comment (`RUBRIC: ... JUDGMENT: ...`). Makes scores reproducible and diagnosable across iterations.
+
+### Changed
+
+- **Evolve skill simplified** — Merge + config update is now 3 tool calls (`backup → restore → update`) instead of inline Python. Worktree cleanup added at end of post-iteration. Zero manual `cp .bak` or `python3 -c` in the skill.
+
+---
+
+## [6.2.0] - 2026-04-03
+
+### Added
+
+- **Evolution tracing to LangSmith** — New `tools/log_iteration.py` creates a LangSmith run per iteration with score, approach, lens, duration, and merge decision. Persistent timeline in LangSmith UI.
+- **Proposer trace nesting** — `CC_LANGSMITH_PARENT_DOTTED_ORDER` passed to proposer environment. With the langsmith-tracing companion, proposer tool calls nest hierarchically under iteration runs.
+- **Companion plugin recommended** — README, setup skill, and CLAUDE.md recommend installing `langsmith-tracing` from `langchain-ai/langsmith-claude-code-plugins` for full proposer observability.
+
+---
+
 ## [6.1.0] - 2026-04-03
 
 Fixes from first real multi-iteration evolution run (agno-deepknowledge: 0.575 → 0.950).
