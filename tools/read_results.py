@@ -306,7 +306,7 @@ def format_summary(results):
     eval_summary = {k: round(sum(v) / len(v), 3) for k, v in eval_avgs.items()}
 
     # Identify failure pattern
-    failing = [ex for ex in r.get("per_example", {}).values() if ex.get("score", 0) < 0.5]
+    failing = [ex for ex in r.get("per_example", {}).values() if ex.get("score", 0) <= 0.5]
     failure_pattern = "none"
     if failing:
         # Check if failures share a common error
@@ -316,10 +316,10 @@ def format_summary(results):
         else:
             failure_pattern = f"{len(failing)}/{num} failing"
 
-    # Top failing inputs (max 3)
+    # Top failing inputs (max 3) — include score <= 0.5 (not just < 0.5)
     top_failing = []
     for eid, data in sorted(r.get("per_example", {}).items(), key=lambda x: x[1].get("score", 0))[:3]:
-        if data.get("score", 0) < 0.5:
+        if data.get("score", 0) <= 0.5:
             fb = data.get("feedback", {})
             fb_text = next(iter(fb.values()), "") if fb else ""
             top_failing.append({
