@@ -6,11 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.3.2] - 2026-04-03
+
+### Fixed
+
+- **CWD drift: use `--git-common-dir`** — `--show-toplevel` (v6.3.1) still resolved to the worktree root, not the main repo. Fixed with `dirname "$(git rev-parse --git-common-dir)"` which always returns the main repo root even from inside a worktree. Confirmed by Codex adversarial review and end-to-end test.
+
+---
+
 ## [6.3.1] - 2026-04-03
 
 ### Fixed
 
-- **CWD drift prevention** — Replaced all `$(pwd)` in evolve skill with `$(git rev-parse --show-toplevel)`. When CWD drifts into a worktree during proposer spawn, `$(pwd)` resolved to the wrong path (double-nested worktree). `git rev-parse --show-toplevel` always returns the git root. `$SRC` set once per iteration, used everywhere.
+- **CWD drift prevention** — Replaced all `$(pwd)` in evolve skill with `$SRC` variable set once per iteration. `$(pwd)` resolved to wrong path when CWD drifted into worktree. (Note: v6.3.1 used `--show-toplevel` which was still wrong inside worktrees — corrected to `--git-common-dir` in v6.3.2.)
 
 ---
 
