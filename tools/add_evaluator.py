@@ -11,7 +11,17 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
+
+
+def write_config_atomic(path, config):
+    """Write config JSON atomically (temp file + rename)."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
 
 
 CODE_EVALUATOR_TEMPLATES = {
@@ -74,8 +84,7 @@ def add_evaluator(config_path, evaluator_name, eval_type, pattern=None):
         code_evals[evaluator_name] = new_code_eval
         config["code_evaluators"] = code_evals
 
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
+    write_config_atomic(config_path, config)
 
     return True
 
@@ -100,8 +109,7 @@ def main():
             code_evals = config.get("code_evaluators", {})
             code_evals.pop(args.evaluator, None)
             config["code_evaluators"] = code_evals
-            with open(args.config, "w") as f:
-                json.dump(config, f, indent=2)
+            write_config_atomic(args.config, config)
             print(f"Removed evaluator: {args.evaluator}")
         else:
             print(f"Evaluator '{args.evaluator}' not found", file=sys.stderr)

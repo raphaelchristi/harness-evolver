@@ -589,8 +589,12 @@ def main():
             }] if baseline_experiment else [],
         }
 
-        with open(args.output, "w") as f:
+        # Atomic write to prevent corruption
+        tmp = args.output + ".tmp"
+        with open(tmp, "w") as f:
             json.dump(config, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, args.output)
 
         print(f"\nSetup complete. Config saved to {args.output}")
         print(f"  Project: {project_name}")

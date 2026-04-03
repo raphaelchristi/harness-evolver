@@ -15,6 +15,15 @@ import platform
 import sys
 
 
+def write_config_atomic(path, config):
+    """Write config JSON atomically (temp file + rename)."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
 def ensure_langsmith_api_key():
     """Load LANGSMITH_API_KEY from env, project .env, or global credentials.
 
@@ -183,8 +192,7 @@ def main():
                 try:
                     dataset = client.read_dataset(dataset_name=config["dataset"])
                     config["dataset_id"] = str(dataset.id)
-                    with open(args.config, "w") as f:
-                        json.dump(config, f, indent=2)
+                    write_config_atomic(args.config, config)
                     fixed.append(f"Fixed dataset_id: updated to {dataset.id}")
                     issue["severity"] = "fixed"
                 except Exception:
@@ -195,8 +203,7 @@ def main():
                     best_in_history = max(history, key=lambda h: h.get("score", 0))
                     config["best_experiment"] = best_in_history["experiment"]
                     config["best_score"] = best_in_history["score"]
-                    with open(args.config, "w") as f:
-                        json.dump(config, f, indent=2)
+                    write_config_atomic(args.config, config)
                     fixed.append(f"Fixed best_experiment: set to {best_in_history['experiment']}")
                     issue["severity"] = "fixed"
         if fixed:

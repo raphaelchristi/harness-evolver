@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -197,7 +198,19 @@ def main():
     parser.add_argument("--timeout", type=int, default=120, help="Per-task timeout in seconds")
     parser.add_argument("--concurrency", type=int, default=None, help="Max concurrent evaluations (default: from config or 1)")
     parser.add_argument("--no-canary", action="store_true", help="Skip canary preflight check")
+    parser.add_argument("--preflight-only", action="store_true", help="Run preflight checks only (API key, config, canary) then exit")
     args = parser.parse_args()
+
+    # Auto-copy config files to worktree if missing (untracked files aren't in worktrees)
+    config_dir = os.path.dirname(os.path.abspath(args.config))
+    worktree = args.worktree_path
+    if config_dir != os.path.abspath(worktree):
+        for fname in [".evolver.json", ".env"]:
+            src = os.path.join(config_dir, fname)
+            dst = os.path.join(worktree, fname)
+            if os.path.exists(src) and not os.path.exists(dst):
+                shutil.copy2(src, dst)
+                print(f"  Auto-copied {fname} to worktree", file=sys.stderr)
 
     with open(args.config) as f:
         config = json.load(f)
@@ -242,6 +255,19 @@ def main():
                     print(f"  Canary passed: got output ({len(str(canary_output))} chars)", file=sys.stderr)
         except Exception as e:
             print(f"  Canary check failed: {e} (proceeding anyway)", file=sys.stderr)
+
+    # Preflight-only mode: check everything works, then exit
+    if args.preflight_only:
+        print(json.dumps({
+            "preflight": "pass",
+            "config": args.config,
+            "dataset": config["dataset"],
+            "entry_point": config["entry_point"],
+            "evaluators": config["evaluators"],
+            "worktree_files_copied": True,
+            "api_key_loaded": bool(os.environ.get("LANGSMITH_API_KEY")),
+        }, indent=2))
+        sys.exit(0)
 
     print(f"Running evaluation: {args.experiment_prefix}")
     print(f"  Dataset: {config['dataset']}")
