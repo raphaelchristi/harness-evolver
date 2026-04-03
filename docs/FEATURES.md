@@ -1,0 +1,47 @@
+# Features
+
+Full feature list for Harness Evolver. For the quick overview, see [README.md](../README.md).
+
+## Core
+
+| Feature | Description |
+|---|---|
+| **LangSmith-Native** | No custom eval scripts or task files. Uses LangSmith Datasets for test inputs, Experiments for results, and an agent-based LLM-as-judge for scoring via langsmith-cli. No external API keys needed. Everything is visible in the LangSmith UI. |
+| **Real Code Evolution** | Proposers modify your actual agent code — not a wrapper. Each candidate works in an isolated git worktree. Winners are merged automatically. Config files (.evolver.json, .env, evolution_archive/) are auto-propagated to worktrees. |
+| **Self-Organizing Proposers** | Two-wave spawning: critical lenses run first, then medium/open lenses see wave 1 results (+14% quality). Dynamic investigation lenses from failure data, architecture analysis, production traces, evolution memory, and archive branching (revisit losing candidates). Proposers self-organize, self-abstain, and can fork from any ancestor. |
+| **Background Mode** | Run all iterations in background while you continue working. Get notified on completion or significant improvements. |
+
+## Evaluation
+
+| Feature | Description |
+|---|---|
+| **Rubric-Based Evaluation** | Dataset examples support `expected_behavior` rubrics — specific criteria the judge evaluates against, not just generic correctness. Partial scoring (0.5) for partially-met rubrics. |
+| **Agent-Based LLM-as-Judge** | Justification BEFORE score (15-25% reliability improvement). Rubric-aware scoring via langsmith-cli. Judge feedback surfaced to proposers. Position bias mitigation. Few-shot self-improvement from human corrections. Pairwise head-to-head comparison when top candidates are within 5%. |
+| **Weighted Evaluators + Pareto** | Configure `evaluator_weights` to prioritize what matters. Pareto front reported when candidates offer different tradeoffs. MAP-Elites diversity grid preserves approach diversity. |
+| **Canary Preflight** | 1 example tested before full evaluation. If agent produces no output, evaluation stops immediately. Accepts both `output` and `answer` response formats. |
+
+## Safety
+
+| Feature | Description |
+|---|---|
+| **Constraint Gates** | Proposals must pass hard constraints before merge: code growth <=30%, entry point syntax valid (Python/JS/TS/shell), test suite passes. Fails closed when validation tools unavailable. |
+| **Secret Detection** | Detects 15+ secret patterns (API keys, tokens, PEM keys). Filtered from production trace imports and flagged in dataset health checks. |
+| **Smart Gating** | Score plateau, target reached, diminishing returns. Holdout enforcement ensures final comparison uses unseen data. Baseline re-scored with LLM-judge before loop. |
+| **Active Critic** | Auto-triggers on suspicious score jumps. Detects evaluator gaming AND implements stricter evaluators. |
+| **Regression Guards** | Failed examples auto-added as permanent regression tests. Deduplication prevents inflation. Train-only (never contaminates held_out). |
+
+## Intelligence
+
+| Feature | Description |
+|---|---|
+| **Evolution Archive** | Persistent history of ALL candidates (winners + losers) — diffs, proposals, scores. Proposers grep archive for cross-iteration causal reasoning. |
+| **Evolution Memory** | Anchored iterative summarization — promoted insights are immutable anchors. Garbage collection removes stale observations. |
+| **ULTRAPLAN Architect** | Auto-triggers on stagnation. Opus model for deep architectural analysis. Recommends topology changes. |
+| **Production Traces** | Auto-discovers LangSmith production projects. Real user inputs for test generation. Can also mine Claude Code session history. |
+
+## Visualization
+
+| Feature | Description |
+|---|---|
+| **Evolution Chart** | Rich ASCII visualization with ANSI colors: sparkline trend, score progression table, per-evaluator breakdown, what-changed narrative, horizontal bar chart, code growth tracking. |
+| **Integrated Preflight** | 5 checks in one pass: API key, config schema, LangSmith state, dataset health, canary. Reports all issues at once. |
