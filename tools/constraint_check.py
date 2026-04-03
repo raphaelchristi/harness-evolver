@@ -126,6 +126,10 @@ def check_tests(worktree_path, config=None):
             capture_output=True, text=True,
             cwd=worktree_path, timeout=120,
         )
+        # Detect pytest not installed (exit 1 with "No module named pytest")
+        if result.returncode != 0 and "No module named pytest" in (result.stderr or ""):
+            return {"pass": True, "reason": "pytest not installed in venv (skipped)", "skipped": True}
+
         passed = result.returncode == 0
         return {
             "pass": passed,
@@ -133,7 +137,7 @@ def check_tests(worktree_path, config=None):
             "skipped": False,
         }
     except FileNotFoundError:
-        return {"pass": True, "reason": "pytest not available (skipped)", "skipped": True}
+        return {"pass": True, "reason": "python not available (skipped)", "skipped": True}
     except subprocess.TimeoutExpired:
         return {"pass": False, "reason": "test suite timed out after 120s", "skipped": False}
 

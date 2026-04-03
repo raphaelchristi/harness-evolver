@@ -68,19 +68,29 @@ def ensure_langsmith_api_key():
             pass
 
     # Also check .env in current directory
-    if os.path.exists(".env"):
-        try:
-            with open(".env") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
-                        key = line.split("=", 1)[1].strip().strip("'\"")
-                        if key:
-                            os.environ["LANGSMITH_API_KEY"] = key
-                            key_source = ".env file"
-                            return True
-        except OSError:
-            pass
+    # Check .env in CWD and in --config directory (CWD may differ from project)
+    env_candidates = [".env"]
+    for i, arg in enumerate(sys.argv):
+        if arg == "--config" and i + 1 < len(sys.argv):
+            cfg_dir = os.path.dirname(os.path.abspath(sys.argv[i + 1]))
+            env_candidates.append(os.path.join(cfg_dir, ".env"))
+        elif arg.startswith("--config="):
+            cfg_dir = os.path.dirname(os.path.abspath(arg.split("=", 1)[1]))
+            env_candidates.append(os.path.join(cfg_dir, ".env"))
+    for env_path in env_candidates:
+        if os.path.exists(env_path):
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
+                            key = line.split("=", 1)[1].strip().strip("'\"")
+                            if key:
+                                os.environ["LANGSMITH_API_KEY"] = key
+                                key_source = f".env file ({env_path})"
+                                return True
+            except OSError:
+                pass
 
     return False
 
