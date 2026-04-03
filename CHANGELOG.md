@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.6.0] - 2026-04-03
+
+Three structural improvements from the agent's final verdict (7/10 review).
+
+### Added
+
+- **Auto-copy worktree files** — `run_eval.py` automatically copies `.evolver.json` and `.env` from the config directory to the worktree if missing. Eliminates the most frequent bug from all real-world reports (worktree untracked files).
+- **Preflight mode** — `run_eval.py --preflight-only` runs API key check + canary + config validation in one command, then exits. Single command to verify everything works before running full evolution.
+- **Atomic config writes** — `add_evaluator.py`, `validate_state.py`, and `setup.py` now write `.evolver.json` via temp file + `os.replace()` (atomic on same filesystem). Prevents corruption from concurrent writers (critic + main loop).
+
+---
+
 ## [4.5.4] - 2026-04-03
 
 ### Fixed
