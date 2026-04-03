@@ -326,6 +326,7 @@ def format_summary(results):
                 "input": data.get("input_preview", "")[:80],
                 "output": data.get("output_preview", "")[:80],
                 "score": data["score"],
+                "scores": data.get("scores", {}),
                 "feedback": fb_text[:120],
             })
 
