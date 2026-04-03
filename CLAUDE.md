@@ -42,6 +42,9 @@ python tools/analyze_architecture.py --harness path/to/agent -o output.json
 # Evolution progress chart (stdlib-only, no langsmith needed)
 python tools/evolution_chart.py --config .evolver.json
 
+# Integrated preflight check (API key + schema + state + health + canary)
+python tools/preflight.py --config .evolver.json
+
 # Constraint validation for proposals (stdlib-only, no langsmith needed)
 python tools/constraint_check.py --config .evolver.json --worktree-path /tmp/wt --baseline-path .
 

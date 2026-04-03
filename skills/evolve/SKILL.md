@@ -106,32 +106,20 @@ Read config:
 python3 -c "import json; c=json.load(open('.evolver.json')); print(f'Best: {c[\"best_experiment\"]} ({c[\"best_score\"]:.3f}), Iterations: {c[\"iterations\"]}')"
 ```
 
-### 0.5. Validate State
+### 0.5. Preflight Check
 
-Before starting the loop, verify `.evolver.json` matches LangSmith reality:
+Run the integrated preflight that validates everything in one pass (API key, config schema, LangSmith state, dataset health, canary):
 
 ```bash
-VALIDATION=$($EVOLVER_PY $TOOLS/validate_state.py --config .evolver.json 2>/dev/null)
-VALID=$(echo "$VALIDATION" | python3 -c "import sys,json; print(json.load(sys.stdin).get('valid', False))")
-if [ "$VALID" = "False" ]; then
-    echo "WARNING: State validation found issues:"
-    echo "$VALIDATION" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for issue in data.get('issues', []):
-    print(f'  [{issue[\"severity\"]}] {issue[\"message\"]}')
-"
-fi
+$EVOLVER_PY $TOOLS/preflight.py --config .evolver.json
 ```
 
-If critical issues found, ask user whether to continue or fix first via AskUserQuestion:
-- "Continue anyway" — proceed with warnings
-- "Fix and retry" — attempt auto-fix with `--fix` flag
+This replaces the previous separate validate_state + health check steps. If preflight fails, it reports ALL issues at once. Ask the user via AskUserQuestion:
+- "Fix and retry" — address the issues, then rerun preflight
+- "Continue anyway" — proceed with warnings (not recommended if critical)
 - "Abort" — stop the evolution loop
 
-### 0.6. Dataset Health Check
-
-Invoke `/evolver:health` to check and auto-correct dataset issues. If health_report.json shows critical issues that couldn't be auto-corrected, ask user whether to proceed via AskUserQuestion.
+If dataset health has auto-correctable issues (missing splits, low difficulty distribution), invoke `/evolver:health` to fix them, then rerun preflight.
 
 ### 0.7. Ensure Baseline Has LLM-Judge Scores
 
@@ -371,7 +359,15 @@ Agent(
 )
 ```
 
-Wait for all proposers to complete.
+Wait for all proposers to complete. **As each proposer completes**, report its status immediately (don't wait for all):
+
+```
+Proposer {id} ({lens.source}) completed — {committed N files / ABSTAINED}
+  Approach: {first line from proposal.md, if exists}
+Progress: {completed}/{total} proposers done
+```
+
+This gives the user visibility into progress while other proposers are still running.
 
 **Stuck proposer detection**: If any proposer hasn't completed after 10 minutes, it may be stuck in a loop. The Claude Code runtime handles this via the agent's turn limit. If a proposer returns without committing changes, skip it — don't retry.
 

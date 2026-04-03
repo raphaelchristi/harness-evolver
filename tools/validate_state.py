@@ -75,6 +75,42 @@ def ensure_langsmith_api_key():
     return False
 
 
+def validate_config_schema(config):
+    """Validate .evolver.json structure without API calls."""
+    issues = []
+
+    REQUIRED = {"project": str, "dataset": str, "entry_point": str, "evaluators": list, "history": list}
+    for field, expected_type in REQUIRED.items():
+        if field not in config:
+            issues.append(f"missing required field: {field}")
+        elif not isinstance(config[field], expected_type):
+            issues.append(f"{field} must be {expected_type.__name__}, got {type(config[field]).__name__}")
+
+    if isinstance(config.get("evaluators"), list) and len(config["evaluators"]) == 0:
+        issues.append("evaluators list is empty")
+
+    for i, h in enumerate(config.get("history", [])):
+        if not isinstance(h, dict):
+            issues.append(f"history[{i}] must be a dict")
+            continue
+        if "version" not in h:
+            issues.append(f"history[{i}] missing 'version'")
+        if "score" not in h:
+            issues.append(f"history[{i}] missing 'score'")
+        elif not isinstance(h["score"], (int, float)):
+            issues.append(f"history[{i}].score must be numeric")
+
+    bs = config.get("best_score")
+    if bs is not None and not isinstance(bs, (int, float)):
+        issues.append(f"best_score must be numeric or null")
+
+    ew = config.get("evaluator_weights")
+    if ew is not None and not isinstance(ew, dict):
+        issues.append(f"evaluator_weights must be a dict or null")
+
+    return issues
+
+
 def validate_dataset(client, config):
     """Check dataset exists and has expected example count."""
     issues = []
@@ -152,11 +188,31 @@ def main():
     with open(args.config) as f:
         config = json.load(f)
 
+    # Schema validation first (no API needed)
+    schema_issues = validate_config_schema(config)
+    if schema_issues:
+        # Critical schema errors — can't proceed with API validation
+        critical = [i for i in schema_issues if "missing required" in i]
+        if critical:
+            result = {
+                "valid": False,
+                "issues": [{"severity": "critical", "message": f"Schema: {i}"} for i in schema_issues],
+            }
+            out = json.dumps(result, indent=2)
+            if args.output:
+                with open(args.output, "w") as f:
+                    f.write(out)
+            print(out)
+            sys.exit(1)
+
     ensure_langsmith_api_key()
     from langsmith import Client
     client = Client()
 
     all_issues = []
+    # Add non-critical schema warnings
+    for si in schema_issues:
+        all_issues.append({"field": "schema", "severity": "warning", "message": si})
 
     # Validate dataset
     dataset_issues, example_count = validate_dataset(client, config)
