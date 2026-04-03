@@ -83,14 +83,15 @@ From trace_insights.json, best_results.json, evolution_memory.md, production_see
 
 Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST. Include `evolution_archive/` in `<files_to_read>` so proposers can grep prior candidates.
 
-**IMPORTANT**: After each proposer worktree is created, copy untracked files BEFORE the agent starts reading:
+**IMPORTANT**: After each proposer worktree is created, copy untracked files BEFORE the agent starts reading. Always use **absolute paths** (relative paths fail when Bash CWD differs from project root):
 ```bash
+SRC="$(pwd)"
 # For each worktree (after Agent creates it, before agent reads files):
-cp .evolver.json "$WT_PROJECT/.evolver.json" 2>/dev/null
-[ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
-[ -d evolution_archive ] && cp -r evolution_archive "$WT_PROJECT/evolution_archive" 2>/dev/null
+cp "$SRC/.evolver.json" "$WT_PROJECT/.evolver.json"
+[ -f "$SRC/.env" ] && cp "$SRC/.env" "$WT_PROJECT/.env"
+[ -d "$SRC/evolution_archive" ] && cp -r "$SRC/evolution_archive" "$WT_PROJECT/evolution_archive"
 ```
-Since proposers are spawned with `isolation: "worktree"` and `run_in_background: true`, the worktree path is returned in the Agent result. Copy files immediately after dispatch.
+Do NOT suppress stderr with `2>/dev/null` — if the copy fails, you need to see the error.
 
 **Wave 1** — critical + high severity lenses, run independently in parallel:
 
@@ -122,22 +123,19 @@ If only 1-2 lenses total, run as single wave.
 
 ### 4. Evaluate Candidates
 
-Copy `.evolver.json` + `.env` to worktrees (run_eval.py also auto-copies if missing). Resolve `project_dir` for subdirectory projects:
+Run evaluations. `run_eval.py` auto-copies `.evolver.json` + `.env` to worktrees if missing (no manual `cp` needed). Resolve `project_dir` for subdirectory projects:
 
 ```bash
 for WT in {worktree_paths_with_commits}; do
     WT_PROJECT="$WT"
     [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WT/$PROJECT_DIR"
-    cp .evolver.json "$WT_PROJECT/.evolver.json" 2>/dev/null
-    [ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
-    [ -d evolution_archive ] && cp -r evolution_archive "$WT_PROJECT/evolution_archive" 2>/dev/null
-    $EVOLVER_PY $TOOLS/run_eval.py --config "$WT_PROJECT/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
-    # Default concurrency is 3 (parallel eval within each candidate).
-    # If the agent can't handle parallel execution (shared files, fixed ports, DB locks),
-    # add --concurrency 1 or set eval_concurrency: 1 in .evolver.json.
+    $EVOLVER_PY $TOOLS/run_eval.py --config "$(pwd)/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
+    # Default concurrency is 3. Use --concurrency 1 for agents needing sequential execution.
 done
 wait  # CRITICAL: wait for ALL evals before judge
 ```
+
+Note: always pass `--config` with **absolute path** (`$(pwd)/.evolver.json`). The Bash tool's CWD may differ from the project root, causing relative paths to fail silently.
 
 Then spawn evaluator agent for LLM-as-judge (if configured):
 
