@@ -2114,12 +2114,12 @@ Ask for schedule via AskUserQuestion:
 Then create a cron trigger:
 \`\`\`
 Use CronCreate tool to schedule:
-  - command: "/evolver:evolve --iterations 1"
+  - command: "/harness:evolve --iterations 1"
   - schedule: {selected_cron}
   - description: "Harness Evolver: scheduled optimization iteration"
 \`\`\`
 
-Report: "Scheduled evolution iterations. Use `/evolver:status` to check progress. Cancel with CronDelete."
+Report: "Scheduled evolution iterations. Use `/harness:status` to check progress. Cancel with CronDelete."
 ```
 
 - [ ] **Step 2: Commit**

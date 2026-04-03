@@ -1,5 +1,5 @@
 ---
-name: evolver-evaluator
+name: harness-evaluator
 description: |
   Use this agent to evaluate experiment outputs using LLM-as-judge.
   Reads run inputs/outputs from LangSmith via langsmith-cli, judges correctness,

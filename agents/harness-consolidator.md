@@ -1,5 +1,5 @@
 ---
-name: evolver-consolidator
+name: harness-consolidator
 description: |
   Background agent for cross-iteration memory consolidation.
   Runs after each iteration to extract learnings and update evolution_memory.md.

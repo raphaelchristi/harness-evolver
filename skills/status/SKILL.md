@@ -1,10 +1,10 @@
 ---
-name: evolver:status
+name: harness:status
 description: "Use when the user asks about evolution progress, current scores, best version, how many iterations ran, or whether the loop is stagnating."
 allowed-tools: [Read, Bash]
 ---
 
-# /evolver:status
+# /harness:status
 
 Show current evolution progress.
 
@@ -27,6 +27,6 @@ $EVOLVER_PY $TOOLS/evolution_chart.py --config .evolver.json
 
 After displaying the chart:
 
-- Detect stagnation: if last 3 scores within 1% of each other, warn and suggest `/evolver:evolve` with architect trigger.
+- Detect stagnation: if last 3 scores within 1% of each other, warn and suggest `/harness:evolve` with architect trigger.
 - Detect regression: if current best is lower than a previous best, warn.
 - Print LangSmith experiment URL for the best experiment if available.

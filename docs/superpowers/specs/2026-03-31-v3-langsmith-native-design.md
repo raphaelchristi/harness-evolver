@@ -48,7 +48,7 @@ LangSmith (remote backend)
 
 ## Skills
 
-### `/evolver:setup` — Interactive Project Setup
+### `/harness:setup` — Interactive Project Setup
 
 Replaces `/harness-evolver:init`. Explores the project, configures LangSmith, runs baseline.
 
@@ -154,7 +154,7 @@ baseline_score = results.aggregate_metrics["correctness"]["mean"]
 
 ---
 
-### `/evolver:evolve` — Evolution Loop
+### `/harness:evolve` — Evolution Loop
 
 **allowed-tools**: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 
@@ -308,12 +308,12 @@ Same logic as v2, adapted to read from LangSmith experiments instead of local fi
 
 ---
 
-### `/evolver:status` — Show Progress
+### `/harness:status` — Show Progress
 
 Reads `.evolver.json` history + LangSmith experiment metrics.
 Shows: iterations, best score, improvement trend, stagnation detection.
 
-### `/evolver:deploy` — Promote Best Version
+### `/harness:deploy` — Promote Best Version
 
 In v3, the best version is **already in the main branch** (merge automático). Deploy skill becomes simpler:
 - Show what changed since baseline (git diff)
@@ -394,7 +394,7 @@ openevals>=0.1
 ## Migration from v2
 
 Users upgrading from v2:
-1. Run `/evolver:setup` — it creates LangSmith config from scratch
+1. Run `/harness:setup` — it creates LangSmith config from scratch
 2. Existing `.harness-evolver/` directory is ignored (can be deleted)
 3. Test tasks from v2 can be imported: setup skill detects `tasks/*.json` and offers to import to LangSmith dataset
 

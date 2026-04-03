@@ -41,11 +41,11 @@ cd my-llm-project
 export LANGSMITH_API_KEY="lsv2_pt_..."
 claude
 
-/evolver:setup      # explores project, configures LangSmith
-/evolver:health     # check dataset quality (auto-corrects issues)
-/evolver:evolve     # runs the optimization loop
-/evolver:status     # check progress (rich ASCII chart)
-/evolver:deploy     # tag, push, finalize
+/harness:setup      # explores project, configures LangSmith
+/harness:health     # check dataset quality (auto-corrects issues)
+/harness:evolve     # runs the optimization loop
+/harness:status     # check progress (rich ASCII chart)
+/harness:deploy     # tag, push, finalize
 ```
 
 ---
@@ -67,7 +67,7 @@ claude
 ## Evolution Loop
 
 ```
-/evolver:evolve
+/harness:evolve
   |
   +- 1. Preflight  (validate state + dataset health + baseline scoring)
   +- 2. Analyze    (trace insights + failure clusters + strategy synthesis)

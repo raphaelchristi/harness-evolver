@@ -1,10 +1,10 @@
 ---
-name: evolver:deploy
+name: harness:deploy
 description: "Use when the user is done evolving and wants to finalize, clean up, tag the result, or push the optimized agent."
 allowed-tools: [Read, Write, Bash, Glob, AskUserQuestion]
 ---
 
-# /evolver:deploy
+# /harness:deploy
 
 Finalize the evolution results. In v3, the best code is already in the main branch (auto-merged during evolve). Deploy is about cleanup, tagging, and pushing.
 

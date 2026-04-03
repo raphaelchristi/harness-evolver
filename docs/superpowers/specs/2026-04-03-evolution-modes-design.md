@@ -32,7 +32,7 @@ Default: `"balanced"` when not set (backward compatible).
 
 ## User Interaction
 
-### At setup (`/evolver:setup`)
+### At setup (`/harness:setup`)
 
 AskUserQuestion with 3 options after evaluator selection:
 ```json
@@ -49,7 +49,7 @@ AskUserQuestion with 3 options after evaluator selection:
 
 Written to `.evolver.json` as `"mode": "light|balanced|heavy"`.
 
-### At evolve start (`/evolver:evolve`)
+### At evolve start (`/harness:evolve`)
 
 Shows current mode and asks to confirm or switch:
 ```json

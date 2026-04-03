@@ -11,11 +11,11 @@ graph TB
     end
 
     subgraph Skills["Skills Layer (Markdown)"]
-        Setup["/evolver:setup"]
-        Health["/evolver:health"]
-        Evolve["/evolver:evolve"]
-        Status["/evolver:status"]
-        Deploy["/evolver:deploy"]
+        Setup["/harness:setup"]
+        Health["/harness:health"]
+        Evolve["/harness:evolve"]
+        Status["/harness:status"]
+        Deploy["/harness:deploy"]
     end
 
     subgraph Agents["Agent Layer (Markdown)"]
@@ -58,7 +58,7 @@ graph TB
 
 ```mermaid
 flowchart TD
-    Start(["/evolver:evolve"]) --> Preflight
+    Start(["/harness:evolve"]) --> Preflight
 
     subgraph Pre["Pre-Loop"]
         Preflight["1. Preflight<br/><i>API key + schema + state + health + canary</i>"]

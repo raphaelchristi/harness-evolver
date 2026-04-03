@@ -1,5 +1,5 @@
 ---
-name: evolver-proposer
+name: harness-proposer
 description: |
   Self-organizing agent optimizer. Investigates a data-driven lens (question),
   decides its own approach, and modifies real code in an isolated git worktree.
@@ -93,7 +93,7 @@ If Context7 MCP is not available, note in proposal.md that API patterns were not
 1. **Commit all changes** with a descriptive message:
    ```bash
    git add -A -- ':!.venv' ':!venv' ':!node_modules'
-   git commit -m "evolver: {brief description of changes}"
+   git commit -m "harness: {brief description of changes}"
    ```
    **CRITICAL**: Never commit `.venv`, `venv`, or `node_modules`. Symlinks to these in worktrees will break the main branch if merged.
 

@@ -1,5 +1,5 @@
 ---
-name: evolver-architect
+name: harness-architect
 description: |
   Use this agent when the evolution loop stagnates or regresses. Analyzes the agent architecture
   and recommends topology changes (single-call → RAG, chain → ReAct, etc.).

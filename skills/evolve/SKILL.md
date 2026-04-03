@@ -1,17 +1,17 @@
 ---
-name: evolver:evolve
-description: "Use when the user wants to run the optimization loop, improve agent performance, evolve the agent, or iterate on quality. Requires .evolver.json to exist (run evolver:setup first)."
+name: harness:evolve
+description: "Use when the user wants to run the optimization loop, improve agent performance, evolve the agent, or iterate on quality. Requires .evolver.json to exist (run harness:setup first)."
 argument-hint: "[--iterations N]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 ---
 
-# /evolver:evolve
+# /harness:evolve
 
 Run the propose-evaluate-iterate loop. LangSmith is the evaluation backend, git worktrees provide isolation.
 
 ## Setup
 
-`.evolver.json` must exist. If not, tell user to run `evolver:setup`.
+`.evolver.json` must exist. If not, tell user to run `harness:setup`.
 
 ```bash
 TOOLS="${EVOLVER_TOOLS:-$([ -d ".evolver/tools" ] && echo ".evolver/tools" || echo "$HOME/.evolver/tools")}"
@@ -67,7 +67,7 @@ If changed, update config and re-read MODE.
 $EVOLVER_PY $TOOLS/preflight.py --config .evolver.json
 ```
 
-Validates API key, config schema, LangSmith state, dataset health, and canary in one pass. If it fails, ask user: fix and retry, continue anyway, or abort. If health issues are auto-correctable, run `/evolver:health` first.
+Validates API key, config schema, LangSmith state, dataset health, and canary in one pass. If it fails, ask user: fix and retry, continue anyway, or abort. If health issues are auto-correctable, run `/harness:health` first.
 
 ### Baseline LLM-Judge
 
@@ -133,7 +133,7 @@ Do NOT suppress stderr with `2>/dev/null` — if the copy fails, you need to see
 
 ```
 Agent(
-  subagent_type: "evolver-proposer",
+  subagent_type: "harness-proposer",
   isolation: "worktree",
   run_in_background: true,
   prompt: "{SHARED_PREFIX}\n\n<lens>\n{lens.question}\nSource: {lens.source}\n</lens>"
@@ -186,7 +186,7 @@ If `LLM_EVALS` is non-empty, spawn the evaluator agent immediately after evals c
 
 ```
 Agent(
-  subagent_type: "evolver-evaluator",
+  subagent_type: "harness-evaluator",
   prompt: "Experiments: {names}. Evaluators: {LLM_EVALS}. Dataset: {dataset_name}. Use rubrics from example metadata when available."
 )
 ```
@@ -224,10 +224,10 @@ If constraints fail, try next-best. If none pass, skip merge.
 If winner beats current best AND passes efficiency gate: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc). Then git-tag for rollback:
 
 ```bash
-git tag "evo-iter-v{NNN}" -m "evolver: v{NNN} score={score}"
+git tag "evo-iter-v{NNN}" -m "harness: v{NNN} score={score}"
 ```
 
-Note: uses `evo-iter-` prefix to avoid conflicts with `/evolver:deploy` tags.
+Note: uses `evo-iter-` prefix to avoid conflicts with `/harness:deploy` tags.
 
 ### 6. Post-Iteration
 
@@ -247,7 +247,7 @@ $EVOLVER_PY $TOOLS/regression_tracker.py --config .evolver.json --previous-exper
 
 **Consolidate** (background):
 ```
-Agent(subagent_type: "evolver-consolidator", run_in_background: true, prompt: "Update evolution_memory.md...")
+Agent(subagent_type: "harness-consolidator", run_in_background: true, prompt: "Update evolution_memory.md...")
 ```
 
 **Proactive evaluator evolution**: After reading all proposal.md files, check for `## Suggested Evaluators` sections. If any proposer suggested new evaluators or rubrics, surface them:
@@ -274,4 +274,4 @@ If multiple proposers suggest the same evaluator, prioritize it. **Do NOT add ev
 $EVOLVER_PY $TOOLS/evolution_chart.py --config .evolver.json
 ```
 
-Plus: LangSmith URL, `git log --oneline` summary, suggest `/evolver:deploy`.
+Plus: LangSmith URL, `git log --oneline` summary, suggest `/harness:deploy`.

@@ -1,16 +1,16 @@
 ---
-name: evolver:health
+name: harness:health
 description: "Use when the user wants to check dataset quality, diagnose eval issues, or before running evolve. Checks size, difficulty distribution, dead examples, coverage, and splits. Auto-corrects issues found."
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 ---
 
-# /evolver:health
+# /harness:health
 
-Check eval dataset quality and auto-correct issues. Can be run independently or is invoked by `/evolver:evolve` before the iteration loop.
+Check eval dataset quality and auto-correct issues. Can be run independently or is invoked by `/harness:evolve` before the iteration loop.
 
 ## Prerequisites
 
-`.evolver.json` must exist. If not, tell user to run `/evolver:setup`.
+`.evolver.json` must exist. If not, tell user to run `/harness:setup`.
 
 ## Resolve Tool Path and Python
 
@@ -79,7 +79,7 @@ print(f'Assigned splits: {sp} train, {len(examples)-sp} held_out')
 **If `generate_hard`**: Spawn testgen agent to generate hard examples:
 ```
 Agent(
-  subagent_type: "evolver-testgen",
+  subagent_type: "harness-testgen",
   description: "Generate hard examples to rebalance dataset",
   prompt: "The dataset is skewed toward easy examples. Generate {count} HARD examples that the current agent is likely to fail on. Focus on edge cases, adversarial inputs, and complex multi-step queries. Read .evolver.json and production_seed.json for context."
 )
@@ -88,7 +88,7 @@ Agent(
 **If `fill_coverage`**: Spawn testgen agent for missing categories:
 ```
 Agent(
-  subagent_type: "evolver-testgen",
+  subagent_type: "harness-testgen",
   description: "Generate examples for missing categories",
   prompt: "The dataset is missing these production categories: {categories}. Generate 5 examples per missing category. Read .evolver.json and production_seed.json for context."
 )

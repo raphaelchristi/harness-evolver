@@ -95,7 +95,7 @@ Three layers, each in its own directory:
 
 1. **Skills** (`skills/*/SKILL.md`) — Claude Code slash commands that orchestrate the workflow. Each skill is a markdown file with frontmatter (`name`, `description`, `allowed-tools`). The five skills are `setup`, `evolve`, `health`, `status`, `deploy`.
 
-2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `evolver-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `evolver-evaluator` (yellow, LLM-as-judge via langsmith-cli), `evolver-critic` (red, active — detects + fixes gaming), `evolver-architect` (blue, ULTRAPLAN mode with opus), `evolver-consolidator` (cyan, cross-iteration memory), `evolver-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
+2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `harness-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `harness-evaluator` (yellow, LLM-as-judge via langsmith-cli), `harness-critic` (red, active — detects + fixes gaming), `harness-architect` (blue, ULTRAPLAN mode with opus), `harness-consolidator` (cyan, cross-iteration memory), `harness-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
 3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, and `mine_sessions.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
@@ -106,20 +106,20 @@ Supporting infrastructure:
 
 ## The evolution loop (how skills and agents connect)
 
-`/evolver:setup` → explores project, asks user questions via `AskUserQuestion`, runs `setup.py` → writes `.evolver.json`
+`/harness:setup` → explores project, asks user questions via `AskUserQuestion`, runs `setup.py` → writes `.evolver.json`
 
-`/evolver:health` → checks dataset quality (size, difficulty, coverage, splits), auto-corrects issues
+`/harness:health` → checks dataset quality (size, difficulty, coverage, splits), auto-corrects issues
 
-`/evolver:evolve` → reads `.evolver.json`, invokes `/evolver:health`, then per iteration:
+`/harness:evolve` → reads `.evolver.json`, invokes `/harness:health`, then per iteration:
 1. `trace_insights.py` gathers failure data from best experiment
 2. Claude generates `strategy.md` + `lenses.json` directly from analysis data (no intermediate Python tool)
-3. Spawns N `evolver-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with dynamic investigation lenses — each proposer self-organizes its approach and may self-abstain
+3. Spawns N `harness-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with dynamic investigation lenses — each proposer self-organizes its approach and may self-abstain
 4. `run_eval.py` evaluates each candidate (code-based evaluators only)
-5. Spawns 1 `evolver-evaluator` agent to score ALL candidates via langsmith-cli (LLM-as-judge)
+5. Spawns 1 `harness-evaluator` agent to score ALL candidates via langsmith-cli (LLM-as-judge)
 6. `read_results.py` compares experiments, picks winner + per-task champion
 7. Merges winning worktree branch into main, updates `.evolver.json`
 8. Claude assesses gate conditions (plateau, target, diminishing returns) — no intermediate Python tool
-9. Auto-triggers `evolver-critic` if score jumped >0.3, `evolver-architect` if stagnated
+9. Auto-triggers `harness-critic` if score jumped >0.3, `harness-architect` if stagnated
 
 ## Dev skills (`.claude/`)
 

@@ -1,5 +1,5 @@
 ---
-name: evolver-testgen
+name: harness-testgen
 description: |
   Use this agent to generate test inputs for the evaluation dataset.
   Spawned by the setup skill when no test data exists.

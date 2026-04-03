@@ -1,5 +1,5 @@
 ---
-name: evolver-critic
+name: harness-critic
 description: |
   Use this agent when scores converge suspiciously fast, evaluator quality is questionable,
   or the agent reaches high scores in few iterations. Detects gaming AND implements fixes.

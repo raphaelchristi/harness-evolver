@@ -1,11 +1,11 @@
 ---
-name: evolver:setup
+name: harness:setup
 description: "Use when the user wants to set up the evolver in their project, optimize an LLM agent, improve agent performance, or mentions evolver for the first time in a project without .evolver.json."
 argument-hint: "[directory]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 ---
 
-# /evolver:setup
+# /harness:setup
 
 Set up the Harness Evolver v3 in a project. Explores the codebase, configures LangSmith, runs baseline evaluation.
 
@@ -210,7 +210,7 @@ If testgen is needed, spawn it:
 
 ```
 Agent(
-  subagent_type: "evolver-testgen",
+  subagent_type: "harness-testgen",
   description: "TestGen: generate test inputs",
   prompt: |
     <objective>
@@ -241,7 +241,7 @@ Setup complete!
   Baseline score: {score}
   Config: .evolver.json
 
-Next: run /evolver:evolve to start optimizing.
+Next: run /harness:evolve to start optimizing.
 ```
 
 ## Gotchas
