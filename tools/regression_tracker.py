@@ -43,8 +43,9 @@ def get_per_example_scores(client, experiment_name):
             avg = sum(fb_scores.values()) / len(fb_scores) if fb_scores else 0.0
             scores[example_id] = {
                 "score": avg,
-                "input": str(run.inputs)[:500] if run.inputs else "",
-                "output": str(run.outputs)[:500] if run.outputs else "",
+                "input": run.inputs if isinstance(run.inputs, dict) else (str(run.inputs)[:500] if run.inputs else ""),
+                "output": run.outputs if isinstance(run.outputs, dict) else (str(run.outputs)[:500] if run.outputs else ""),
+                "split": getattr(run, "split", None),
             }
     except Exception as e:
         print(f"Error reading {experiment_name}: {e}", file=sys.stderr)
@@ -141,7 +142,19 @@ def main():
         report_guard_details = []
 
     if args.auto_guard_failures:
-        failing = [eid for eid, data in curr_scores.items() if data["score"] < 0.5]
+        # Only guard failures from train split — never contaminate held_out
+        # Also check original split via LangSmith example lookup
+        train_example_ids = set()
+        try:
+            for ex in client.list_examples(dataset_id=config["dataset_id"], splits=["train"]):
+                train_example_ids.add(str(ex.id))
+        except Exception:
+            pass  # If we can't determine splits, skip auto-guard entirely
+
+        failing = [
+            eid for eid, data in curr_scores.items()
+            if data["score"] < 0.5 and (not train_example_ids or eid in train_example_ids)
+        ]
         hard_added = 0
 
         # Deduplicate: check which example_ids already have hard_failure guards
@@ -160,8 +173,13 @@ def main():
             if eid in existing_guards:
                 continue  # Already guarded from a prior iteration
             try:
-                input_text = curr_scores[eid].get("input", "")
-                input_data = json.loads(input_text) if input_text.startswith("{") else {"input": input_text}
+                # Use dict inputs directly (not str repr)
+                input_data = curr_scores[eid].get("input", {})
+                if isinstance(input_data, str):
+                    try:
+                        input_data = json.loads(input_data)
+                    except (json.JSONDecodeError, ValueError):
+                        input_data = {"input": input_data}
                 client.create_example(
                     inputs=input_data,
                     dataset_id=config["dataset_id"],
@@ -174,8 +192,8 @@ def main():
                     split="train",
                 )
                 hard_added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Failed to add hard guard for {eid}: {e}", file=sys.stderr)
     else:
         hard_added = 0
 

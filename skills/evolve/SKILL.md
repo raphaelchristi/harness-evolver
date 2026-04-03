@@ -83,6 +83,15 @@ From trace_insights.json, best_results.json, evolution_memory.md, production_see
 
 Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache sharing. Only the `<lens>` block differs — place it LAST. Include `evolution_archive/` in `<files_to_read>` so proposers can grep prior candidates.
 
+**IMPORTANT**: After each proposer worktree is created, copy untracked files BEFORE the agent starts reading:
+```bash
+# For each worktree (after Agent creates it, before agent reads files):
+cp .evolver.json "$WT_PROJECT/.evolver.json" 2>/dev/null
+[ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
+[ -d evolution_archive ] && cp -r evolution_archive "$WT_PROJECT/evolution_archive" 2>/dev/null
+```
+Since proposers are spawned with `isolation: "worktree"` and `run_in_background: true`, the worktree path is returned in the Agent result. Copy files immediately after dispatch.
+
 **Wave 1** — critical + high severity lenses, run independently in parallel:
 
 ```
