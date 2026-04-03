@@ -209,10 +209,17 @@ def main():
             try:
                 health = json.load(open(health_output))
                 critical = [i for i in health.get("issues", []) if i.get("severity") == "critical"]
+                # Check held_out split exists (required for unbiased comparison)
+                splits = health.get("splits", {})
+                has_held_out = splits.get("has_held_out", False) if splits else False
+                if not has_held_out:
+                    critical.append({"severity": "critical", "message": "No held_out split — run /evolver:health to create train/held_out splits"})
+
                 checks["health"] = {
                     "pass": len(critical) == 0,
                     "health_score": health.get("health_score", 0),
                     "example_count": health.get("example_count", 0),
+                    "has_held_out": has_held_out,
                     "critical_issues": len(critical),
                 }
             except json.JSONDecodeError:

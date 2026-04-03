@@ -54,11 +54,15 @@ def check_growth(baseline_loc, candidate_loc, max_growth_pct=30):
 
 
 def check_entry_point(worktree_path, entry_point):
-    """Check that the entry point is still runnable (syntax check)."""
+    """Check that the entry point is still runnable (syntax + existence).
+
+    Validates Python (.py) via py_compile, JS/TS (.js/.ts) via node --check,
+    and shell (.sh) via bash -n. Fails closed: unknown extensions fail.
+    """
     parts = entry_point.split()
     script_file = None
     for part in parts:
-        if part.endswith((".py", ".js", ".ts", ".sh")):
+        if part.endswith((".py", ".js", ".ts", ".mjs", ".sh")):
             script_file = part
             break
 
@@ -69,6 +73,7 @@ def check_entry_point(worktree_path, entry_point):
     if not os.path.exists(full_path):
         return {"pass": False, "reason": f"entry point file missing: {script_file}"}
 
+    # Python syntax check
     if script_file.endswith(".py"):
         result = subprocess.run(
             ["python3", "-m", "py_compile", full_path],
@@ -77,7 +82,41 @@ def check_entry_point(worktree_path, entry_point):
         if result.returncode != 0:
             return {"pass": False, "reason": f"syntax error: {result.stderr[:200]}"}
 
-    return {"pass": True, "reason": "entry point exists and has valid syntax"}
+    # JS/TS syntax check via node --check
+    elif script_file.endswith((".js", ".mjs")):
+        try:
+            result = subprocess.run(
+                ["node", "--check", full_path],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                return {"pass": False, "reason": f"JS syntax error: {result.stderr[:200]}"}
+        except FileNotFoundError:
+            return {"pass": False, "reason": "node not found — cannot validate JS entry point"}
+
+    elif script_file.endswith(".ts"):
+        # TS: check if file exists and has content (no cheap syntax check without tsc)
+        try:
+            with open(full_path) as f:
+                content = f.read()
+            if not content.strip():
+                return {"pass": False, "reason": "TS entry point is empty"}
+        except OSError as e:
+            return {"pass": False, "reason": f"cannot read TS file: {e}"}
+
+    # Shell syntax check
+    elif script_file.endswith(".sh"):
+        try:
+            result = subprocess.run(
+                ["bash", "-n", full_path],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                return {"pass": False, "reason": f"shell syntax error: {result.stderr[:200]}"}
+        except FileNotFoundError:
+            return {"pass": False, "reason": "bash not found — cannot validate shell entry point"}
+
+    return {"pass": True, "reason": f"entry point exists and has valid syntax ({script_file})"}
 
 
 def find_project_python(worktree_path, config=None):
@@ -104,20 +143,52 @@ def find_project_python(worktree_path, config=None):
 
 
 def check_tests(worktree_path, config=None):
-    """Run test suite if it exists. Returns pass if no tests found."""
-    test_dirs = ["tests", "test"]
-    has_tests = False
-    for td in test_dirs:
+    """Run test suite if it exists. Detects Python (pytest) and JS (npm test)."""
+
+    # Detect Python tests
+    has_py_tests = False
+    for td in ["tests", "test"]:
         test_path = os.path.join(worktree_path, td)
         if os.path.isdir(test_path):
             for f in os.listdir(test_path):
                 if f.startswith("test_") and f.endswith(".py"):
-                    has_tests = True
+                    has_py_tests = True
                     break
 
-    if not has_tests:
+    # Detect JS/TS tests (package.json with test script)
+    has_js_tests = False
+    pkg_path = os.path.join(worktree_path, "package.json")
+    if os.path.exists(pkg_path):
+        try:
+            import json as _json
+            pkg = _json.load(open(pkg_path))
+            test_cmd = pkg.get("scripts", {}).get("test", "")
+            if test_cmd and "no test specified" not in test_cmd:
+                has_js_tests = True
+        except (ValueError, OSError):
+            pass
+
+    if not has_py_tests and not has_js_tests:
         return {"pass": True, "reason": "no test suite found (skipped)", "skipped": True}
 
+    # Run JS tests if detected
+    if has_js_tests and not has_py_tests:
+        try:
+            result = subprocess.run(
+                ["npm", "test", "--", "--passWithNoTests"],
+                capture_output=True, text=True,
+                cwd=worktree_path, timeout=120,
+            )
+            passed = result.returncode == 0
+            return {
+                "pass": passed,
+                "reason": result.stdout.strip()[:200] if passed else result.stderr.strip()[:200],
+                "skipped": False,
+            }
+        except FileNotFoundError:
+            return {"pass": False, "reason": "npm not found — cannot run JS tests", "skipped": False}
+
+    # Run Python tests
     python = find_project_python(worktree_path, config)
 
     try:

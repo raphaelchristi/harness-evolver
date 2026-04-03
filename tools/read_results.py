@@ -387,6 +387,12 @@ def main():
             for ex in client.list_examples(dataset_name=cfg_for_split["dataset"], splits=[args.split]):
                 split_example_ids.add(str(ex.id))
 
+            # Fail hard if requested split has zero examples
+            if not split_example_ids:
+                print(f"ERROR: Split '{args.split}' has 0 examples in dataset '{cfg_for_split['dataset']}'.", file=sys.stderr)
+                print(f"Run /evolver:health to create train/held_out splits before comparing.", file=sys.stderr)
+                sys.exit(1)
+
         for name in experiment_names:
             print(f"Reading experiment: {name}...", file=sys.stderr)
             result = read_experiment(client, name, weights=weights)
@@ -395,7 +401,10 @@ def main():
                 if split_example_ids is not None and "per_example" in result:
                     result["per_example"] = {k: v for k, v in result["per_example"].items() if k in split_example_ids}
                     all_scores = [v["score"] for v in result["per_example"].values()]
-                    result["combined_score"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
+                    if not all_scores:
+                        print(f"  WARNING: {name} has 0 examples after '{args.split}' filter — skipping", file=sys.stderr)
+                        continue
+                    result["combined_score"] = sum(all_scores) / len(all_scores)
                     result["num_examples"] = len(result["per_example"])
                 results_list.append(result)
 

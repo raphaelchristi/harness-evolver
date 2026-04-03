@@ -190,9 +190,11 @@ def main():
                 canary_result = target(canary_examples[0].inputs)
                 canary_output = canary_result.get("output", "")
                 canary_error = canary_result.get("error", "")
-                if not canary_output and canary_error:
-                    print(f"  CANARY FAILED: Agent produced no output.", file=sys.stderr)
-                    print(f"  Error: {canary_error}", file=sys.stderr)
+                # Fail on empty output regardless of error — an agent that exits
+                # cleanly with no output is still broken (Codex review finding)
+                if not canary_output:
+                    reason = canary_error or "agent produced no output (clean exit, no stdout)"
+                    print(f"  CANARY FAILED: {reason}", file=sys.stderr)
                     print(f"  Fix the agent before running full evaluation.", file=sys.stderr)
                     output = {
                         "experiment": None,
