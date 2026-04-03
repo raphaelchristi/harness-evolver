@@ -78,7 +78,7 @@ flowchart TD
             Wave1 --> Wave2
         end
         
-        Eval["4. Evaluate<br/><i>Canary → run_eval → LLM-as-judge</i>"]
+        Eval["4. Evaluate<br/><i>Canary → run_eval (rate-limit abort) → auto-spawn LLM-as-judge</i>"]
         
         subgraph Select["5. Select"]
             Compare["Compare on held-out"]
@@ -88,7 +88,10 @@ flowchart TD
             Merge["Merge winner"]
             Compare --> Pairwise
             Pairwise -->|Yes| PW --> Constraint
-            Pairwise -->|No| Constraint
+            Pairwise -->|No| Efficiency
+            Efficiency["Efficiency gate<br/><i>tokens 2x? latency 50%?</i>"]
+            Efficiency -->|Pass| Constraint
+            Efficiency -->|Fail| NextBest
             Constraint -->|Pass| Merge
             Constraint -->|Fail| NextBest["Try next-best"]
             NextBest --> Constraint

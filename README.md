@@ -58,7 +58,7 @@ claude
 | **Real Code Evolution** | Proposers modify actual code in isolated git worktrees. Winners merge automatically. |
 | **Self-Organizing Proposers** | Two-wave spawning, dynamic lenses from failure data, archive branching from losing candidates. Self-abstention when redundant. |
 | **Rubric-Based Evaluation** | LLM-as-judge with justification-before-score, rubrics, few-shot calibration, pairwise comparison. |
-| **Smart Gating** | Constraint gates, regression guards, Pareto selection, holdout enforcement, stagnation detection. |
+| **Smart Gating** | Constraint gates, efficiency gate (cost/latency pre-merge), regression guards, Pareto selection, holdout enforcement, rate-limit early abort, stagnation detection. |
 
 [Full feature list](docs/FEATURES.md)
 
@@ -72,8 +72,8 @@ claude
   +- 1. Preflight  (validate state + dataset health + baseline scoring)
   +- 2. Analyze    (trace insights + failure clusters + strategy synthesis)
   +- 3. Propose    (spawn N proposers in git worktrees, two-wave)
-  +- 4. Evaluate   (canary → run target → LLM-as-judge → weighted scoring)
-  +- 5. Select     (held-out comparison → Pareto front → constraint gate → merge)
+  +- 4. Evaluate   (canary → run target → auto-spawn LLM-as-judge → rate-limit abort)
+  +- 5. Select     (held-out comparison → Pareto front → efficiency gate → constraint gate → merge)
   +- 6. Learn      (archive candidates + regression guards + evolution memory)
   +- 7. Gate       (plateau → target check → critic/architect → continue or stop)
 ```

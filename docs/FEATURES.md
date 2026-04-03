@@ -19,12 +19,16 @@ Full feature list for Harness Evolver. For the quick overview, see [README.md](.
 | **Agent-Based LLM-as-Judge** | Justification BEFORE score (15-25% reliability improvement). Rubric-aware scoring via langsmith-cli. Judge feedback surfaced to proposers. Position bias mitigation. Few-shot self-improvement from human corrections. Pairwise head-to-head comparison when top candidates are within 5%. |
 | **Weighted Evaluators + Pareto** | Configure `evaluator_weights` to prioritize what matters. Pareto front reported when candidates offer different tradeoffs. MAP-Elites diversity grid preserves approach diversity. |
 | **Canary Preflight** | 1 example tested before full evaluation. If agent produces no output, evaluation stops immediately. Accepts both `output` and `answer` response formats. |
+| **Rate-Limit Early Abort** | After 5+ runs, if >50% hit 429 errors, evaluation stops to save API quota. Reports `rate_limited: true` + `aborted_early: true` in output. |
+| **has_output Excluded** | `has_output` evaluator tracked but excluded from combined score by default (weight=0). Any `print()` gives 1.0, inflating scores artificially. |
+| **`--strict` Evaluator Validation** | `add_evaluator.py --strict` rejects evaluators without known implementation. Prevents ghost evaluators in config. |
 
 ## Safety
 
 | Feature | Description |
 |---|---|
 | **Constraint Gates** | Proposals must pass hard constraints before merge: code growth <=30%, entry point syntax valid (Python/JS/TS/shell), test suite passes. Fails closed when validation tools unavailable. |
+| **Efficiency Gate** | Pre-merge check: tokens >2x with <2% score improvement or latency >50% with <5% gain → reject candidate. Prevents merging expensive regressions. |
 | **Secret Detection** | Detects 15+ secret patterns (API keys, tokens, PEM keys). Filtered from production trace imports and flagged in dataset health checks. |
 | **Smart Gating** | Score plateau, target reached, diminishing returns. Holdout enforcement ensures final comparison uses unseen data. Baseline re-scored with LLM-judge before loop. |
 | **Active Critic** | Auto-triggers on suspicious score jumps. Detects evaluator gaming AND implements stricter evaluators. |

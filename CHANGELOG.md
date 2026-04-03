@@ -6,6 +6,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [5.3.2] - 2026-04-03
+
+### Fixed
+
+- **Auto-spawn LLM evaluator** — Skill now auto-spawns the evaluator agent after evals complete. Not a manual step. Marked as NOT optional.
+
+---
+
+## [5.3.1] - 2026-04-03
+
+### Added
+
+- **Early abort on rate limits** — After 5+ runs, if >50% hit 429/rate-limit errors, evaluation stops immediately to save API quota. Reports `aborted_early: true` + `total_processed` in JSON output.
+
+---
+
+## [5.3.0] - 2026-04-03
+
+### Added
+
+- **Rate-limit detection** — `run_eval.py` detects when >30% of runs hit 429 errors. Reports `rate_limited: true` + count in JSON output + warning to stderr.
+- **has_output excluded from combined score** — `setup.py` defaults `evaluator_weights` to `{"has_output": 0}`. has_output tracked but excluded from combined (any print inflates scores).
+
+### Fixed
+
+- **Absolute paths in skill cp commands** — Uses `$(pwd)` for absolute paths, no `2>/dev/null` hiding errors. Removed redundant manual cp from eval step.
+- **--config uses project path** — Skill passes `--config "$(pwd)/.evolver.json"` (project main), not worktree path. Auto-copy in run_eval.py handles the rest.
+
+---
+
+## [5.2.3] - 2026-04-03
+
+### Changed
+
+- **Default eval concurrency 3** (was 1). ~3x faster baseline runs. Use `--concurrency 1` or `eval_concurrency: 1` for agents needing sequential execution. Documented in evolve skill, setup skill, and CLAUDE.md.
+
+---
+
+## [5.2.2] - 2026-04-03
+
+### Added
+
+- **`--strict` flag in `add_evaluator.py`** — Rejects evaluators without known implementation: code evaluators need a template or `--pattern`, LLM evaluators must be in `{correctness, conciseness}`. Enforcement in code, not just skill instructions.
+
+---
+
+## [5.2.1] - 2026-04-03
+
+### Fixed
+
+- **Efficiency gate moved pre-merge** — Cost/latency check now rejects candidates BEFORE merge (step 5), not after (step 7).
+- **Evaluator validation** — Suggested evaluators must match known templates before adding.
+- **Tag prefix deconflict** — `evo-iter-v{NNN}` instead of `evolver-v{NNN}` to avoid conflicts with `/evolver:deploy`.
+
+---
+
 ## [5.2.0] - 2026-04-03
 
 Three improvements from new 2026 references (A-Evolve, MCE, SICA).
