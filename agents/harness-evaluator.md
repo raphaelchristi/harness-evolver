@@ -138,14 +138,17 @@ For each run you evaluated, write feedback via `langsmith-cli feedback create`.
 
 Write scores in batches — evaluate all runs first, then write all scores. This is more efficient than alternating between reading and writing.
 
-Example for one run:
+**Rubric pinning**: Include the rubric text (if available) in the comment. This makes scores reproducible and diagnosable across iterations:
+
 ```bash
 langsmith-cli --json feedback create "run-uuid-here" \
     --key correctness \
     --score 1.0 \
-    --comment "Response correctly identifies the applicable regulation and provides accurate guidance." \
+    --comment "RUBRIC: Should mention null safety and Android. JUDGMENT: Lists all features correctly." \
     --source model
 ```
+
+If no rubric exists, use standard format without the RUBRIC prefix. The `RUBRIC:` prefix lets downstream tools compare rubric interpretations across iterations.
 
 ### Phase 4: Summary
 

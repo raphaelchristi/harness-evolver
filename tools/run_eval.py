@@ -150,6 +150,8 @@ def main():
     parser.add_argument("--concurrency", type=int, default=None, help="Max concurrent evaluations (default: from config or 1)")
     parser.add_argument("--no-canary", action="store_true", help="Skip canary preflight check")
     parser.add_argument("--preflight-only", action="store_true", help="Run preflight checks only (API key, config, canary) then exit")
+    parser.add_argument("--retry-on-rate-limit", action="store_true",
+                        help="If rate-limited, wait 60s and suggest re-run")
     parser.add_argument("--sample", type=int, default=None, help="Evaluate a random sample of N examples instead of all")
     args = parser.parse_args()
 
@@ -316,6 +318,12 @@ def main():
                 "score": sum(example_scores) / len(example_scores) if example_scores else 0.0,
                 "num_evaluators": len(example_scores),
             }
+
+        if aborted_early and args.retry_on_rate_limit:
+            import time
+            print(f"\n  Rate-limited. Waiting 60s before suggesting re-run...", file=sys.stderr)
+            time.sleep(60)
+            print(f"  Wait complete. Re-run this command to retry remaining examples.", file=sys.stderr)
 
         mean_score = sum(scores) / len(scores) if scores else 0.0
         num_examples = len(per_example)
