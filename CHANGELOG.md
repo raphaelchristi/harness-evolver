@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.7.0] - 2026-04-03
+
+Three improvements targeting the agent's 9+/10 criteria.
+
+### Added
+
+- **Integrated preflight** — New `tools/preflight.py` runs 5 checks in one pass: API key resolution, config schema validation, LangSmith state verification, dataset health, and entry point canary. Replaces 3 separate steps (0.5 + 0.6 + canary) with a single invocation. Reports all issues at once instead of failing across multiple steps.
+- **Config schema validation** — `validate_config_schema()` in `validate_state.py` checks required fields, types, history structure, evaluator_weights, and evaluator list. Catches malformed `.evolver.json` before it causes cryptic errors downstream.
+- **Proposer observability** — Evolve skill now reports each proposer's completion as it happens: `"Proposer N (lens) completed — committed/abstained. Progress: 2/4"`. Users see progress while other proposers are still running.
+
+---
+
 ## [4.6.0] - 2026-04-03
 
 Three structural improvements from the agent's final verdict (7/10 review).
