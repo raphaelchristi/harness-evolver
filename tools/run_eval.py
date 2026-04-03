@@ -189,7 +189,8 @@ def main():
             if canary_examples:
                 canary_result = target(canary_examples[0].inputs)
                 # Accept both "output" and "answer" keys (same contract as has_output evaluator)
-                canary_output = canary_result.get("output", canary_result.get("answer", ""))
+                # Use `or` not default — handles empty string and None
+                canary_output = canary_result.get("output") or canary_result.get("answer") or ""
                 canary_error = canary_result.get("error", "")
                 # Fail on empty output regardless of error — an agent that exits
                 # cleanly with no output is still broken (Codex review finding)
