@@ -131,7 +131,8 @@ Build IDENTICAL shared prefix (objective + files_to_read + context) for KV-cache
 
 **IMPORTANT**: After each proposer worktree is created, copy untracked files and set trace nesting. Always use **absolute paths**:
 ```bash
-SRC="$(pwd)"
+SRC="$(git rev-parse --show-toplevel)"
+[ -n "$PROJECT_DIR" ] && SRC="$SRC/$PROJECT_DIR"
 # If langsmith-tracing companion is installed, proposer traces nest under iteration:
 [ -n "$ITER_DOTTED_ORDER" ] && export CC_LANGSMITH_PARENT_DOTTED_ORDER="$ITER_DOTTED_ORDER"
 # For each worktree (after Agent creates it, before agent reads files):
@@ -181,12 +182,12 @@ SAMPLE=$(python3 -c "m={'light':'10','balanced':'','heavy':''}; s=m.get('$MODE',
 for WT in {worktree_paths_with_commits}; do
     WT_PROJECT="$WT"
     [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WT/$PROJECT_DIR"
-    $EVOLVER_PY $TOOLS/run_eval.py --config "$(pwd)/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} --concurrency $CONCURRENCY --timeout $TIMEOUT $SAMPLE &
+    $EVOLVER_PY $TOOLS/run_eval.py --config "$SRC/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} --concurrency $CONCURRENCY --timeout $TIMEOUT $SAMPLE &
 done
 wait  # CRITICAL: wait for ALL evals before judge
 ```
 
-Note: always pass `--config` with **absolute path** (`$(pwd)/.evolver.json`). The Bash tool's CWD may differ from the project root, causing relative paths to fail silently.
+Note: `$SRC` is set via `git rev-parse --show-toplevel` at the start of each iteration — always resolves to the git root regardless of CWD drift.
 
 **Auto-spawn LLM-as-judge** — check if LLM evaluators are configured and automatically spawn the evaluator agent. Do NOT leave this as a manual step for the user:
 
@@ -304,7 +305,7 @@ If multiple proposers suggest the same evaluator, prioritize it. **Do NOT add ev
 
 **Cleanup worktrees** (free disk space after eval):
 ```bash
-$EVOLVER_PY $TOOLS/cleanup_worktrees.py --dir "$(pwd)"
+$EVOLVER_PY $TOOLS/cleanup_worktrees.py --dir "$SRC"
 ```
 
 ### 7. Gate Check
