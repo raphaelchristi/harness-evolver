@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.3.1] - 2026-04-03
+
+### Fixed
+
+- **CWD drift prevention** — Replaced all `$(pwd)` in evolve skill with `$(git rev-parse --show-toplevel)`. When CWD drifts into a worktree during proposer spawn, `$(pwd)` resolved to the wrong path (double-nested worktree). `git rev-parse --show-toplevel` always returns the git root. `$SRC` set once per iteration, used everywhere.
+
+---
+
 ## [6.3.0] - 2026-04-03
 
 Five improvements from the testing agent's verdict on agno-deepknowledge run.
