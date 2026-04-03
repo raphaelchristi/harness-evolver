@@ -45,6 +45,15 @@ Full feature list for Harness Evolver. For the quick overview, see [README.md](.
 | **ULTRAPLAN Architect** | Auto-triggers on stagnation. Opus model for deep architectural analysis. Recommends topology changes. |
 | **Production Traces** | Auto-discovers LangSmith production projects. Real user inputs for test generation. Can also mine Claude Code session history. |
 
+## Operations
+
+| Feature | Description |
+|---|---|
+| **`update_config.py`** | Atomic config update after merge. Three actions: `backup` (before merge), `restore` (after merge overwrites), `update` (increments iterations, appends enriched history). Replaces manual inline Python. |
+| **`cleanup_worktrees.py`** | Removes orphan worktrees from `.claude/worktrees/` after eval. `--dry-run` to preview, `--keep` to preserve specific ones. Prevents worktree accumulation. |
+| **Rubric Pinning** | Evaluator includes rubric text in feedback comment (`RUBRIC: ... JUDGMENT: ...`). Makes scores reproducible and diagnosable across iterations. |
+| **`--retry-on-rate-limit`** | When rate-limited, `run_eval.py` waits 60s and suggests re-run instead of just aborting. |
+
 ## Visualization
 
 | Feature | Description |

@@ -98,10 +98,12 @@ flowchart TD
         end
         
         subgraph PostIter["6. Learn"]
+            UpdateCfg["update_config.py<br/><i>backup → restore → update</i>"]
             Archive["Archive ALL candidates"]
             Regression["Regression guards<br/><i>train-only, deduplicated</i>"]
             Memory["Consolidator<br/><i>background</i>"]
-            Archive --> Regression --> Memory
+            Cleanup["cleanup_worktrees.py"]
+            UpdateCfg --> Archive --> Regression --> Memory --> Cleanup
         end
 
         Analyze --> Strategy --> Propose --> Eval --> Select --> PostIter
@@ -208,20 +210,27 @@ graph LR
         archive["archive.py"]
         regression["regression_tracker.py"]
         chart["evolution_chart.py"]
+        logiter["log_iteration.py"]
         addev["add_evaluator.py"]
         adversarial["adversarial_inject.py"]
+    end
+
+    subgraph Operations["Operations"]
+        updatecfg["update_config.py"]
+        cleanup["cleanup_worktrees.py"]
     end
 
     subgraph Shared["Shared"]
         common["_common.py"]
     end
 
-    common -.-> Core & Analysis & Safety & Evolution
+    common -.-> Core & Analysis & Safety & Evolution & Operations
 
     style Core fill:#16213e,color:#fff
     style Analysis fill:#0f3460,color:#fff
     style Safety fill:#533483,color:#fff
     style Evolution fill:#e94560,color:#fff
+    style Operations fill:#2d6a4f,color:#fff
     style Shared fill:#1a1a2e,color:#fff
 ```
 
