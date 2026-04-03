@@ -170,11 +170,18 @@ $EVOLVER_PY $TOOLS/constraint_check.py --config .evolver.json --worktree-path "$
 
 If constraints fail, try next-best. If none pass, skip merge.
 
-If winner beats current best: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc). Then git-tag for instant rollback:
+**Efficiency gate** (before merge): Check if winner's tokens or latency regressed significantly:
+- If tokens increased >2x AND score improved <2%: reject this candidate, try next-best
+- If latency increased >50% AND score improved <5%: reject this candidate, try next-best
+- In interactive mode: ask user to override if desired. In background mode: auto-reject.
+
+If winner beats current best AND passes efficiency gate: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc). Then git-tag for rollback:
 
 ```bash
-git tag "evolver-v{NNN}" -m "evolver: v{NNN} score={score}"
+git tag "evo-iter-v{NNN}" -m "evolver: v{NNN} score={score}"
 ```
+
+Note: uses `evo-iter-` prefix to avoid conflicts with `/evolver:deploy` tags.
 
 ### 6. Post-Iteration
 
@@ -201,27 +208,19 @@ Agent(subagent_type: "evolver-consolidator", run_in_background: true, prompt: "U
 ```
 Proposer v{NNN}-{id} suggested new evaluator: "{name}" — {description}
 ```
-If multiple proposers suggest the same evaluator, prioritize it. Pass suggestions to the critic or architect for implementation via `$EVOLVER_PY $TOOLS/add_evaluator.py`.
+If multiple proposers suggest the same evaluator, prioritize it. **Do NOT add evaluators that have no implementation** — `add_evaluator.py` only supports code evaluators with templates (see `CODE_EVALUATOR_TEMPLATES` in the tool) and LLM evaluators (correctness, conciseness). If a suggestion doesn't match a known template, log it for the architect/critic to implement manually rather than silently adding a no-op entry.
 
 **Auto-trigger critic** if score jumped >0.3 or hit target in <3 iterations.
 
 **Auto-trigger architect** (opus model) if 3 consecutive iterations within 1% or score dropped.
 
-### 7. Gate Check (multi-objective utility)
-
-Score alone is insufficient. Assess using composite utility:
+### 7. Gate Check
 
 - **Score plateau**: 3 scores within 2% → consider architect or stop
 - **Target reached**: `best_score >= target_score` → stop
 - **Diminishing returns**: avg improvement <0.5% over 5 iterations → stop
-- **Cost regression**: if tokens increased >2x while score improved <2%, flag as inefficient. The improvement isn't worth the cost. Consider reverting or constraining token budget.
-- **Latency regression**: if avg_latency_ms increased >50% while score improved <5%, flag. Faster with same quality > slower with marginally better quality.
 
-When flagging cost/latency regressions, report to user:
-```
-WARNING: Iteration v{NNN} improved score by {delta}% but tokens increased {token_pct}% and latency increased {latency_pct}%.
-Consider: accept (quality matters more) or revert (efficiency matters more)?
-```
+(Cost/latency regressions are now checked pre-merge in step 5, not post-merge.)
 
 ## Final Report
 
