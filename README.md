@@ -50,6 +50,30 @@ claude
 
 ---
 
+## Real-World Results
+
+**agno-deepknowledge** — RAG agent, Gemini 3.1 Flash Lite, light mode (~2 min/iter)
+
+```mermaid
+xychart-beta
+    title "Score Progression: 0.575 → 0.950 (+65%)"
+    x-axis ["baseline", "v001", "v002", "v003", "v004"]
+    y-axis "Correctness" 0 --> 1
+    bar [0.575, 0.333, 0.950, 0.900, 0.800]
+```
+
+| Iter | Score | What happened |
+|---|---|---|
+| baseline | 0.575 | Original agent — hallucinations, no error handling |
+| v001 | 0.333 | Anti-hallucination fix (100% on successful runs, but 60% hit rate limits) |
+| **v002** | **0.950** | **Inline KB + retry/backoff — eliminated vector search, 5.7x faster** |
+| v003 | 0.900 | Attempted completeness fix — regressed, **not merged** |
+| v004 | 0.800 | Attempted KB context fix — regressed, **not merged** |
+
+4 iterations, 2 merged, 2 rejected by gate check. The breakthrough (v002) came from a proposer that realized vector search over 17 lines of text was overkill — inlining the KB into the prompt eliminated rate limits and tripled correctness.
+
+---
+
 ## How It Works
 
 | | |
