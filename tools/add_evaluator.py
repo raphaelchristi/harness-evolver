@@ -90,6 +90,7 @@ def main():
     parser.add_argument("--type", choices=["llm", "code"], default="llm", help="Evaluator type")
     parser.add_argument("--pattern", default=None, help="Regex pattern for code evaluators")
     parser.add_argument("--remove", action="store_true", help="Remove evaluator instead of adding")
+    parser.add_argument("--strict", action="store_true", help="Reject evaluators without known implementation (template or LLM)")
     args = parser.parse_args()
 
     if args.remove:
@@ -108,6 +109,16 @@ def main():
         else:
             print(f"Evaluator '{args.evaluator}' not found", file=sys.stderr)
         return
+
+    # Strict mode: reject evaluators without known implementation
+    KNOWN_LLM = {"correctness", "conciseness"}
+    if args.strict:
+        if args.type == "code" and args.evaluator not in CODE_EVALUATOR_TEMPLATES and not args.pattern:
+            print(f"REJECTED (--strict): code evaluator '{args.evaluator}' has no template and no --pattern", file=sys.stderr)
+            sys.exit(1)
+        if args.type == "llm" and args.evaluator not in KNOWN_LLM:
+            print(f"REJECTED (--strict): LLM evaluator '{args.evaluator}' not in known set {KNOWN_LLM}", file=sys.stderr)
+            sys.exit(1)
 
     added = add_evaluator(args.config, args.evaluator, args.type, args.pattern)
     if added:
