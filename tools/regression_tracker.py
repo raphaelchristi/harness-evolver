@@ -144,17 +144,22 @@ def main():
     if args.auto_guard_failures:
         # Only guard failures from train split — never contaminate held_out
         # Also check original split via LangSmith example lookup
-        train_example_ids = set()
+        train_example_ids = None  # None = couldn't determine, skip entirely (fail-closed)
         try:
+            train_example_ids = set()
             for ex in client.list_examples(dataset_id=config["dataset_id"], splits=["train"]):
                 train_example_ids.add(str(ex.id))
         except Exception:
-            pass  # If we can't determine splits, skip auto-guard entirely
+            train_example_ids = None  # API failed — fail closed, don't risk held_out contamination
 
-        failing = [
-            eid for eid, data in curr_scores.items()
-            if data["score"] < 0.5 and (not train_example_ids or eid in train_example_ids)
-        ]
+        if train_example_ids is None:
+            print("  WARNING: Could not determine train split — skipping auto-guard to protect held_out", file=sys.stderr)
+            failing = []
+        else:
+            failing = [
+                eid for eid, data in curr_scores.items()
+                if data["score"] < 0.5 and eid in train_example_ids
+            ]
         hard_added = 0
 
         # Deduplicate: check which example_ids already have hard_failure guards
