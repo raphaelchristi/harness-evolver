@@ -112,6 +112,8 @@ def main():
     parser.add_argument("--output", default=None, help="Output JSON report")
     parser.add_argument("--add-guards", action="store_true", help="Add regression guard examples to dataset")
     parser.add_argument("--max-guards", type=int, default=5, help="Max guard examples to add")
+    parser.add_argument("--auto-guard-failures", action="store_true",
+                        help="Also add currently-failing examples as guards (marks them as known-hard)")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -130,12 +132,46 @@ def main():
     if args.add_guards and transitions:
         added = add_regression_guards(client, config["dataset_id"], transitions, args.max_guards, config=config)
 
+    if added > 0:
+        report_guard_details = [
+            {"input": t["input"][:100], "prev_score": t["prev_score"], "curr_score": t["curr_score"]}
+            for t in transitions[:args.max_guards]
+        ]
+    else:
+        report_guard_details = []
+
+    if args.auto_guard_failures:
+        failing = [eid for eid, data in curr_scores.items() if data["score"] < 0.5]
+        hard_added = 0
+        for eid in failing[:3]:
+            try:
+                input_text = curr_scores[eid].get("input", "")
+                input_data = json.loads(input_text) if input_text.startswith("{") else {"input": input_text}
+                client.create_example(
+                    inputs=input_data,
+                    dataset_id=config["dataset_id"],
+                    metadata={
+                        "source": "hard_failure",
+                        "original_example_id": eid,
+                        "failure_score": curr_scores[eid]["score"],
+                        "added_at_iteration": config.get("iterations", 0),
+                    },
+                    split="train",
+                )
+                hard_added += 1
+            except Exception:
+                pass
+    else:
+        hard_added = 0
+
     result = {
         "previous": args.previous_experiment,
         "current": args.current_experiment,
         "fixed_count": len(transitions),
         "regression_count": len(regressions),
         "guards_added": added,
+        "guard_details": report_guard_details,
+        "hard_guards_added": hard_added,
         "fixed": transitions,
         "regressions": regressions,
     }

@@ -78,6 +78,19 @@ langsmith-cli --json runs list \
 
 Then read `experiment_runs.jsonl` to see all results.
 
+### Phase 1.5: Load Few-Shot Corrections (if available)
+
+Check if prior evaluation runs have human corrections (feedback with `source: "human"`):
+
+```bash
+langsmith-cli --json feedback list \
+    --run-id "{any_recent_run_id}" \
+    --source human \
+    --limit 10
+```
+
+If human corrections exist, use them as calibration examples. For instance, if a human corrected your 0.5 to 1.0 with note "Response was correct despite being brief", adjust your threshold for brevity accordingly. Human corrections compound — each one makes future scoring more accurate.
+
 ### Phase 2: Evaluate Each Run
 
 For each run, apply the requested evaluators. The evaluators you may be asked to judge:
