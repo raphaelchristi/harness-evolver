@@ -103,6 +103,7 @@ TOOLS_WITH_HELP = [
     "iteration_gate.py",
     "mine_sessions.py",
     "preflight.py",
+    "promote_learnings.py",
     "read_results.py",
     "regression_tracker.py",
     "run_eval.py",
@@ -372,6 +373,27 @@ def test_archive():
         archive_dir = os.path.join(os.path.dirname(config_path), "evolution_archive")
         if os.path.isdir(archive_dir):
             shutil.rmtree(archive_dir)
+
+
+# ─── Test: promote_learnings.py ───
+
+def test_promote_learnings_help():
+    """promote_learnings.py accepts --help."""
+    code, stdout, stderr = run_tool("promote_learnings.py", ["--help"])
+    assert code == 0
+    assert "--threshold" in stdout
+    assert "--dry-run" in stdout
+
+
+def test_promote_learnings_no_memory():
+    """promote_learnings.py handles missing evolution_memory.md gracefully."""
+    code, stdout, stderr = run_tool("promote_learnings.py", [
+        "--memory", "/tmp/nonexistent_memory.md",
+        "--dry-run",
+    ])
+    assert code == 0
+    result = json.loads(stdout)
+    assert result["promoted"] == 0
 
 
 # ─── Runner ───

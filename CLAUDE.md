@@ -51,6 +51,10 @@ python tools/preflight.py --config .evolver.json
 python tools/archive.py --config .evolver.json --version v001 --experiment v001-abc --worktree-path /tmp/wt --score 0.85 --won
 python tools/archive.py --config .evolver.json --list
 
+# Promote proven evolution learnings to CLAUDE.md (compound learning)
+python tools/promote_learnings.py --memory evolution_memory.md --target CLAUDE.md --threshold 5 --dry-run
+python tools/promote_learnings.py --memory evolution_memory.md --target CLAUDE.md --threshold 5
+
 # Log evolution iteration to LangSmith (creates traceable run per iteration)
 python tools/log_iteration.py --config .evolver.json --action start --version v001
 python tools/log_iteration.py --config .evolver.json --action end --run-id <id> --score 0.85 --merged true
@@ -106,11 +110,11 @@ No test framework is configured. The `tests/` directory contains only `__pycache
 
 Three layers, each in its own directory:
 
-1. **Skills** (`skills/*/SKILL.md`) — Claude Code slash commands that orchestrate the workflow. Each skill is a markdown file with frontmatter (`name`, `description`, `allowed-tools`). The five skills are `setup`, `evolve`, `health`, `status`, `deploy`.
+1. **Skills** (`skills/*/SKILL.md`) — Claude Code slash commands that orchestrate the workflow. Each skill is a markdown file with frontmatter (`name`, `description`, `allowed-tools`). The six skills are `setup`, `evolve`, `health`, `status`, `deploy`, `certify`.
 
 2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `harness-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `harness-evaluator` (yellow, LLM-as-judge via langsmith-cli), `harness-critic` (red, active — detects + fixes gaming), `harness-architect` (blue, ULTRAPLAN mode with opus), `harness-consolidator` (cyan, cross-iteration memory), `harness-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
-3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, and `mine_sessions.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
+3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, `mine_sessions.py`, and `promote_learnings.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
 Supporting infrastructure:
 - **Plugin manifest** (`.claude-plugin/plugin.json`) — registers as a Claude Code plugin
