@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.5.4] - 2026-04-03
+
+### Fixed
+
+- **Project .env takes precedence over global credentials** — Reordered `ensure_langsmith_api_key()` in all 7 tools: env var > project `.env` > global `~/.config/langsmith-cli/credentials`. Fixes stale/invalid key in global credentials file shadowing the valid key in the project's `.env`. This was the root cause of the persistent 403 Forbidden bug across all real-world runs.
+
+---
+
 ## [4.5.3] - 2026-04-03
 
 Fixes the two longest-standing bugs across all 4 REPORT.md files.
