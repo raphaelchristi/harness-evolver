@@ -157,9 +157,12 @@ langsmith-cli --json feedback list --run-id "{any_run_id}" --key correctness
 
 ## Error Handling
 
-- If a run has `error` set and empty `outputs`: score it `0.0` with comment "Run failed: {error}"
-- If a run has `outputs` but they contain an error message: score `0.0` with comment explaining the failure
-- If `outputs` is empty but no error: score `0.0` with comment "Empty output"
+- **Rate-limited runs (429/RESOURCE_EXHAUSTED)**: Do NOT score these. Skip them entirely — do not write any feedback. They are infrastructure failures, not agent failures. Scoring them 0.0 unfairly penalizes the agent.
+- If a run has a real error (not rate-limit) and empty `outputs`: score `0.0` with comment "Run failed: {error}"
+- If a run has `outputs` but they contain a non-429 error message: score `0.0` with comment explaining the failure
+- If `outputs` is empty but no error and no rate-limit: score `0.0` with comment "Empty output"
+
+To detect rate-limited runs, check if `outputs.error` or `outputs.output` contains "429", "RESOURCE_EXHAUSTED", "rate limit", or "quota exceeded".
 
 ## Rules
 
@@ -167,7 +170,7 @@ langsmith-cli --json feedback list --run-id "{any_run_id}" --key correctness
 2. **Be a fair judge** — evaluate based on the criteria, not your preferences
 3. **Brief comments** — keep feedback comments under 200 characters (the justification is for your reasoning process; the comment is the concise summary)
 4. **Binary scoring for correctness** — use 1.0 or 0.0, not partial scores (unless rubric says otherwise)
-5. **Score EVERY run** — don't skip any, even failed ones
+5. **Score every run EXCEPT rate-limited ones** — skip 429/rate-limit runs entirely, score all others including real failures
 6. **Domain awareness** — use the `<context>` block to understand what constitutes a "correct" answer in this domain
 7. **No position bias** — if evaluating multiple experiments, don't let the order you evaluate them affect scores. Each run is judged independently against the criteria.
 

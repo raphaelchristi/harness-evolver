@@ -109,13 +109,30 @@ def read_experiment(client, experiment_name, weights=None):
             }
 
         num_examples = len(per_example)
-        all_scores = [v["score"] for v in per_example.values()]
+
+        # Exclude rate-limited runs from combined score (they're infra failures, not agent failures)
+        rate_limit_keywords = ("429", "rate", "resource_exhausted", "quota")
+        scored_examples = {}
+        rate_limited_count = 0
+        for eid, data in per_example.items():
+            error_text = (data.get("error") or "").lower()
+            output_text = (data.get("output_preview") or "").lower()
+            is_rate_limited = any(kw in error_text or kw in output_text for kw in rate_limit_keywords)
+            if is_rate_limited:
+                rate_limited_count += 1
+                data["rate_limited"] = True
+            else:
+                scored_examples[eid] = data
+
+        all_scores = [v["score"] for v in scored_examples.values()]
         combined_score = sum(all_scores) / len(all_scores) if all_scores else 0.0
 
         return {
             "experiment": experiment_name,
             "combined_score": combined_score,
             "num_examples": num_examples,
+            "num_scored": len(scored_examples),
+            "rate_limited_count": rate_limited_count,
             "total_tokens": total_tokens,
             "avg_latency_ms": total_latency_ms // max(num_examples, 1),
             "error_count": errors,
