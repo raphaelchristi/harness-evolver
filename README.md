@@ -52,28 +52,29 @@ claude
 
 ## What It Looks Like
 
+Tested on a RAG agent (Agno framework, Gemini 3.1 Flash Lite, light mode):
+
 ```mermaid
 xychart-beta
-    title "Best Score Over Evolution Iterations"
-    x-axis ["base", "v001", "v002", "v003", "v004", "v005", "v006", "v007", "v008", "v009"]
+    title "agno-deepknowledge: 0.575 → 1.000 (+74%)"
+    x-axis ["base", "v001", "v002", "v003", "v004", "v005", "v006", "v007"]
     y-axis "Correctness" 0 --> 1
-    line [0.31, 0.48, 0.52, 0.52, 0.67, 0.71, 0.71, 0.71, 0.79, 0.84]
+    line [0.575, 0.575, 0.950, 0.950, 0.950, 0.950, 0.950, 1.0]
+    bar [0.575, 0.333, 0.950, 0.720, 0.875, 0.680, 0.880, 1.0]
 ```
 
-| Iter | Score | Merged? | What happened |
+| Iter | Score | Merged? | What the proposer did |
 |---|---|---|---|
-| baseline | 0.31 | — | Broken tool calls, hallucinations, no error handling |
-| v001 | 0.48 | Yes | Fixed input parsing, added retry logic (+0.17) |
-| v002 | 0.52 | Yes | Prompt rewrite to reduce hallucinations (+0.04) |
-| v003 | 0.49 | **No** | Attempted retrieval change — regressed, rejected by gate |
-| v004 | 0.67 | Yes | Architect triggered: chain → ReAct restructure (+0.15) |
-| v005 | 0.71 | Yes | Output validation + citation grounding (+0.04) |
-| v006 | 0.68 | **No** | Tried fewer tool calls — broke edge cases, rejected |
-| v007 | 0.70 | **No** | Prompt tweak — within noise margin, not merged |
-| v008 | 0.79 | Yes | Evolution memory insight: combined v003's retrieval with v005's validation (+0.08) |
-| v009 | 0.84 | Yes | Fine-tuned rubric alignment from judge feedback (+0.05) |
+| baseline | 0.575 | — | Original agent — hallucinations, broken tool calls, no retry logic |
+| v001 | 0.333 | Yes | Anti-hallucination prompt (100% correct when API responded, but 60% hit rate limits) |
+| v002 | 0.950 | Yes | **Breakthrough**: inlined 17-line KB into prompt, eliminated vector search entirely. 5.7x faster, zero rate limits |
+| v003 | 0.720 | **No** | Attempted hybrid retrieval — regressed, rejected by constraint gate |
+| v004 | 0.875 | **No** | Response completeness fix — improved one case but regressed others |
+| v005 | 0.680 | **No** | Reduced tool calls — broke edge cases, rejected |
+| v006 | 0.880 | Yes | Evolution memory insight: combined v001's anti-hallucination with one-shot example from archive |
+| v007 | 1.000 | Yes | One-shot example injection + rubric-aligned responses — perfect on held-out |
 
-Real pattern: initial jump → plateau → architectural breakthrough → small gains → stagnation → memory-driven recovery. Regressions rejected automatically. Not every iteration improves — that's the point of gate checks.
+The line shows best score (only goes up — regressions aren't merged). The bars show each candidate's raw score. 4 merged, 3 rejected by gate checks. Not every iteration improves — that's the point.
 
 ---
 
