@@ -6,6 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.5.0] - 2026-04-02
+
+9 improvements inspired by [NousResearch/hermes-agent-self-evolution](https://github.com/NousResearch/hermes-agent-self-evolution), hardening evaluation rigor, data safety, and decision quality.
+
+### Added
+
+- **Rubric-based evaluation** — Dataset examples support `expected_behavior` rubrics in metadata. Evaluator agent scores against specific criteria instead of generic correctness. Testgen agent generates rubrics automatically. `setup.py` parses `expected_behavior`, `difficulty`, and `category` fields from input files.
+- **Constraint gates** — New `constraint_check.py` (stdlib-only) validates proposals before merge: code growth ≤30%, entry point syntax valid, test suite passes. Step 4.5 in evolve skill rejects failing candidates and falls back to next-best.
+- **Evaluator weights** — `evaluator_weights` field in `.evolver.json` enables weighted scoring (e.g., `{"correctness": 0.5, "latency": 0.3}`). `read_results.py` uses `weighted_score()` instead of flat average.
+- **Judge feedback in proposers** — `read_results.py` captures `feedback_comments` from LangSmith feedback. Evolve skill surfaces judge comments in proposer strategy for targeted mutations.
+- **Secret detection** — New `secret_filter.py` (stdlib-only) detects 15+ secret patterns (API keys, tokens, PEM keys). Integrated into `seed_from_traces.py` (skips runs with secrets) and `dataset_health.py` (flags examples with secrets as critical issue).
+- **Holdout enforcement** — Candidate comparison now uses `--split held_out` for unbiased winner selection. Split filtering works in both single and multi-experiment modes.
+- **Code growth tracking** — `code_loc` field in history entries. Evolution chart shows LOC column with ⚠ warning when growth exceeds 30% vs baseline.
+- **Pareto selection** — `read_results.py` computes Pareto front across evaluators via `pareto_front()`. Evolve skill reports non-dominated candidates when tradeoffs exist.
+- **Session mining** — New `mine_sessions.py` (stdlib-only) extracts eval data from Claude Code session history (`~/.claude/`), with keyword relevance filtering and secret detection.
+
+---
+
+## [4.4.0] - 2026-04-02
+
+### Added
+
+- **Evolution chart** — New `evolution_chart.py` (stdlib-only) renders rich ASCII chart with ANSI colors: header with sparkline, score progression table, per-evaluator breakdown, what-changed narrative, and horizontal bar chart. Called by `/evolver:evolve` (final report) and `/evolver:status`.
+- **Enriched history** — `.evolver.json` history entries now store `tokens`, `latency_ms`, `error_count`, `passing`, `total`, `per_evaluator`, `approach`, and `lens` alongside score. Backward compatible with lean entries.
+
+---
+
 ## [4.3.1] - 2026-04-02
 
 ### Added
