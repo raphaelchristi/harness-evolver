@@ -447,7 +447,7 @@ async function configureLangSmith(rl, nonInteractive) {
         attempts++;
       } else {
         stepError("No API key configured");
-        barLine(c.dim("/evolver:setup will not work until you set LANGSMITH_API_KEY"));
+        barLine(c.dim("/harness:setup will not work until you set LANGSMITH_API_KEY"));
         barLine(c.dim("Run: export LANGSMITH_API_KEY=lsv2_pt_your_key"));
         break;
       }
@@ -700,7 +700,7 @@ async function main() {
   const cwdWorktreeInclude = fs.existsSync(path.join(process.cwd(), ".worktreeinclude"));
   if (cwdGit && !cwdWorktreeInclude) {
     step("Worktree support");
-    barLine(c.dim("For /evolver:evolve to work, .evolver.json needs to be in worktrees."));
+    barLine(c.dim("For /harness:evolve to work, .evolver.json needs to be in worktrees."));
     barLine(c.dim("Create .worktreeinclude in your project root with:"));
     barLine(c.dim("  .evolver.json"));
     barLine(c.dim("  .env"));
@@ -726,10 +726,10 @@ async function main() {
   stepDone(c.green("Done.") + "  Restart your agent tools to load the plugin.");
   barEmpty();
   barLine(c.dim("Commands:"));
-  barLine(`  ${c.cyan("/evolver:setup")}   \u2014 configure LangSmith for your project`);
-  barLine(`  ${c.cyan("/evolver:evolve")}  \u2014 run the optimization loop`);
-  barLine(`  ${c.cyan("/evolver:status")} \u2014 check progress`);
-  barLine(`  ${c.cyan("/evolver:deploy")}  \u2014 finalize and push`);
+  barLine(`  ${c.cyan("/harness:setup")}   \u2014 configure LangSmith for your project`);
+  barLine(`  ${c.cyan("/harness:evolve")}  \u2014 run the optimization loop`);
+  barLine(`  ${c.cyan("/harness:status")} \u2014 check progress`);
+  barLine(`  ${c.cyan("/harness:deploy")}  \u2014 finalize and push`);
   barEmpty();
   barLine(c.dim("Plugin marketplace (auto-updates):"));
   barLine(`  ${c.cyan("/plugin install harness-evolver")}  ${c.dim("— from Claude Code marketplace")}`);
