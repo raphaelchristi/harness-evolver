@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.4.0] - 2026-04-03
+
+Two competitive-inspired features: compound learning and score certification.
+
+### Added
+
+- **Compound Learning** — New `tools/promote_learnings.py` (stdlib-only) extracts proven evolution insights (recurrence >= 5) from `evolution_memory.md` and appends them as permanent rules in the project's CLAUDE.md. Each evolution session permanently improves the project, not just the code. Inspired by [Compound Engineering (EveryInc)](https://github.com/EveryInc/compound-engineering-plugin) and [Self-Improving Agent (pskoett)](https://github.com/pskoett/pskoett-ai-skills).
+- **`/harness:certify` skill** — Runs evaluation 3x and reports mean ± std with STABLE/MARGINAL/UNSTABLE verdict. Verifies LLM-as-judge score consistency before deploying. Inspired by [PluginEval Monte Carlo (wshobson)](https://github.com/wshobson/agents).
+- **Consolidator Phase 5: Promote** — The consolidator agent now flags insights with recurrence >= 5 as promotion candidates. Terminology clarified: "anchored" (rec >= 3, within memory) vs "promoted" (rec >= 5, to CLAUDE.md).
+- **Deploy "Promote learnings" option** — `/harness:deploy` offers a 4th option to promote learnings with dry-run preview + user consent before writing.
+
+---
+
 ## [6.3.2] - 2026-04-03
 
 ### Fixed
