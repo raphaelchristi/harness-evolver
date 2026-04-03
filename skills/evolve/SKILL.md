@@ -133,6 +133,61 @@ If critical issues found, ask user whether to continue or fix first via AskUserQ
 
 Invoke `/evolver:health` to check and auto-correct dataset issues. If health_report.json shows critical issues that couldn't be auto-corrected, ask user whether to proceed via AskUserQuestion.
 
+### 0.7. Ensure Baseline Has LLM-Judge Scores
+
+The baseline experiment (from setup) only runs code-based evaluators (has_output, token_efficiency). Without LLM-judge scores, the baseline score is inflated — any agent that produces text gets 1.0, making gate checks stop evolution prematurely.
+
+Check if LLM evaluators are configured and the baseline needs scoring:
+
+```bash
+LLM_EVALS=$(python3 -c "import json; c=json.load(open('.evolver.json')); llm=[k for k in c['evaluators'] if k in ('correctness','conciseness')]; print(','.join(llm) if llm else '')")
+BASELINE=$(python3 -c "import json; print(json.load(open('.evolver.json')).get('baseline_experiment', ''))")
+```
+
+If `LLM_EVALS` is non-empty and `BASELINE` exists, check if LLM scores already exist:
+
+```bash
+HAS_LLM_SCORES=$($EVOLVER_PY $TOOLS/read_results.py --experiment "$BASELINE" --config .evolver.json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    r = json.load(sys.stdin)
+    scored_keys = set()
+    for ex in r.get('per_example', {}).values():
+        scored_keys.update(ex.get('scores', {}).keys())
+    llm_keys = set('correctness,conciseness'.split(','))
+    configured = set(k for k in llm_keys if k in '$LLM_EVALS'.split(','))
+    print('yes' if configured.issubset(scored_keys) else 'no')
+except: print('no')
+")
+```
+
+If `HAS_LLM_SCORES` is "no", trigger the evaluator agent on the baseline:
+
+```
+Agent(
+  subagent_type: "evolver-evaluator",
+  description: "Score baseline with LLM-judge",
+  prompt: "Experiments to evaluate: {baseline_experiment}. Evaluators: {llm_evaluator_list}. Framework: {framework}. Entry point: {entry_point}. Dataset: {dataset_name}. NOTE: This is the baseline — score it fairly so evolution has a meaningful starting point. Some examples have expected_behavior rubrics in their metadata — fetch example metadata and use rubrics for scoring when available."
+)
+```
+
+After the evaluator completes, re-read the baseline score and update `.evolver.json`:
+
+```bash
+$EVOLVER_PY $TOOLS/read_results.py --experiment "$BASELINE" --config .evolver.json --output best_results.json 2>/dev/null
+python3 -c "
+import json
+br = json.load(open('best_results.json'))
+c = json.load(open('.evolver.json'))
+new_score = br.get('combined_score', c['best_score'])
+c['best_score'] = new_score
+if c.get('history'):
+    c['history'][0]['score'] = new_score
+json.dump(c, open('.evolver.json', 'w'), indent=2)
+print(f'Baseline re-scored with LLM-judge: {new_score:.3f}')
+"
+```
+
 ### 0.8. Resolve Project Directory
 
 If the project is in a subdirectory of the git repo (e.g., `playground/react-agent/`), worktrees replicate the full repo structure. Read `project_dir` from `.evolver.json` to resolve paths correctly:
@@ -340,10 +395,22 @@ Only run evaluation (Step 3) for proposers that committed changes (not abstained
 
 ### 3. Run Target for Each Candidate (Parallel)
 
-Run evaluations for ALL candidates simultaneously — they're independent:
+First, copy config files into each worktree (untracked files aren't replicated by git — this was the #1 bug in all real-world runs):
 
 ```bash
-# Launch all evaluations in parallel
+for WORKTREE in {worktree_paths_with_commits}; do
+    WORKTREE_PROJECT="$WORKTREE"
+    [ -n "$PROJECT_DIR" ] && WORKTREE_PROJECT="$WORKTREE/$PROJECT_DIR"
+
+    # Copy untracked config files needed by run_eval.py and the agent
+    cp .evolver.json "$WORKTREE_PROJECT/.evolver.json" 2>/dev/null
+    [ -f .env ] && cp .env "$WORKTREE_PROJECT/.env" 2>/dev/null
+done
+```
+
+Then run evaluations for ALL candidates simultaneously:
+
+```bash
 for WORKTREE in {worktree_paths_with_commits}; do
     WORKTREE_PROJECT="$WORKTREE"
     [ -n "$PROJECT_DIR" ] && WORKTREE_PROJECT="$WORKTREE/$PROJECT_DIR"
