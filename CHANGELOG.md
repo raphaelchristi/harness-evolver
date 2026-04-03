@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.8.2] - 2026-04-03
+
+### Fixed
+
+- **top_failing shows per-evaluator scores** — `scores: {correctness: 0.0, has_output: 1.0}` alongside combined score. Proposers no longer confused by score=0.5 when correctness is actually 0.0.
+
+---
+
 ## [4.8.1] - 2026-04-03
 
 ### Fixed
