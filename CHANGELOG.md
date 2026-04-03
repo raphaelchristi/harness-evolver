@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [5.0.1] - 2026-04-03
+
+Fixes 6 findings from two Codex (GPT-5.4) cross-model reviews — the first time a different model reviewed this codebase.
+
+### Fixed (from Adversarial Review — 3 high-severity)
+
+- **Held-out comparison fails hard on zero examples** — `read_results.py` exits with error when `--split` filtering leaves 0 examples in the dataset. Missing `held_out` is now a blocking preflight error. Previously silently compared 0.0 scores and picked arbitrary winners.
+- **Canary fails on empty output** — Empty output is now always a canary failure, regardless of whether an error string is present. Previously, agents that exited cleanly with no stdout passed the canary silently.
+- **Constraint gate validates JS/TS/shell** — `check_entry_point()` now runs `node --check` for .js/.mjs, `bash -n` for .sh, and checks .ts files aren't empty. `check_tests()` detects `package.json` test scripts and runs `npm test`. Fails closed when validation tools are unavailable (instead of silently skipping).
+
+### Fixed (from Standard Review — 3 skill bugs in v5.0.0 refactoring)
+
+- **Subdirectory projects** — Eval and constraint paths now resolve `$PROJECT_DIR` in worktrees. Previously, `run_eval.py` pointed at repo root instead of subdirectory.
+- **Race condition: eval → judge** — Added explicit `wait` after parallel evaluations before spawning evaluator agent. Previously, the judge could start before experiments existed.
+- **`$BEST` initialization** — Added state-read block (`$BEST`, `$PROJECT_DIR`) before the gather step. Previously, analysis tools received empty experiment names. Configs without a baseline now cleanly skip analysis.
+
+---
+
 ## [5.0.0] - 2026-04-03
 
 Major refactoring release addressing the "road to 10/10" feedback.
