@@ -184,7 +184,7 @@ def main():
         lens=args.lens,
         won=args.won,
     )
-    print(f"Archived to {candidate_dir}")
+    print(json.dumps({"archived": candidate_dir, "version": args.version, "score": args.score}))
 
 
 if __name__ == "__main__":

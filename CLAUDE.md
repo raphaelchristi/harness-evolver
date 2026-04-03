@@ -45,6 +45,10 @@ python tools/evolution_chart.py --config .evolver.json
 # Integrated preflight check (API key + schema + state + health + canary)
 python tools/preflight.py --config .evolver.json
 
+# Archive evolution candidate (stdlib-only, no langsmith needed)
+python tools/archive.py --config .evolver.json --version v001 --experiment v001-abc --worktree-path /tmp/wt --score 0.85 --won
+python tools/archive.py --config .evolver.json --list
+
 # Constraint validation for proposals (stdlib-only, no langsmith needed)
 python tools/constraint_check.py --config .evolver.json --worktree-path /tmp/wt --baseline-path .
 

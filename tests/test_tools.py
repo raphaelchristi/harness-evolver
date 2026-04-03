@@ -309,6 +309,39 @@ def test_pareto_front():
         sys.path.pop(0)
 
 
+# ─── Test: archive.py ───
+
+def test_archive():
+    """archive.py creates and lists archive entries."""
+    config_path = make_mock_config()
+    try:
+        code, stdout, stderr = run_tool("archive.py", [
+            "--config", config_path,
+            "--version", "test-v001",
+            "--experiment", "test-exp",
+            "--score", "0.75",
+            "--approach", "test approach",
+            "--won",
+        ])
+        assert code == 0, f"exit {code}: {stderr[:200]}"
+        result = json.loads(stdout)
+        assert "archived" in result
+
+        # List
+        code2, stdout2, stderr2 = run_tool("archive.py", ["--config", config_path, "--list"])
+        assert code2 == 0
+        entries = json.loads(stdout2)
+        assert len(entries) == 1
+        assert entries[0]["version"] == "test-v001"
+        assert entries[0]["won"] is True
+    finally:
+        os.unlink(config_path)
+        import shutil
+        archive_dir = os.path.join(os.path.dirname(config_path), "evolution_archive")
+        if os.path.isdir(archive_dir):
+            shutil.rmtree(archive_dir)
+
+
 # ─── Runner ───
 
 if __name__ == "__main__":
