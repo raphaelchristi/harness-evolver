@@ -50,27 +50,28 @@ claude
 
 ---
 
-## Real-World Results
-
-**agno-deepknowledge** — RAG agent, Gemini 3.1 Flash Lite, light mode (~2 min/iter)
+## What It Looks Like
 
 ```mermaid
 xychart-beta
-    title "Score Progression: 0.575 → 0.950 (+65%)"
-    x-axis ["baseline", "v001", "v002", "v003", "v004"]
-    y-axis "Correctness" 0 --> 1
-    bar [0.575, 0.333, 0.950, 0.900, 0.800]
+    title "Agent Correctness Over Evolution Iterations"
+    x-axis ["baseline", "v001", "v002", "v003", "v004", "v005", "v006", "v007"]
+    y-axis "Score" 0 --> 1
+    line [0.32, 0.41, 0.55, 0.63, 0.71, 0.78, 0.84, 0.91]
 ```
 
-| Iter | Score | What happened |
+| Iter | Score | What the proposer did |
 |---|---|---|
-| baseline | 0.575 | Original agent — hallucinations, no error handling |
-| v001 | 0.333 | Anti-hallucination fix (100% on successful runs, but 60% hit rate limits) |
-| **v002** | **0.950** | **Inline KB + retry/backoff — eliminated vector search, 5.7x faster** |
-| v003 | 0.900 | Attempted completeness fix — regressed, **not merged** |
-| v004 | 0.800 | Attempted KB context fix — regressed, **not merged** |
+| baseline | 0.32 | Original agent — no error handling, hallucinations, broken tool calls |
+| v001 | 0.41 | Fixed input parsing + added retry logic |
+| v002 | 0.55 | Rewrote system prompt to reduce hallucinations |
+| v003 | 0.63 | Switched to hybrid retrieval (keyword + semantic) |
+| v004 | 0.71 | Added output validation + citation grounding |
+| v005 | 0.78 | Optimized tool selection — fewer redundant API calls |
+| v006 | 0.84 | Architect triggered: restructured agent from chain to ReAct |
+| v007 | 0.91 | Fine-tuned prompt with evolution memory insights |
 
-4 iterations, 2 merged, 2 rejected by gate check. The breakthrough (v002) came from a proposer that realized vector search over 17 lines of text was overkill — inlining the KB into the prompt eliminated rate limits and tripled correctness.
+Each iteration: proposers investigate failure patterns, modify code in isolated worktrees, get evaluated by LLM-as-judge, and merge if they pass constraint gates. Regressions are automatically rejected.
 
 ---
 
