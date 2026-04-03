@@ -226,3 +226,4 @@ Next: run /evolver:evolve to start optimizing.
 - If the agent needs a venv, the run command should activate it: `cd {dir} && .venv/bin/python main.py`
 - If LangSmith connection fails, check API key and network.
 - The setup requires `langsmith` (Python SDK) and `langsmith-cli` (for evaluator agent).
+- **Eval concurrency** defaults to 3 (runs 3 examples in parallel). If the agent can't handle parallel execution (writes to shared files, uses a fixed port, holds a DB lock), set `eval_concurrency: 1` in `.evolver.json` after setup.

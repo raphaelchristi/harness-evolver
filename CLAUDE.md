@@ -25,6 +25,7 @@ python tools/setup.py --project-name my-agent --entry-point "python main.py" --f
 
 # Run evaluation for a candidate in a worktree (canary preflight runs 1 example first)
 python tools/run_eval.py --config .evolver.json --worktree-path /tmp/wt --experiment-prefix v001a
+# Default concurrency is 3. Use --concurrency 1 for agents that can't run in parallel (shared files, fixed ports, etc)
 # Use --no-canary to skip preflight check
 
 # Compare experiment results

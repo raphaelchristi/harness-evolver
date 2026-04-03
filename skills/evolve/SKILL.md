@@ -132,6 +132,9 @@ for WT in {worktree_paths_with_commits}; do
     [ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
     [ -d evolution_archive ] && cp -r evolution_archive "$WT_PROJECT/evolution_archive" 2>/dev/null
     $EVOLVER_PY $TOOLS/run_eval.py --config "$WT_PROJECT/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
+    # Default concurrency is 3 (parallel eval within each candidate).
+    # If the agent can't handle parallel execution (shared files, fixed ports, DB locks),
+    # add --concurrency 1 or set eval_concurrency: 1 in .evolver.json.
 done
 wait  # CRITICAL: wait for ALL evals before judge
 ```
