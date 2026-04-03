@@ -350,7 +350,7 @@ def run_baseline(client, dataset_name, entry_point, evaluators):
         mean_score = sum(scores) / len(scores) if scores else 0.0
     except Exception as e:
         print(f"  Warning: Could not extract baseline scores: {e}", file=sys.stderr)
-        print(f"  Baseline experiment '{experiment_name}' was created — scores will be computed during /evolve", file=sys.stderr)
+        print(f"  Baseline experiment '{experiment_name}' was created — scores will be computed during /harness:evolve", file=sys.stderr)
 
     return experiment_name, mean_score
 
