@@ -47,12 +47,23 @@ Read `project_dir` from config. If non-empty, all worktree paths include it: `{w
 
 ## The Loop (per iteration)
 
+### 0. Read State
+
+```bash
+BEST=$(python3 -c "import json; b=json.load(open('.evolver.json')).get('best_experiment'); print(b if b else '')")
+PROJECT_DIR=$(python3 -c "import json; print(json.load(open('.evolver.json')).get('project_dir', ''))")
+```
+
+If `$BEST` is empty (no baseline ran), skip data gathering — proposers work from code analysis only.
+
 ### 1. Gather Data (parallel)
 
 ```bash
-$EVOLVER_PY $TOOLS/trace_insights.py --from-experiment "$BEST" --format summary --output trace_insights.json &
-$EVOLVER_PY $TOOLS/read_results.py --experiment "$BEST" --config .evolver.json --split train --format summary --output best_results.json &
-wait
+if [ -n "$BEST" ]; then
+    $EVOLVER_PY $TOOLS/trace_insights.py --from-experiment "$BEST" --format summary --output trace_insights.json &
+    $EVOLVER_PY $TOOLS/read_results.py --experiment "$BEST" --config .evolver.json --split train --format summary --output best_results.json &
+    wait
+fi
 ```
 
 Use `--format summary` to keep context compact (~200 tokens vs ~5K). Full data stays on disk for proposers to read on demand.
@@ -84,10 +95,17 @@ Report each completion as it happens: `Proposer N ({lens}) completed — committ
 
 ### 4. Evaluate Candidates
 
-Copy `.evolver.json` + `.env` to worktrees (run_eval.py also auto-copies if missing). Run evaluations in parallel:
+Copy `.evolver.json` + `.env` to worktrees (run_eval.py also auto-copies if missing). Resolve `project_dir` for subdirectory projects:
 
 ```bash
-$EVOLVER_PY $TOOLS/run_eval.py --config "$WT/.evolver.json" --worktree-path "$WT" --experiment-prefix v{NNN}-{id} &
+for WT in {worktree_paths_with_commits}; do
+    WT_PROJECT="$WT"
+    [ -n "$PROJECT_DIR" ] && WT_PROJECT="$WT/$PROJECT_DIR"
+    cp .evolver.json "$WT_PROJECT/.evolver.json" 2>/dev/null
+    [ -f .env ] && cp .env "$WT_PROJECT/.env" 2>/dev/null
+    $EVOLVER_PY $TOOLS/run_eval.py --config "$WT_PROJECT/.evolver.json" --worktree-path "$WT_PROJECT" --experiment-prefix v{NNN}-{id} &
+done
+wait  # CRITICAL: wait for ALL evals before judge
 ```
 
 Then spawn evaluator agent for LLM-as-judge (if configured):
@@ -98,6 +116,8 @@ Agent(
   prompt: "Experiments: {names}. Evaluators: {list}. Dataset: {name}. Use rubrics from example metadata when available."
 )
 ```
+
+Wait for evaluator to complete before comparing.
 
 ### 5. Compare + Constraint Gate + Merge
 
