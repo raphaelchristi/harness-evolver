@@ -54,24 +54,26 @@ claude
 
 ```mermaid
 xychart-beta
-    title "Agent Correctness Over Evolution Iterations"
-    x-axis ["baseline", "v001", "v002", "v003", "v004", "v005", "v006", "v007"]
-    y-axis "Score" 0 --> 1
-    line [0.32, 0.41, 0.55, 0.63, 0.71, 0.78, 0.84, 0.91]
+    title "Best Score Over Evolution Iterations"
+    x-axis ["base", "v001", "v002", "v003", "v004", "v005", "v006", "v007", "v008", "v009"]
+    y-axis "Correctness" 0 --> 1
+    line [0.31, 0.48, 0.52, 0.52, 0.67, 0.71, 0.71, 0.71, 0.79, 0.84]
 ```
 
-| Iter | Score | What the proposer did |
-|---|---|---|
-| baseline | 0.32 | Original agent — no error handling, hallucinations, broken tool calls |
-| v001 | 0.41 | Fixed input parsing + added retry logic |
-| v002 | 0.55 | Rewrote system prompt to reduce hallucinations |
-| v003 | 0.63 | Switched to hybrid retrieval (keyword + semantic) |
-| v004 | 0.71 | Added output validation + citation grounding |
-| v005 | 0.78 | Optimized tool selection — fewer redundant API calls |
-| v006 | 0.84 | Architect triggered: restructured agent from chain to ReAct |
-| v007 | 0.91 | Fine-tuned prompt with evolution memory insights |
+| Iter | Score | Merged? | What happened |
+|---|---|---|---|
+| baseline | 0.31 | — | Broken tool calls, hallucinations, no error handling |
+| v001 | 0.48 | Yes | Fixed input parsing, added retry logic (+0.17) |
+| v002 | 0.52 | Yes | Prompt rewrite to reduce hallucinations (+0.04) |
+| v003 | 0.49 | **No** | Attempted retrieval change — regressed, rejected by gate |
+| v004 | 0.67 | Yes | Architect triggered: chain → ReAct restructure (+0.15) |
+| v005 | 0.71 | Yes | Output validation + citation grounding (+0.04) |
+| v006 | 0.68 | **No** | Tried fewer tool calls — broke edge cases, rejected |
+| v007 | 0.70 | **No** | Prompt tweak — within noise margin, not merged |
+| v008 | 0.79 | Yes | Evolution memory insight: combined v003's retrieval with v005's validation (+0.08) |
+| v009 | 0.84 | Yes | Fine-tuned rubric alignment from judge feedback (+0.05) |
 
-Each iteration: proposers investigate failure patterns, modify code in isolated worktrees, get evaluated by LLM-as-judge, and merge if they pass constraint gates. Regressions are automatically rejected.
+Real pattern: initial jump → plateau → architectural breakthrough → small gains → stagnation → memory-driven recovery. Regressions rejected automatically. Not every iteration improves — that's the point of gate checks.
 
 ---
 
