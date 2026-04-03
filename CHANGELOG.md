@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.5.3] - 2026-04-03
+
+Fixes the two longest-standing bugs across all 4 REPORT.md files.
+
+### Fixed
+
+- **LANGSMITH_API_KEY .env resolution** — All 7 tools with `ensure_langsmith_api_key()` now search `.env` in both CWD AND the `--config` file's directory. Fixes the bug that hit every single real-world run: tools failed with 403 Forbidden when CWD differed from the project directory. No more `set -a && source .env && set +a` workaround needed.
+- **`constraint_check.py` pytest skip** — "No module named pytest" in stderr is now treated as skip (pass) instead of test failure. Previously, valid candidates were rejected when pytest wasn't installed in the project's venv.
+
+---
+
 ## [4.5.2] - 2026-04-03
 
 Fixes from second round of real-world testing (arag project REPORT.md).
