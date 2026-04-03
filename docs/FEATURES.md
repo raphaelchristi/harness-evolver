@@ -21,6 +21,7 @@ Full feature list for Harness Evolver. For the quick overview, see [README.md](.
 | **Weighted Evaluators + Pareto** | Configure `evaluator_weights` to prioritize what matters. Pareto front reported when candidates offer different tradeoffs. MAP-Elites diversity grid preserves approach diversity. |
 | **Canary Preflight** | 1 example tested before full evaluation. If agent produces no output, evaluation stops immediately. Accepts both `output` and `answer` response formats. |
 | **Rate-Limit Early Abort** | After 5+ runs, if >50% hit 429 errors, evaluation stops to save API quota. Reports `rate_limited: true` + `aborted_early: true` in output. |
+| **Evolution Tracing** | Each iteration logged as a LangSmith run with score, approach, duration. With the langsmith-tracing companion, proposer tool calls nest hierarchically under iterations. Full evolution timeline in LangSmith UI. |
 | **has_output Excluded** | `has_output` evaluator tracked but excluded from combined score by default (weight=0). Any `print()` gives 1.0, inflating scores artificially. |
 | **`--strict` Evaluator Validation** | `add_evaluator.py --strict` rejects evaluators without known implementation. Prevents ghost evaluators in config. |
 

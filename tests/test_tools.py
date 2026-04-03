@@ -311,6 +311,14 @@ def test_pareto_front():
 
 # ─── Test: run_eval.py --sample flag ───
 
+def test_log_iteration_help():
+    """log_iteration.py accepts --help."""
+    code, stdout, stderr = run_tool("log_iteration.py", ["--help"])
+    assert code == 0
+    assert "--action" in stdout
+    assert "--run-id" in stdout
+
+
 def test_run_eval_sample_flag():
     """run_eval.py accepts --sample flag."""
     code, stdout, stderr = run_tool("run_eval.py", ["--help"])
