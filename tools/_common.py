@@ -28,15 +28,28 @@ def ensure_langsmith_api_key():
     Project .env takes precedence over global credentials because the project-local
     key is more likely to be correct and up-to-date.
 
-    Sets the module-level `key_source` variable to indicate where the key was found:
-    "environment", ".env file (<path>)", or "credentials file".
+    Validates key format before accepting (must be 30+ chars, start with lsv2_).
+    Rejects obviously dummy/test keys.
 
+    Sets the module-level `key_source` variable to indicate where the key was found.
     Returns True if a key was found and set, False otherwise.
     """
     global key_source
-    if os.environ.get("LANGSMITH_API_KEY"):
-        key_source = "environment"
+
+    def _is_valid_key(k):
+        """Reject dummy/test keys and obviously invalid ones."""
+        if not k or len(k) < 30:
+            return False
+        if k.startswith("lsv2_pt_test") or k == "your-api-key-here":
+            return False
         return True
+
+    if os.environ.get("LANGSMITH_API_KEY"):
+        if _is_valid_key(os.environ["LANGSMITH_API_KEY"]):
+            key_source = "environment"
+            return True
+        else:
+            print(f"  WARNING: LANGSMITH_API_KEY in environment looks invalid (too short or test key), skipping", file=sys.stderr)
     # Check .env in CWD and in --config directory FIRST (project-local > global)
     env_candidates = [".env"]
     for i, arg in enumerate(sys.argv):
@@ -54,10 +67,12 @@ def ensure_langsmith_api_key():
                         line = line.strip()
                         if line.startswith("LANGSMITH_API_KEY=") and not line.startswith("#"):
                             key = line.split("=", 1)[1].strip().strip("'\"")
-                            if key:
+                            if key and _is_valid_key(key):
                                 os.environ["LANGSMITH_API_KEY"] = key
                                 key_source = f".env file ({env_path})"
                                 return True
+                            elif key:
+                                print(f"  WARNING: LANGSMITH_API_KEY in {env_path} looks invalid, skipping", file=sys.stderr)
             except OSError:
                 pass
     # Fallback: global langsmith-cli credentials file
@@ -72,10 +87,12 @@ def ensure_langsmith_api_key():
                     line = line.strip()
                     if line.startswith("LANGSMITH_API_KEY="):
                         key = line.split("=", 1)[1].strip()
-                        if key:
+                        if key and _is_valid_key(key):
                             os.environ["LANGSMITH_API_KEY"] = key
                             key_source = "credentials file"
                             return True
+                        elif key:
+                            print(f"  WARNING: LANGSMITH_API_KEY in {creds_path} looks invalid (dummy/test key?), skipping", file=sys.stderr)
         except OSError:
             pass
     return False

@@ -248,6 +248,12 @@ Next: run /harness:evolve to start optimizing.
 
 - If `.evolver.json` already exists, ask before overwriting.
 - If the agent needs a venv, the run command should activate it: `cd {dir} && .venv/bin/python main.py`
-- If LangSmith connection fails, check API key and network.
-- The setup requires `langsmith` (Python SDK) and `langsmith-cli` (for evaluator agent).
+- **No project venv detected**: Before building the entry_point, check if `.venv/bin/python` or `venv/bin/python` exists in the project directory. If NOT, warn the user:
+  ```
+  WARNING: No Python venv found in this project (.venv/ or venv/).
+  The entry_point should use the project's own Python, not ~/.evolver/venv/bin/python.
+  Create one first: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+  ```
+  Do NOT use `~/.evolver/venv/bin/python` as the entry_point — that's for evolver tools only. Using it pollutes the evolver venv with agent dependencies.
+- If LangSmith connection fails, check API key and network. The `ensure_langsmith_api_key()` function validates key format and rejects dummy/test keys with a warning.
 - **Eval concurrency** defaults to 3 (runs 3 examples in parallel). If the agent can't handle parallel execution (writes to shared files, uses a fixed port, holds a DB lock), set `eval_concurrency: 1` in `.evolver.json` after setup.
