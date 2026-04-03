@@ -72,7 +72,20 @@ def make_target(entry_point, cwd):
 
         try:
             cmd = entry_point
-            if "{input}" in cmd:
+
+            # {input_text}: extract plain text from inputs dict (for agents expecting --query "text")
+            if "{input_text}" in cmd:
+                import shlex
+                text = ""
+                for key in ("input", "question", "query", "prompt", "text", "user_input"):
+                    if key in inputs and isinstance(inputs[key], str):
+                        text = inputs[key]
+                        break
+                if not text and inputs:
+                    first_val = next(iter(inputs.values()), "")
+                    text = str(first_val) if not isinstance(first_val, str) else first_val
+                cmd = cmd.replace("{input_text}", shlex.quote(text))
+            elif "{input}" in cmd:
                 # Placeholder: replace with path to JSON file
                 cmd = cmd.replace("{input}", input_path)
             elif "{input_json}" in cmd:
@@ -167,6 +180,7 @@ def main():
     parser.add_argument("--experiment-prefix", required=True, help="Experiment name prefix (e.g. v001a)")
     parser.add_argument("--timeout", type=int, default=120, help="Per-task timeout in seconds")
     parser.add_argument("--concurrency", type=int, default=None, help="Max concurrent evaluations (default: from config or 1)")
+    parser.add_argument("--no-canary", action="store_true", help="Skip canary preflight check")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -186,6 +200,32 @@ def main():
     # Identify which evaluators need the agent (LLM-as-judge)
     llm_evaluators = [k for k in config["evaluators"] if k in ("correctness", "conciseness")]
     code_evaluators = [k for k in config["evaluators"] if k not in ("correctness", "conciseness")]
+
+    # Canary run: verify agent works before burning through full dataset
+    if not args.no_canary:
+        print("  Canary: running 1 example preflight...", file=sys.stderr)
+        try:
+            canary_examples = list(client.list_examples(dataset_name=config["dataset"], limit=1))
+            if canary_examples:
+                canary_result = target(canary_examples[0].inputs)
+                canary_output = canary_result.get("output", "")
+                canary_error = canary_result.get("error", "")
+                if not canary_output and canary_error:
+                    print(f"  CANARY FAILED: Agent produced no output.", file=sys.stderr)
+                    print(f"  Error: {canary_error}", file=sys.stderr)
+                    print(f"  Fix the agent before running full evaluation.", file=sys.stderr)
+                    output = {
+                        "experiment": None,
+                        "prefix": args.experiment_prefix,
+                        "combined_score": 0.0,
+                        "error": f"Canary failed: {canary_error[:200]}",
+                    }
+                    print(json.dumps(output))
+                    sys.exit(2)
+                else:
+                    print(f"  Canary passed: got output ({len(str(canary_output))} chars)", file=sys.stderr)
+        except Exception as e:
+            print(f"  Canary check failed: {e} (proceeding anyway)", file=sys.stderr)
 
     print(f"Running evaluation: {args.experiment_prefix}")
     print(f"  Dataset: {config['dataset']}")
