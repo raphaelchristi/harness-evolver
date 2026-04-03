@@ -112,6 +112,9 @@ LangSmith traces any AI framework: LangChain/LangGraph (auto), OpenAI/Anthropic 
 - [Self-Organizing LLM Agents Outperform Designed Structures](https://arxiv.org/abs/2603.28990) — Dochkina, 2026
 - [Hermes Agent Self-Evolution](https://github.com/NousResearch/hermes-agent-self-evolution) — NousResearch
 - [Agent Skills for Context Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering) — Koylan
+- [A-Evolve: Automated Agent Evolution](https://github.com/A-EVO-Lab/a-evolve) — Amazon (5-stage evolution loop, git-tagged mutations)
+- [Meta Context Engineering via Agentic Skill Evolution](https://arxiv.org/abs/2601.21557) — Ye et al., Peking University, 2026
+- [EvoAgentX: Evolving Agentic Workflows](https://github.com/EvoAgentX/EvoAgentX) — Wang et al., 2026
 - [Darwin Godel Machine](https://sakana.ai/dgm/) — Sakana AI
 - [AlphaEvolve](https://deepmind.google/blog/alphaevolve/) — DeepMind
 - [LangSmith Evaluation](https://docs.smith.langchain.com/evaluation) — LangChain

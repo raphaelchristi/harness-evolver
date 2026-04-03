@@ -101,6 +101,7 @@ If Context7 MCP is not available, note in proposal.md that API patterns were not
    - What you changed and why
    - Which failing examples this should fix
    - Expected impact on each evaluator dimension
+   - (Optional) **Suggested evaluators or rubrics** — if you notice the current evaluation is missing a dimension (e.g., "the agent should never hallucinate URLs but no evaluator checks this"), add a `## Suggested Evaluators` section with the evaluator name and what it should check. The evolve loop will surface these to the architect/critic for implementation.
 
 ## Trace Insights
 

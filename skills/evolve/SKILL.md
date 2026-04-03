@@ -170,7 +170,11 @@ $EVOLVER_PY $TOOLS/constraint_check.py --config .evolver.json --worktree-path "$
 
 If constraints fail, try next-best. If none pass, skip merge.
 
-If winner beats current best: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc).
+If winner beats current best: `git merge`, update `.evolver.json` with enriched history (score, tokens, latency, errors, passing, total, per_evaluator, approach, lens, code_loc). Then git-tag for instant rollback:
+
+```bash
+git tag "evolver-v{NNN}" -m "evolver: v{NNN} score={score}"
+```
 
 ### 6. Post-Iteration
 
@@ -193,15 +197,31 @@ $EVOLVER_PY $TOOLS/regression_tracker.py --config .evolver.json --previous-exper
 Agent(subagent_type: "evolver-consolidator", run_in_background: true, prompt: "Update evolution_memory.md...")
 ```
 
+**Proactive evaluator evolution**: After reading all proposal.md files, check for `## Suggested Evaluators` sections. If any proposer suggested new evaluators or rubrics, surface them:
+```
+Proposer v{NNN}-{id} suggested new evaluator: "{name}" — {description}
+```
+If multiple proposers suggest the same evaluator, prioritize it. Pass suggestions to the critic or architect for implementation via `$EVOLVER_PY $TOOLS/add_evaluator.py`.
+
 **Auto-trigger critic** if score jumped >0.3 or hit target in <3 iterations.
 
 **Auto-trigger architect** (opus model) if 3 consecutive iterations within 1% or score dropped.
 
-### 7. Gate Check
+### 7. Gate Check (multi-objective utility)
 
-- **Plateau**: 3 scores within 2% → consider architect or stop
+Score alone is insufficient. Assess using composite utility:
+
+- **Score plateau**: 3 scores within 2% → consider architect or stop
 - **Target reached**: `best_score >= target_score` → stop
 - **Diminishing returns**: avg improvement <0.5% over 5 iterations → stop
+- **Cost regression**: if tokens increased >2x while score improved <2%, flag as inefficient. The improvement isn't worth the cost. Consider reverting or constraining token budget.
+- **Latency regression**: if avg_latency_ms increased >50% while score improved <5%, flag. Faster with same quality > slower with marginally better quality.
+
+When flagging cost/latency regressions, report to user:
+```
+WARNING: Iteration v{NNN} improved score by {delta}% but tokens increased {token_pct}% and latency increased {latency_pct}%.
+Consider: accept (quality matters more) or revert (efficiency matters more)?
+```
 
 ## Final Report
 
