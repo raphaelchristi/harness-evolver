@@ -166,7 +166,7 @@ def main():
     with open(args.config) as f:
         config = json.load(f)
 
-    concurrency = args.concurrency or config.get("eval_concurrency", 1)
+    concurrency = args.concurrency or config.get("eval_concurrency", 3)
 
     os.environ["EVAL_TASK_TIMEOUT"] = str(args.timeout)
     ensure_langsmith_api_key()
