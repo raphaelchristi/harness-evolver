@@ -37,7 +37,7 @@ Do NOT copy production inputs verbatim — generate VARIATIONS.
 
 ### Phase 3: Generate Inputs
 
-Generate 30 test inputs as a JSON file. Each example MUST include an `expected_behavior` rubric — a description of what a correct response should cover (NOT exact expected text):
+Generate {count} test inputs as a JSON file (count specified in your prompt — default 30 if not specified). Each example MUST include an `expected_behavior` rubric — a description of what a correct response should cover (NOT exact expected text):
 
 ```json
 [

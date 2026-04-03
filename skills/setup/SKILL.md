@@ -132,6 +132,30 @@ Use AskUserQuestion:
 
   Map selections to evaluator configuration for setup.py.
 
+### Phase 2.5: Mode Selection
+
+```json
+{
+  "questions": [{
+    "question": "Evolution mode?",
+    "header": "Mode",
+    "multiSelect": false,
+    "options": [
+      {"label": "light", "description": "20 examples, 2 proposers, ~2 min/iter. Good for testing."},
+      {"label": "balanced (Recommended)", "description": "30 examples, 3 proposers, ~8 min/iter. Best trade-off."},
+      {"label": "heavy", "description": "50 examples, 5 proposers, ~25 min/iter. Maximum quality."}
+    ]
+  }]
+}
+```
+
+Pass selection to setup.py as `--mode light|balanced|heavy`.
+
+The mode determines testgen count:
+- `light`: generate 20 examples
+- `balanced`: generate 30 examples (default, current behavior)
+- `heavy`: generate 50 examples
+
 **If "I have test data"**: Ask the data source question, then proceed to Phase 3 with accuracy as default goal.
 
   Use AskUserQuestion with **preview**:
