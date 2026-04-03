@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [4.5.1] - 2026-04-02
+
+Fixes the 4 highest-frequency bugs from real-world evolution runs (3 independent REPORT.md files).
+
+### Fixed
+
+- **`{input_text}` placeholder** — New placeholder in `run_eval.py` extracts plain text from inputs dict and shell-escapes it. Fixes the #1 bug (3/3 repos): agents receiving JSON file paths instead of query text. Use `{input_text}` for agents that take `--query "text"`.
+- **Worktree file propagation** — Evolve skill now copies `.evolver.json` and `.env` into worktrees before evaluation (step 3). Fixes the #2 bug (3/3 repos): `FileNotFoundError` for untracked config files in git worktrees.
+- **Canary preflight** — `run_eval.py` runs 1 example before the full evaluation to catch broken agents early. Exits with code 2 if canary fails. Prevents wasting API quota on broken runs (OpenAI report #6). Disable with `--no-canary`.
+- **Baseline LLM-judge** — New step 0.7 in evolve skill: if baseline only has code-based evaluator scores (has_output), trigger the evaluator agent to score it with LLM-judge before the loop starts. Prevents inflated baseline scores that cause premature stopping (ARAG report #4).
+
+---
+
 ## [4.5.0] - 2026-04-02
 
 9 improvements inspired by [NousResearch/hermes-agent-self-evolution](https://github.com/NousResearch/hermes-agent-self-evolution), hardening evaluation rigor, data safety, and decision quality.
