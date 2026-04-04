@@ -98,13 +98,20 @@ def read_experiment(client, experiment_name, weights=None):
                 if fb.comment:
                     feedback_comments[fb.key] = fb.comment
 
+            # Collect error from both LangSmith run-level and agent outputs
+            run_error = run.error[:200] if run.error else None
+            outputs_error = ""
+            if run.outputs and isinstance(run.outputs, dict):
+                outputs_error = str(run.outputs.get("error", ""))[:200]
+
             per_example[example_id] = {
                 "score": weighted_score(scores, weights),
                 "scores": scores,
                 "feedback": feedback_comments,
                 "tokens": tokens,
                 "latency_ms": latency_ms,
-                "error": run.error[:200] if run.error else None,
+                "error": run_error,
+                "outputs_error": outputs_error,
                 "input_preview": str(run.inputs)[:200] if run.inputs else "",
                 "output_preview": str(run.outputs)[:200] if run.outputs else "",
             }
@@ -115,7 +122,8 @@ def read_experiment(client, experiment_name, weights=None):
         scored_examples = {}
         rate_limited_count = 0
         for eid, data in per_example.items():
-            error_text = (data.get("error") or "")
+            # Check both run.error (SDK-level) and outputs.error (agent-level subprocess failures)
+            error_text = (data.get("error") or "") + " " + (data.get("outputs_error") or "")
             is_rate_limited = bool(RATE_LIMIT_RE.search(error_text))
             if is_rate_limited:
                 rate_limited_count += 1
