@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.4.1] - 2026-04-03
+
+Evaluation reliability fixes discovered during real-world testing on a CrewAI trip planner agent.
+
+### Fixed
+
+- **Rate-limit false positives** — Bare `"rate"` substring matched "curated", "hydrate", "karate" in agent output, silently excluding valid results from scoring. Replaced with `RATE_LIMIT_RE` regex that matches specific phrases ("429", "rate limit", "resource exhausted", "quota exceeded"). Now only checks error fields, never output text.
+- **Split-blind sampling** — `--sample 10` sampled from all examples (train + held_out), but comparison filtered to held_out only, leaving 2-3 scored examples. New `--sample-split train` flag samples from train only and always evaluates all held_out. Evolve skill passes this in light mode automatically.
+- **stderr head truncation** — `stderr[:500]` captured verbose startup banners instead of actual error tracebacks at the end. Changed to `stderr[-500:]` so real errors (like 429 RESOURCE_EXHAUSTED) are visible to the rate-limit detector.
+- **Certify skipped canary** — `/harness:certify` passed `--no-canary`, allowing broken agents to burn through all examples before failing. Canary now runs on certify too.
+
+### Added
+
+- **Minimum N guard** — `read_results.py` emits `low_confidence: true` and a stderr warning when comparison is based on fewer than 5 scored examples after split filtering.
+- **`--sample-split` flag** — `run_eval.py` accepts `--sample-split train` to sample from a specific split while always including all other splits (e.g., held_out).
+
+---
+
 ## [6.4.0] - 2026-04-03
 
 Two competitive-inspired features: compound learning and score certification.
