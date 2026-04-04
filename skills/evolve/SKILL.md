@@ -177,7 +177,7 @@ Run evaluations with mode parameters. `run_eval.py` auto-copies config files to 
 ```bash
 CONCURRENCY=$(python3 -c "m={'light':5,'balanced':3,'heavy':3}; print(m.get('$MODE',3))")
 TIMEOUT=$(python3 -c "m={'light':60,'balanced':120,'heavy':300}; print(m.get('$MODE',120))")
-SAMPLE=$(python3 -c "m={'light':'10','balanced':'','heavy':''}; s=m.get('$MODE',''); print(f'--sample {s}' if s else '')")
+SAMPLE=$(python3 -c "m={'light':'10','balanced':'','heavy':''}; s=m.get('$MODE',''); print(f'--sample {s} --sample-split train' if s else '')")
 
 for WT in {worktree_paths_with_commits}; do
     WT_PROJECT="$WT"
