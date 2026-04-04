@@ -510,6 +510,9 @@ def main():
             all_scores = [v["score"] for v in result["per_example"].values()]
             result["combined_score"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
             result["num_examples"] = len(result["per_example"])
+            if all_scores and len(all_scores) < 5:
+                result["low_confidence"] = True
+                print(f"  WARNING: only {len(all_scores)} scored examples after '{args.split}' filter — score may be unreliable", file=sys.stderr)
 
         if args.format == "summary":
             output = json.dumps(format_summary(result), indent=2, default=str)
@@ -556,6 +559,9 @@ def main():
                         continue
                     result["combined_score"] = sum(all_scores) / len(all_scores)
                     result["num_examples"] = len(result["per_example"])
+                    if len(all_scores) < 5:
+                        result["low_confidence"] = True
+                        print(f"  WARNING: {name} has only {len(all_scores)} scored examples after '{args.split}' filter — comparison may be unreliable", file=sys.stderr)
                 results_list.append(result)
 
         if not results_list:

@@ -162,6 +162,7 @@ def main():
     parser.add_argument("--retry-on-rate-limit", action="store_true",
                         help="If rate-limited, wait 60s and suggest re-run")
     parser.add_argument("--sample", type=int, default=None, help="Evaluate a random sample of N examples instead of all")
+    parser.add_argument("--sample-split", default=None, help="When --sample is used, sample from this split only (e.g., 'train'). Remaining splits are always fully evaluated.")
     args = parser.parse_args()
 
     # Auto-copy config files to worktree if missing (untracked files aren't in worktrees)
@@ -191,7 +192,16 @@ def main():
     if args.sample:
         import random
         all_examples = list(client.list_examples(dataset_name=config["dataset"], limit=500))
-        if args.sample < len(all_examples):
+
+        if args.sample_split:
+            # Split-aware sampling: sample N from the specified split, include ALL other splits
+            split_examples = list(client.list_examples(dataset_name=config["dataset"], splits=[args.sample_split]))
+            other_examples = [ex for ex in all_examples if ex.id not in {e.id for e in split_examples}]
+            n_sample = min(args.sample, len(split_examples))
+            sampled_from_split = random.sample(split_examples, n_sample) if n_sample < len(split_examples) else split_examples
+            sampled_examples = sampled_from_split + other_examples
+            print(f"  Sampling {n_sample}/{len(split_examples)} from '{args.sample_split}' + {len(other_examples)} from other splits = {len(sampled_examples)} total", file=sys.stderr)
+        elif args.sample < len(all_examples):
             sampled_examples = random.sample(all_examples, args.sample)
             print(f"  Sampling {args.sample}/{len(all_examples)} examples", file=sys.stderr)
         else:
