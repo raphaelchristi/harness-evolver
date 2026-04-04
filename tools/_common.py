@@ -10,7 +10,15 @@ Contains functions that were previously duplicated across multiple tool files:
 import json
 import os
 import platform
+import re
 import sys
+
+# Shared rate-limit detection regex — used by run_eval.py and read_results.py
+# Matches specific phrases (not bare "rate" which triggers on "curated", "hydrate", etc.)
+RATE_LIMIT_RE = re.compile(
+    r"\b429\b|rate[ _-]?limit|resource[_ ]exhausted|quota[_ ]?(exceeded|exhausted)",
+    re.IGNORECASE,
+)
 
 
 # Tracks where the API key was loaded from.

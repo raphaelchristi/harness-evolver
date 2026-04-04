@@ -19,19 +19,13 @@ Requires: pip install langsmith
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import ensure_langsmith_api_key
-
-_RATE_LIMIT_RE = re.compile(
-    r"\b429\b|rate[ _-]?limit|resource[_ ]exhausted|quota[_ ]?(exceeded|exhausted)",
-    re.IGNORECASE,
-)
+from _common import ensure_langsmith_api_key, RATE_LIMIT_RE
 
 
 def make_target(entry_point, cwd):
@@ -164,6 +158,9 @@ def main():
     parser.add_argument("--sample", type=int, default=None, help="Evaluate a random sample of N examples instead of all")
     parser.add_argument("--sample-split", default=None, help="When --sample is used, sample from this split only (e.g., 'train'). Remaining splits are always fully evaluated.")
     args = parser.parse_args()
+
+    if args.sample_split and not args.sample:
+        print("  WARNING: --sample-split has no effect without --sample", file=sys.stderr)
 
     # Auto-copy config files to worktree if missing (untracked files aren't in worktrees)
     config_dir = os.path.dirname(os.path.abspath(args.config))
@@ -317,7 +314,7 @@ def main():
             # Detect rate-limit in this run's error (never check output — words like "curated" cause false positives)
             if outputs and isinstance(outputs, dict):
                 error_text = str(outputs.get("error", ""))
-                if _RATE_LIMIT_RE.search(error_text):
+                if RATE_LIMIT_RE.search(error_text):
                     rate_limit_count += 1
 
             # Early abort: after 5+ runs, if >50% are rate-limited, stop burning quota

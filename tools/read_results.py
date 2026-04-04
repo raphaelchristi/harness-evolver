@@ -25,12 +25,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import ensure_langsmith_api_key
-
-_RATE_LIMIT_RE = re.compile(
-    r"\b429\b|rate[ _-]?limit|resource[_ ]exhausted|quota[_ ]?(exceeded|exhausted)",
-    re.IGNORECASE,
-)
+from _common import ensure_langsmith_api_key, RATE_LIMIT_RE
 
 
 def weighted_score(scores, weights=None):
@@ -121,7 +116,7 @@ def read_experiment(client, experiment_name, weights=None):
         rate_limited_count = 0
         for eid, data in per_example.items():
             error_text = (data.get("error") or "")
-            is_rate_limited = bool(_RATE_LIMIT_RE.search(error_text))
+            is_rate_limited = bool(RATE_LIMIT_RE.search(error_text))
             if is_rate_limited:
                 rate_limited_count += 1
                 data["rate_limited"] = True
