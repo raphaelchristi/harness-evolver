@@ -21,10 +21,16 @@ Requires: pip install langsmith
 import argparse
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import ensure_langsmith_api_key
+
+_RATE_LIMIT_RE = re.compile(
+    r"\b429\b|rate[ _-]?limit|resource[_ ]exhausted|quota[_ ]?(exceeded|exhausted)",
+    re.IGNORECASE,
+)
 
 
 def weighted_score(scores, weights=None):
@@ -111,13 +117,11 @@ def read_experiment(client, experiment_name, weights=None):
         num_examples = len(per_example)
 
         # Exclude rate-limited runs from combined score (they're infra failures, not agent failures)
-        rate_limit_keywords = ("429", "rate", "resource_exhausted", "quota")
         scored_examples = {}
         rate_limited_count = 0
         for eid, data in per_example.items():
-            error_text = (data.get("error") or "").lower()
-            output_text = (data.get("output_preview") or "").lower()
-            is_rate_limited = any(kw in error_text or kw in output_text for kw in rate_limit_keywords)
+            error_text = (data.get("error") or "")
+            is_rate_limited = bool(_RATE_LIMIT_RE.search(error_text))
             if is_rate_limited:
                 rate_limited_count += 1
                 data["rate_limited"] = True

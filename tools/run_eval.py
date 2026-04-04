@@ -19,6 +19,7 @@ Requires: pip install langsmith
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,11 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import ensure_langsmith_api_key
+
+_RATE_LIMIT_RE = re.compile(
+    r"\b429\b|rate[ _-]?limit|resource[_ ]exhausted|quota[_ ]?(exceeded|exhausted)",
+    re.IGNORECASE,
+)
 
 
 def make_target(entry_point, cwd):
@@ -93,7 +99,10 @@ def make_target(entry_point, cwd):
 
             # Accept segfault (139) if output was produced
             if result.returncode != 0:
-                return {"output": "", "error": result.stderr.strip()[:500]}
+                stderr = result.stderr.strip()
+                # Capture tail of stderr (traceback/error is at the end, not the beginning)
+                error_msg = stderr[-500:] if len(stderr) > 500 else stderr
+                return {"output": "", "error": error_msg}
 
             return {"output": ""}
 
@@ -295,11 +304,10 @@ def main():
                 run_obj = getattr(result, "run", None)
                 outputs = getattr(run_obj, "outputs", {}) if run_obj else {}
 
-            # Detect rate-limit in this run's output
+            # Detect rate-limit in this run's error (never check output — words like "curated" cause false positives)
             if outputs and isinstance(outputs, dict):
-                error_text = str(outputs.get("error", "")).lower()
-                output_text = str(outputs.get("output", "")).lower()
-                if "429" in error_text or "rate" in error_text or "resource_exhausted" in error_text or "429" in output_text:
+                error_text = str(outputs.get("error", ""))
+                if _RATE_LIMIT_RE.search(error_text):
                     rate_limit_count += 1
 
             # Early abort: after 5+ runs, if >50% are rate-limited, stop burning quota

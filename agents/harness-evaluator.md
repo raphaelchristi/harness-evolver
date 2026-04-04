@@ -165,7 +165,7 @@ langsmith-cli --json feedback list --run-id "{any_run_id}" --key correctness
 - If a run has `outputs` but they contain a non-429 error message: score `0.0` with comment explaining the failure
 - If `outputs` is empty but no error and no rate-limit: score `0.0` with comment "Empty output"
 
-To detect rate-limited runs, check if `outputs.error` or `outputs.output` contains "429", "RESOURCE_EXHAUSTED", "rate limit", or "quota exceeded".
+To detect rate-limited runs, check ONLY `outputs.error` (never `outputs.output`) for "429", "RESOURCE_EXHAUSTED", "rate limit", or "quota exceeded". Do NOT scan agent output text — words like "curated" or "temperature" cause false positives.
 
 ## Rules
 
