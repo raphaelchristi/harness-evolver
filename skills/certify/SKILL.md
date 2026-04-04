@@ -26,8 +26,7 @@ for i in 1 2 3; do
     $EVOLVER_PY $TOOLS/run_eval.py \
         --config .evolver.json \
         --worktree-path "." \
-        --experiment-prefix "certify-run-$i" \
-        --no-canary
+        --experiment-prefix "certify-run-$i"
 done
 ```
 

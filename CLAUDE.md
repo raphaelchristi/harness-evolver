@@ -27,6 +27,7 @@ python tools/setup.py --project-name my-agent --entry-point "python main.py" --f
 python tools/run_eval.py --config .evolver.json --worktree-path /tmp/wt --experiment-prefix v001a
 # Default concurrency is 3. Use --concurrency 1 for agents that can't run in parallel (shared files, fixed ports, etc)
 # Use --sample 10 to evaluate a random subset (used by light mode)
+# Use --sample 10 --sample-split train to sample from train only + always eval all held_out
 # Use --no-canary to skip preflight check
 
 # Compare experiment results
