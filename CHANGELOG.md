@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ---
 
+## [6.4.2] - 2026-04-03
+
+### Fixed
+
+- **Rate-limit detection checked wrong field** — `read_results.py` only checked `run.error` (LangSmith-level, usually None) but subprocess 429 errors go into `run.outputs["error"]`. Now checks both fields. Found by Codex adversarial review.
+
+---
+
 ## [6.4.1] - 2026-04-03
 
 Evaluation reliability fixes discovered during real-world testing on a CrewAI trip planner agent.
