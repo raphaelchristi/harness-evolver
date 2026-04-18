@@ -101,6 +101,25 @@ python tools/add_evaluator.py --config .evolver.json --evaluator factual_accurac
 
 # Inject adversarial examples
 python tools/adversarial_inject.py --config .evolver.json --experiment v003a --inject
+
+# Extract a consolidated capability contract (AGP Contract Generation)
+# AST-walk the agent source tree and emit contracts.md (signatures + docstrings
+# + @tool decorators). Reduces prompt bloat and keeps prompts synced with code.
+python tools/extract_contracts.py --root . --output contracts.md
+python tools/extract_contracts.py --config .evolver.json --output contracts.md  # use entry_point
+
+# Build the RSPL-lite resource registry (AGP Layer 1)
+# Classifies project files into prompt/tool/agent/environment/memory, hashes and
+# versions them. Proposers can target a single type via the evolvable flag.
+python tools/resource_registry.py --root .
+python tools/resource_registry.py --root . --list --type tool
+python tools/resource_registry.py --root . --freeze prompts/system.md  # mark non-evolvable
+
+# TF-IDF retrieval over the evolution archive (AGP retrieve operator)
+# Returns top-k historically similar candidates for a lens/failure description.
+python tools/archive_search.py --config .evolver.json --query "retry rate limit"
+python tools/archive_search.py --config .evolver.json --query-file lenses.json --winners-only --top 3
+python tools/archive_search.py --config .evolver.json --query "..." --losers-only --format json
 ```
 
 ## Testing
@@ -115,7 +134,7 @@ Three layers, each in its own directory:
 
 2. **Agents** (`agents/*.md`) — Markdown agent definitions spawned by skills via `Agent()`. Six agent types: `harness-proposer` (green, self-organizing with lens protocol, runs in worktree with `acceptEdits`), `harness-evaluator` (yellow, LLM-as-judge via langsmith-cli), `harness-critic` (red, active — detects + fixes gaming), `harness-architect` (blue, ULTRAPLAN mode with opus), `harness-consolidator` (cyan, cross-iteration memory), `harness-testgen` (cyan). Each has a frontmatter block defining `name`, `tools`, `color`, and `permissionMode`.
 
-3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, `mine_sessions.py`, and `promote_learnings.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
+3. **Tools** (`tools/*.py`) — Python scripts that interface with LangSmith SDK. All tools share a common `ensure_langsmith_api_key()` pattern that loads the key from the credentials file if not in env. `analyze_architecture.py`, `evolution_chart.py`, `constraint_check.py`, `secret_filter.py`, `mine_sessions.py`, `promote_learnings.py`, `extract_contracts.py`, `resource_registry.py`, and `archive_search.py` are stdlib-only (no langsmith dependency). `validate_state.py`, `iteration_gate.py`, `regression_tracker.py`, `consolidate.py`, `synthesize_strategy.py`, `add_evaluator.py`, and `dataset_health.py` are new v4.0+ tools. `evolution_chart.py` renders a rich ASCII evolution chart with score progression, per-evaluator breakdown, change narrative, and bar chart. `dataset_health.py` checks dataset quality (size, difficulty distribution, coverage, splits) and outputs actionable corrections. `consolidate.py` and `synthesize_strategy.py` are stdlib-only (no langsmith dependency for core logic).
 
 Supporting infrastructure:
 - **Plugin manifest** (`.claude-plugin/plugin.json`) — registers as a Claude Code plugin
@@ -129,15 +148,28 @@ Supporting infrastructure:
 `/harness:health` → checks dataset quality (size, difficulty, coverage, splits), auto-corrects issues
 
 `/harness:evolve` → reads `.evolver.json`, invokes `/harness:health`, then per iteration:
-1. `trace_insights.py` gathers failure data from best experiment
-2. Claude generates `strategy.md` + `lenses.json` directly from analysis data (no intermediate Python tool)
-3. Spawns N `harness-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with dynamic investigation lenses — each proposer self-organizes its approach and may self-abstain
-4. `run_eval.py` evaluates each candidate (code-based evaluators only)
-5. Spawns 1 `harness-evaluator` agent to score ALL candidates via langsmith-cli (LLM-as-judge)
-6. `read_results.py` compares experiments, picks winner + per-task champion
-7. Merges winning worktree branch into main, updates `.evolver.json`
-8. Claude assesses gate conditions (plateau, target, diminishing returns) — no intermediate Python tool
-9. Auto-triggers `harness-critic` if score jumped >0.3, `harness-architect` if stagnated
+1. **ρ Reflect** — `trace_insights.py` gathers failure data from best experiment
+2. **σ Select** — `synthesize_strategy.py` generates `strategy.md` + `lenses.json` (regime-aware: weak → prompt lens, ceiling → tool-gap lens)
+3. **ι Improve** — spawns N `harness-proposer` agents in parallel (each in `isolation: "worktree"`, `run_in_background: true`) with dynamic investigation lenses — each proposer self-organizes its approach and may self-abstain
+4. **ε Evaluate** — `run_eval.py` evaluates each candidate (code-based evaluators only) + 1 `harness-evaluator` agent scores ALL candidates via langsmith-cli (LLM-as-judge)
+5. `read_results.py` compares experiments, picks winner + per-task champion
+6. **κ Commit** — merges winning worktree branch into main, updates `.evolver.json`, `archive.py` saves candidate artifacts
+7. Claude assesses gate conditions (plateau, target, diminishing returns)
+8. Auto-triggers `harness-critic` if score jumped >0.3, `harness-architect` if stagnated
+
+The ρ/σ/ι/ε/κ labels follow the Autogenesis AGP operator algebra (Reflect, Select, Improve, Evaluate, Commit). The current instantiation uses reflection-driven optimization; TextGrad, GRPO, and Reinforce++ fit the same interface as future optimizer variants.
+
+## Resource model (RSPL-lite)
+
+`resource_registry.py` classifies every file in the user's project into one of five entity types, following Autogenesis RSPL Layer 1:
+
+- **prompt** — `.md`/`.txt`/`.prompt` templates with second-person or `{placeholder}` markers
+- **tool** — Python modules with `@tool`/`@function_tool`/`@skill` decorators or under `tools/`
+- **agent** — Python modules referencing `StateGraph`, `ReActAgent`, `AgentExecutor`, etc.
+- **environment** — `.yaml`/`.toml`/`.ini`/`.env` config files (secrets auto-frozen)
+- **memory** — files under `memory/`, `knowledge/`, or named `evolution_memory.*`
+
+Each resource gets a content hash, auto-incrementing version on change, and an `evolvable` flag (the binary learnability mask from the paper). `.env` and files matching `credentials|secret|token` are always frozen. Deleted resources are retained as tombstones with `removed_at` for audit. The registry lives at `.evolver/resources.json`.
 
 ## Dev skills (`.claude/`)
 
