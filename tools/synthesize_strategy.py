@@ -38,6 +38,67 @@ def load_json_safe(path):
         return None
 
 
+# Keywords that signal a failure is likely caused by missing capability
+# rather than prompt/instruction wording. When these appear in failure
+# clusters we emit a tool-gap lens so the proposer considers creating
+# a new tool instead of rewriting prompts.
+TOOL_GAP_SIGNALS = (
+    "tool", "function", "api", "calculator", "search", "retriev",
+    "fetch", "parser", "extract", "regex", "browser", "shell",
+    "subprocess", "python_repl", "code_interpreter", "memory",
+)
+
+
+def _gap_analysis(config):
+    """Classify evolution regime based on best_score vs target_score.
+
+    Returns one of: "weak" (far from target), "mid", "ceiling" (near target),
+    plus the numeric values for logging. Implements the empirical finding
+    from Autogenesis Table 1 that weak models gain most from prompt/solution
+    evolution while near-ceiling models only gain from tool evolution.
+    """
+    best = config.get("best_score")
+    target = config.get("target_score")
+    if best is None:
+        return {"regime": "unknown", "best": None, "target": target, "gap": None}
+    # Fallback target when not configured — assume 0.9 is "good enough"
+    effective_target = target if target is not None else 0.9
+    gap = max(0.0, effective_target - best)
+    if gap >= 0.20:
+        regime = "weak"
+    elif gap <= 0.05:
+        regime = "ceiling"
+    else:
+        regime = "mid"
+    return {
+        "regime": regime,
+        "best": best,
+        "target": target,
+        "effective_target": effective_target,
+        "gap": gap,
+    }
+
+
+def _cluster_text(cluster):
+    parts = [str(cluster.get("description", "")), str(cluster.get("type", ""))]
+    return " ".join(parts).lower()
+
+
+def _tool_gap_signal(strategy):
+    """True if any failure cluster or failing example points at missing capability."""
+    for c in strategy.get("failure_clusters", []):
+        text = _cluster_text(c)
+        if any(s in text for s in TOOL_GAP_SIGNALS):
+            return True
+    for ex in strategy.get("failing_examples", []):
+        err = (ex.get("error") or "").lower()
+        if "no tool" in err or "has no attribute" in err or "tool not found" in err:
+            return True
+        if "ModuleNotFoundError" in (ex.get("error") or ""):
+            return True
+    return False
+
+
 def identify_target_files(config):
     """Identify which files proposers should focus on."""
     entry_point = config.get("entry_point", "")
@@ -56,6 +117,7 @@ def synthesize(config, insights, results, memory, production=None):
         "failure_clusters": [],
         "recommended_approaches": [],
         "avoid": [],
+        "regime": _gap_analysis(config),
     }
 
     strategy["primary_targets"] = identify_target_files(config)
@@ -130,6 +192,47 @@ def generate_lenses(strategy, config, insights, results, memory, production, max
     """Generate investigation lenses from available data sources."""
     lenses = []
     lens_id = 0
+
+    # Regime-aware priority lens (weak-model vs near-ceiling)
+    # This must come first so it survives the severity sort + truncation.
+    gap = _gap_analysis(config)
+    if gap["regime"] == "weak":
+        lens_id += 1
+        lenses.append({
+            "id": lens_id,
+            "question": (
+                f"Baseline score {gap['best']:.3f} is far from target "
+                f"{gap['effective_target']:.2f} (gap {gap['gap']:.2f}). "
+                "Focus on prompt clarity and instruction quality — rewrite the "
+                "system prompt and planner instructions to reduce ambiguity. "
+                "Empirically, weak-baseline agents gain most from prompt edits."
+            ),
+            "source": "regime_weak",
+            "severity": "high",
+            "context": gap,
+        })
+    elif gap["regime"] == "ceiling" or _tool_gap_signal(strategy):
+        reason = (
+            f"Baseline score {gap['best']:.3f} is near target "
+            f"{gap['effective_target']:.2f} — prompt edits have diminishing returns. "
+            "Inspect failing examples for missing capabilities."
+        ) if gap["regime"] == "ceiling" else (
+            "Failing examples reference missing tools or capabilities."
+        )
+        lens_id += 1
+        lenses.append({
+            "id": lens_id,
+            "question": (
+                f"{reason} Consider CREATING A NEW TOOL or helper function that the "
+                "agent can call. Identify one concrete capability the agent lacks, "
+                "write the tool as a new Python function with a clear docstring, "
+                "register it with the agent, and reference it from the system prompt. "
+                "Do not just rewrite existing prompts."
+            ),
+            "source": "tool_gap",
+            "severity": "critical" if gap["regime"] == "ceiling" else "high",
+            "context": {"gap": gap, "has_tool_signal": _tool_gap_signal(strategy)},
+        })
 
     # Failure cluster lenses (one per distinct cluster, max 3)
     for cluster in strategy.get("failure_clusters", [])[:3]:
@@ -285,6 +388,20 @@ def format_strategy_md(strategy, config):
         f"*Framework: {config.get('framework', 'unknown')} | Entry point: {config.get('entry_point', 'N/A')}*",
         "",
     ]
+
+    regime = strategy.get("regime") or {}
+    if regime.get("regime") not in (None, "unknown"):
+        best = regime.get("best")
+        target = regime.get("effective_target")
+        gap = regime.get("gap") or 0
+        lines.append(f"## Regime: **{regime['regime']}**  (best {best:.3f} vs target {target:.2f}, gap {gap:.3f})")
+        if regime["regime"] == "weak":
+            lines.append("- High headroom → prioritize prompt/instruction rewrites.")
+        elif regime["regime"] == "ceiling":
+            lines.append("- Near target → prioritize creating new tools/capabilities. Prompt edits have diminishing returns.")
+        else:
+            lines.append("- Mid-range → balanced prompt edits + targeted fixes.")
+        lines.append("")
 
     lines.append("## Target Files")
     for f in strategy.get("primary_targets", []):
